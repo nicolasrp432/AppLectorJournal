@@ -1,0 +1,18 @@
+﻿
+    // Copyright 2015-present 650 Industries. All rights reserved.
+  
+    /**
+>    * Registry to handle import.meta functionality for React Native environment
+     * Similar to how it works in the web, but adapted for the RN context
+     * https://github.com/wintercg/import-meta-registry
+     */
+        // @ts-ignore The react-native tsconfig doesn't support CJS
+        scriptURL = 'file://' + __filename;
+      } else {
+>       // TODO: Try to support `import.meta.url` when the ecosystem supports ESM,
+>       // and jest doesn't throw SyntaxError when accessing `import.meta`.
+        scriptURL = document.currentScript?.src;
+      }
+      if (scriptURL == null) {
+
+

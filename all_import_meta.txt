@@ -1,0 +1,15 @@
+﻿
+   * Registry to handle import.meta functionality for React Native environment
+      // TODO: Try to support `import.meta.url` when the ecosystem supports ESM,
+      // and jest doesn't throw SyntaxError when accessing `import.meta`.
+    if ((import.meta.env ? import.meta.env.MODE : void 0) !== "production" && equalityFn && !didWarnAboutEqualityFn) {
+    if ((import.meta.env ? import.meta.env.MODE : void 0) !== "production" && typeof createState !== "function") {
+    if ((import.meta.env ? import.meta.env.MODE : void 0) !== "production") {
+      if ((import.meta.env ? import.meta.env.MODE : void 0) !== "production") {
+      extensionConnector = (enabled != null ? enabled : (import.meta.env ? import.meta.env.MODE : void 0) !== 
+"production") && window.__REDUX_DEVTOOLS_EXTENSION__;
+      if ((import.meta.env ? import.meta.env.MODE : void 0) !== "production" && enabled) {
+        if ((import.meta.env ? import.meta.env.MODE : void 0) !== "production" && a[0].type === "__setState" && 
+!didWarnAboutReservedActionType) {
+
+
