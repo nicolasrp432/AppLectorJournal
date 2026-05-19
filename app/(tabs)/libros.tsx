@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useLibraryStore } from '../../store/useLibraryStore';
@@ -78,7 +79,7 @@ export default function LibrosScreen() {
           books.length === 0
             ? (
               <View style={styles.emptyState}>
-                <Text style={styles.emptyEmoji}>📚</Text>
+                <Ionicons name="library-outline" size={48} color={COLORS.subtle} />
                 <Text style={styles.emptyText}>Tu biblioteca está vacía</Text>
                 <Text style={styles.emptyHint}>Explora el Catálogo para empezar a leer</Text>
               </View>
@@ -245,7 +246,6 @@ const styles = StyleSheet.create({
   badge:        { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
   badgeText:    { fontFamily: FONTS.headingSemi, fontSize: 9 },
   emptyState:   { alignItems: 'center', paddingTop: 60, gap: 8 },
-  emptyEmoji:   { fontSize: 48 },
   emptyText:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
   emptyHint:    { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
   modal:      { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' } as any,

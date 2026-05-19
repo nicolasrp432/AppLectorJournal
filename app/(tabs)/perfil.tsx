@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Switch,
-  TextInput, ActivityIndicator, Image, Alert,
+  TextInput, ActivityIndicator, Image, Alert, Modal, Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useProfileStore } from '../../store/useProfileStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
+import { useSessionStore } from '../../store/useSessionStore';
+import { useLibraryStore } from '../../store/useLibraryStore';
+import { useProgressStore } from '../../store/useProgressStore';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { MascotChar } from '../../components/ui/MascotChar';
 import type { MascotKey } from '../../components/ui/MascotChar';
@@ -17,17 +23,33 @@ import { levelProgress, xpForNextLevel } from '../../lib/xpEngine';
 import { scheduleDailyReminder, cancelDailyReminder } from '../../lib/notifications';
 import { supabase } from '../../lib/supabase';
 
-const ACHIEVEMENTS = [
-  { id: 'streak7',    title: 'Racha 7',      emoji: '🔥', desc: '7 días seguidos' },
-  { id: 'firstbook',  title: 'Primer libro', emoji: '📚', desc: 'Lee tu primer libro' },
-  { id: 'wpm300',     title: '300 WPM',      emoji: '⚡', desc: 'Alcanza 300 WPM' },
-  { id: 'loci',       title: 'Maestro Loci', emoji: '🏛', desc: 'Completa método Loci' },
-  { id: 'comp90',     title: '90% comp.',    emoji: '🧠', desc: '90% comprensión' },
-  { id: 'level10',    title: 'Nivel 10',     emoji: '👑', desc: 'Llega al nivel 10' },
-  { id: 'sessions50', title: '50 sesiones',  emoji: '🎯', desc: '50 ejercicios' },
-  { id: 'schulte7',   title: 'Schulte 7×7',  emoji: '🔲', desc: 'Cuadrícula 7×7' },
-  { id: 'wpm500',     title: '500 WPM',      emoji: '🚀', desc: 'Alcanza 500 WPM' },
+type IconLib = 'Ionicons' | 'MaterialCommunityIcons';
+
+interface Achievement {
+  id: string;
+  title: string;
+  icon: string;
+  lib: IconLib;
+  desc: string;
+  color: string;
+  cond: boolean;
+}
+
+const MASCOTS: { key: MascotKey; name: string; desc: string; color: string }[] = [
+  { key: 'focus', name: 'Focus', desc: 'El zorro analítico y observador', color: COLORS.focus },
+  { key: 'calm', name: 'Calm', desc: 'El panda sereno de la memoria profunda', color: COLORS.calm },
+  { key: 'swift', name: 'Swift', desc: 'El lince ágil de la lectura veloz', color: COLORS.swift },
+  { key: 'loci', name: 'Loci', desc: 'La lechuza sabia de los palacios mentales', color: COLORS.loci },
+  { key: 'joy', name: 'Joy', desc: 'El delfín alegre de la alta comprensión', color: COLORS.joy },
+  { key: 'memo', name: 'Memo', desc: 'La nube amigable de la memoria ágil', color: COLORS.memo },
 ];
+
+function AchIcon({ icon, lib, size, color }: { icon: string; lib: IconLib; size: number; color: string }) {
+  if (lib === 'MaterialCommunityIcons') {
+    return <MaterialCommunityIcons name={icon as any} size={size} color={color} />;
+  }
+  return <Ionicons name={icon as any} size={size} color={color} />;
+}
 
 export default function PerfilScreen() {
   const profile              = useProfileStore(s => s.profile);
@@ -37,15 +59,95 @@ export default function PerfilScreen() {
   const { update: updatePrefs } = usePrefsStore();
   const unlockedAchievements = useAchievementsStore(s => s.unlocked);
 
+  // Additional stores for dynamic calculated stats
+  const sessions = useSessionStore(s => s.sessions);
+  const libraryItems = useLibraryStore(s => s.items);
+  const progress = useProgressStore(s => s.all);
+
   const [editing, setEditing]     = useState(false);
   const [editName, setEditName]   = useState('');
   const [editBio,  setEditBio]    = useState('');
   const [uploading, setUploading] = useState(false);
 
+  const [avatarMenuVisible, setAvatarMenuVisible] = useState(false);
+  const [mascotModalVisible, setMascotModalVisible] = useState(false);
+  const [diagnosticVisible, setDiagnosticVisible] = useState(false);
+
+  // Interactive settings sheets visibility
+  const [goalsModalVisible, setGoalsModalVisible] = useState(false);
+  const [prefsModalVisible, setPrefsModalVisible] = useState(false);
+  const [accessModalVisible, setAccessModalVisible] = useState(false);
+  const [proModalVisible, setProModalVisible] = useState(false);
+  const [aboutModalVisible, setAboutModalVisible] = useState(false);
+
+  // Local edit states for Goals Modal
+  const [goalMin, setGoalMin] = useState(15);
+  const [goalXp, setGoalXp] = useState(200);
+  const [goalEx, setGoalEx] = useState(3);
+
+  // Local edit states for Preferences Modal
+  const [prefWpm, setPrefWpm] = useState(280);
+  const [prefFont, setPrefFont] = useState<'Lexend' | 'Nunito' | 'Georgia'>('Lexend');
+  const [prefSize, setPrefSize] = useState(16);
+  const [prefNotif, setPrefNotif] = useState(true);
+  const [prefTime, setPrefTime] = useState('20:00');
+
+  // Local edit states for Accessibility Modal
+  const [aDyslexia, setADyslexia] = useState(false);
+  const [aContrast, setAContrast] = useState(false);
+  const [aMotion, setAMotion] = useState(false);
+
+  // Sync state values when modal is displayed
+  useEffect(() => {
+    if (goalsModalVisible && prefs) {
+      setGoalMin(prefs.daily_minutes_goal ?? 15);
+      setGoalXp(prefs.daily_xp_goal ?? 200);
+      setGoalEx(prefs.daily_exercises_goal ?? 3);
+    }
+  }, [goalsModalVisible, prefs]);
+
+  useEffect(() => {
+    if (prefsModalVisible && prefs) {
+      setPrefWpm(prefs.wpm_default ?? 280);
+      setPrefFont(prefs.font_family ?? 'Lexend');
+      setPrefSize(prefs.font_size ?? 16);
+      setPrefNotif(prefs.notifications_enabled ?? true);
+      setPrefTime(prefs.notifications_time ?? '20:00');
+    }
+  }, [prefsModalVisible, prefs]);
+
+  useEffect(() => {
+    if (accessModalVisible && prefs) {
+      setADyslexia(prefs.dyslexia_font ?? false);
+      setAContrast(prefs.high_contrast ?? false);
+      setAMotion(prefs.reduce_motion ?? false);
+    }
+  }, [accessModalVisible, prefs]);
+
   if (!profile) return null;
 
-  // ── Avatar picker ────────────────────────────────────────────────────────────
+  // Real Calculated Stats
+  const totalMinutes = Math.round(sessions.reduce((s, x) => s + (x.time_seconds || 0), 0) / 60);
+  const wpmSessions = sessions.filter(s => s.wpm).map(s => s.wpm as number);
+  const maxWpm = wpmSessions.length ? Math.round(Math.max(...wpmSessions)) : 0;
+  const booksFinished = libraryItems.filter(b => b.progress >= 0.99).length;
+  const progressValues = Object.values(progress);
+  const masteryAvg = progressValues.length ? (progressValues.reduce((s, p) => s + (p?.mastery ?? 0), 0) / progressValues.length) : 0;
+
+  const ACHIEVEMENTS: Achievement[] = [
+    { id: 'streak7',    title: 'Racha 7',      icon: 'flame',           lib: 'Ionicons',              desc: '7 días seguidos', color: '#EF4444', cond: profile.streak >= 7 },
+    { id: 'firstbook',  title: 'Primer libro', icon: 'library',         lib: 'Ionicons',              desc: 'Lee tu primer libro', color: '#3B82F6', cond: booksFinished >= 1 },
+    { id: 'wpm300',     title: '300 WPM',      icon: 'flash',           lib: 'Ionicons',              desc: 'Alcanza 300 WPM', color: '#F97316', cond: maxWpm >= 300 },
+    { id: 'loci',       title: 'Maestro Loci', icon: 'school',          lib: 'Ionicons',              desc: 'Completa método Loci', color: '#8B5CF6', cond: (progress.loci?.mastery ?? 0) >= 0.8 },
+    { id: 'comp90',     title: '90% comp.',    icon: 'brain',           lib: 'MaterialCommunityIcons', desc: '90% comprensión', color: '#22C55E', cond: (progress.comprehension?.best_score ?? 0) >= 0.9 },
+    { id: 'level10',    title: 'Nivel 10',     icon: 'trophy',          lib: 'Ionicons',              desc: 'Llega al nivel 10', color: '#D97706', cond: profile.level >= 10 },
+    { id: 'sessions50', title: '50 sesiones',  icon: 'radio-button-on', lib: 'Ionicons',              desc: '50 ejercicios', color: '#EAB308', cond: sessions.length >= 50 },
+    { id: 'schulte7',   title: 'Schulte 7×7',  icon: 'grid',            lib: 'Ionicons',              desc: 'Cuadrícula 7×7', color: '#16A34A', cond: (progress.schulte?.current_level ?? 0) >= 5 },
+    { id: 'wpm500',     title: '500 WPM',      icon: 'rocket',          lib: 'Ionicons',              desc: 'Alcanza 500 WPM', color: '#DC2626', cond: maxWpm >= 500 },
+  ];
+
   const handlePickAvatar = async () => {
+    setAvatarMenuVisible(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Permiso requerido', 'Necesitamos acceso a tu galería para cambiar el avatar.');
@@ -56,19 +158,25 @@ export default function PerfilScreen() {
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.8,
+      base64: true,
     });
     if (result.canceled || !result.assets[0]) return;
     const asset = result.assets[0];
     setUploading(true);
     const mime = asset.mimeType ?? 'image/jpeg';
-    const url = await uploadAvatar(asset.uri, mime);
+    const url = await uploadAvatar(asset.uri, mime, asset.base64 ?? undefined);
     setUploading(false);
-    if (!url) {
+    if (!url && profile.id !== 'local') {
       Alert.alert('Error', 'No se pudo subir la foto. Verifica tu conexión.');
     }
   };
 
-  // ── Profile edit ─────────────────────────────────────────────────────────────
+  const handleSelectMascot = async (key: MascotKey) => {
+    await updateProfile({ avatar: key, avatar_url: undefined });
+    setMascotModalVisible(false);
+    setAvatarMenuVisible(false);
+  };
+
   const startEdit = () => {
     setEditName(profile.name);
     setEditBio(profile.bio);
@@ -83,7 +191,6 @@ export default function PerfilScreen() {
     setEditing(false);
   };
 
-  // ── Sign out ─────────────────────────────────────────────────────────────────
   const handleSignOut = () => {
     Alert.alert('Cerrar sesión', '¿Seguro que quieres salir?', [
       { text: 'Cancelar', style: 'cancel' },
@@ -99,8 +206,7 @@ export default function PerfilScreen() {
 
         {/* ── Hero ─────────────────────────────────────────────────────────── */}
         <View style={styles.hero}>
-          {/* Avatar */}
-          <Pressable onPress={handlePickAvatar} style={styles.avatarWrap} disabled={uploading || isGuest}>
+          <Pressable onPress={() => setAvatarMenuVisible(true)} style={styles.avatarWrap} disabled={uploading}>
             {uploading ? (
               <ActivityIndicator color={COLORS.focus} size="large" />
             ) : profile.avatar_url ? (
@@ -108,14 +214,11 @@ export default function PerfilScreen() {
             ) : (
               <MascotChar which={(profile.avatar as MascotKey) ?? 'focus'} size={80} expression="happy" />
             )}
-            {!isGuest && (
-              <View style={styles.avatarBadge}>
-                <Text style={styles.avatarBadgeText}>📷</Text>
-              </View>
-            )}
+            <View style={styles.avatarBadge}>
+              <Ionicons name="camera" size={12} color={COLORS.muted} />
+            </View>
           </Pressable>
 
-          {/* Name / bio */}
           {editing ? (
             <View style={{ width: '100%', gap: 10, marginTop: 10 }}>
               <TextInput
@@ -148,17 +251,14 @@ export default function PerfilScreen() {
             <>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
                 <Text style={styles.name}>{profile.name}</Text>
-                {!isGuest && (
-                  <Pressable onPress={startEdit} hitSlop={8}>
-                    <Text style={{ fontSize: 16 }}>✏️</Text>
-                  </Pressable>
-                )}
+                <Pressable onPress={startEdit} hitSlop={8}>
+                  <Ionicons name="pencil" size={16} color={COLORS.muted} />
+                </Pressable>
               </View>
               <Text style={styles.bio}>{profile.bio}</Text>
             </>
           )}
 
-          {/* Level + XP bar */}
           <View style={styles.levelRow}>
             <Text style={styles.levelLabel}>Nivel {profile.level}</Text>
             <Text style={styles.levelXP}>{xpForNextLevel(profile.xp)} XP para Nivel {profile.level + 1}</Text>
@@ -170,62 +270,164 @@ export default function PerfilScreen() {
 
         {/* ── Stats ────────────────────────────────────────────────────────── */}
         <View style={styles.statsGrid}>
-          {[
-            { label: 'Racha', value: profile.streak, unit: '🔥' },
-            { label: 'Nivel',  value: profile.level,  unit: '⭐' },
-            { label: 'XP',     value: profile.xp,     unit: '⚡' },
-          ].map(s => (
-            <View key={s.label} style={styles.statCard}>
-              <Text style={styles.statValue}>{s.unit} {s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
+          <View style={[styles.statCard, { borderLeftColor: '#F97316', borderLeftWidth: 4 }]}>
+            <View style={styles.statIconWrapLeft}>
+              <Ionicons name="time" size={20} color="#F97316" />
             </View>
-          ))}
+            <View style={{ minWidth: 0, flex: 1 }}>
+              <Text style={styles.statValue}>{totalMinutes}</Text>
+              <Text style={styles.statLabel}>Minutos</Text>
+            </View>
+          </View>
+
+          <View style={[styles.statCard, { borderLeftColor: '#22C55E', borderLeftWidth: 4 }]}>
+            <View style={styles.statIconWrapLeft}>
+              <Ionicons name="speedometer" size={20} color="#22C55E" />
+            </View>
+            <View style={{ minWidth: 0, flex: 1 }}>
+              <Text style={styles.statValue}>{maxWpm}</Text>
+              <Text style={styles.statLabel}>WPM máx</Text>
+            </View>
+          </View>
+
+          <View style={[styles.statCard, { borderLeftColor: '#3B82F6', borderLeftWidth: 4 }]}>
+            <View style={styles.statIconWrapLeft}>
+              <Ionicons name="book" size={20} color="#3B82F6" />
+            </View>
+            <View style={{ minWidth: 0, flex: 1 }}>
+              <Text style={styles.statValue}>{booksFinished}</Text>
+              <Text style={styles.statLabel}>Libros</Text>
+            </View>
+          </View>
+
+          <View style={[styles.statCard, { borderLeftColor: '#8B5CF6', borderLeftWidth: 4 }]}>
+            <View style={styles.statIconWrapLeft}>
+              <MaterialCommunityIcons name="brain" size={20} color="#8B5CF6" />
+            </View>
+            <View style={{ minWidth: 0, flex: 1 }}>
+              <Text style={styles.statValue}>{Math.round(masteryAvg * 100)}%</Text>
+              <Text style={styles.statLabel}>Maestría</Text>
+            </View>
+          </View>
         </View>
 
         {/* ── Achievements ─────────────────────────────────────────────────── */}
-        <Text style={styles.sectionTitle}>Logros</Text>
-        <View style={styles.achievementsGrid}>
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Logros</Text>
+          <View style={styles.sectionTitleRightBadge}>
+            <Text style={styles.sectionTitleRightBadgeText}>
+              {ACHIEVEMENTS.filter(a => unlockedAchievements.includes(a.id) || a.cond).length}/{ACHIEVEMENTS.length}
+            </Text>
+          </View>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.achievementsScroll}
+          style={{ marginBottom: 20 }}
+        >
           {ACHIEVEMENTS.map(a => {
-            const unlocked = unlockedAchievements.includes(a.id);
+            const unlocked = unlockedAchievements.includes(a.id) || a.cond;
             return (
-              <View key={a.id} style={[styles.achievementBadge, !unlocked && styles.achievementLocked]}>
-                <Text style={{ fontSize: 24, opacity: unlocked ? 1 : 0.3 }}>{a.emoji}</Text>
-                <Text style={[styles.achievementLabel, !unlocked && { color: COLORS.subtle }]}>{a.title}</Text>
-                {unlocked && <Text style={styles.achievementCheck}>✓</Text>}
+              <View key={a.id} style={[styles.achievementCard, !unlocked && styles.achievementCardLocked]}>
+                <View style={[styles.achievementIconCircle, { backgroundColor: unlocked ? (a.color + '1A') : COLORS.surface }, !unlocked && { opacity: 0.6 }]}>
+                  <AchIcon icon={unlocked ? a.icon : 'lock-closed'} lib={unlocked ? a.lib : 'Ionicons'} size={24} color={unlocked ? a.color : COLORS.subtle} />
+                </View>
+                <Text style={[styles.achievementCardTitle, !unlocked && { color: COLORS.subtle }]} numberOfLines={1}>{a.title}</Text>
+                <Text style={styles.achievementCardDesc}>{a.desc}</Text>
+                {unlocked && (
+                  <View style={styles.achievementCheckWrap}>
+                    <Ionicons name="checkmark-circle" size={14} color="#22C55E" />
+                  </View>
+                )}
               </View>
             );
           })}
-        </View>
+        </ScrollView>
 
         {/* ── Settings ─────────────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Configuración</Text>
         <View style={styles.settingsCard}>
-          <View style={[styles.settingsRow, { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: COLORS.surface }]}>
-            <Text style={styles.settingsLabel}>Reducir animaciones</Text>
-            <Switch
-              value={prefs.reduce_motion}
-              onValueChange={val => updatePrefs({ reduce_motion: val })}
-              trackColor={{ true: COLORS.focus }}
-            />
-          </View>
-          <View style={[styles.settingsRow, { paddingVertical: 14 }]}>
-            <Text style={styles.settingsLabel}>Notificaciones diarias</Text>
-            <Switch
-              value={prefs.notifications_enabled}
-              onValueChange={async (val) => {
-                await updatePrefs({ notifications_enabled: val });
-                if (val) {
-                  scheduleDailyReminder(prefs.notifications_time).catch(() => {});
-                } else {
-                  cancelDailyReminder().catch(() => {});
-                }
-              }}
-              trackColor={{ true: COLORS.focus }}
-            />
-          </View>
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, pressed && { backgroundColor: COLORS.surface }]}
+            onPress={() => setGoalsModalVisible(true)}
+          >
+            <View style={[styles.settingIconWrap, { backgroundColor: '#22C55E1A' }]}>
+              <MaterialCommunityIcons name="target" size={18} color="#22C55E" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Meta diaria</Text>
+              <Text style={styles.settingsSubtext}>
+                {prefs.daily_minutes_goal ?? 15} min · {prefs.daily_xp_goal ?? 200} XP
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, pressed && { backgroundColor: COLORS.surface }]}
+            onPress={() => setPrefsModalVisible(true)}
+          >
+            <View style={[styles.settingIconWrap, { backgroundColor: '#F973161A' }]}>
+              <Ionicons name="speedometer" size={18} color="#F97316" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Preferencias de lectura</Text>
+              <Text style={styles.settingsSubtext}>
+                {prefs.wpm_default ?? 280} WPM · {prefs.font_family ?? 'Lexend'} ({prefs.font_size ?? 16}px)
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, pressed && { backgroundColor: COLORS.surface }]}
+            onPress={() => setAccessModalVisible(true)}
+          >
+            <View style={[styles.settingIconWrap, { backgroundColor: '#8B5CF61A' }]}>
+              <Ionicons name="accessibility" size={18} color="#8B5CF6" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Accesibilidad</Text>
+              <Text style={styles.settingsSubtext}>
+                {prefs.dyslexia_font || prefs.high_contrast || prefs.reduce_motion ? 'Personalizado' : 'Estándar'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, pressed && { backgroundColor: COLORS.surface }]}
+            onPress={() => setProModalVisible(true)}
+          >
+            <View style={[styles.settingIconWrap, { backgroundColor: '#EAB3081A' }]}>
+              <Ionicons name="trophy" size={18} color="#EAB308" />
+            </View>
+            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.settingsLabel}>Plan actual</Text>
+              <View style={styles.proBadge}>
+                <Text style={styles.proBadgeText}>PRO</Text>
+              </View>
+            </View>
+            <Text style={styles.settingsValueRight}>Gratuito</Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+          </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [styles.settingsRow, { borderBottomWidth: 0 }, pressed && { backgroundColor: COLORS.surface }]}
+            onPress={() => setAboutModalVisible(true)}
+          >
+            <View style={[styles.settingIconWrap, { backgroundColor: '#6B72801A' }]}>
+              <Ionicons name="information-circle" size={18} color="#6B7280" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.settingsLabel}>Acerca de LectorApp</Text>
+              <Text style={styles.settingsSubtext}>v1.0.0 · Ver detalles</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+          </Pressable>
         </View>
 
-        {/* ── Account ──────────────────────────────────────────────────────── */}
         {!isGuest && (
           <Pressable onPress={handleSignOut} style={styles.signOutBtn}>
             <Text style={styles.signOutText}>Cerrar sesión</Text>
@@ -234,6 +436,663 @@ export default function PerfilScreen() {
 
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      {/* ── Modal: Avatar Menu ────────────────────────────────────────────── */}
+      <Modal
+        visible={avatarMenuVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAvatarMenuVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setAvatarMenuVisible(false)}>
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetKnob} />
+              <Text style={styles.bottomSheetTitle}>Personalizar Avatar</Text>
+              <Text style={styles.bottomSheetSubtitle}>Selecciona cómo quieres mostrarte en la plataforma</Text>
+            </View>
+
+            <View style={styles.bottomSheetOptions}>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.bottomSheetOptionBtn,
+                  { backgroundColor: pressed ? COLORS.surface : '#fff' }
+                ]}
+                onPress={() => {
+                  setAvatarMenuVisible(false);
+                  setMascotModalVisible(true);
+                }}
+              >
+                <View style={[styles.bottomSheetOptionIcon, { backgroundColor: COLORS.focus + '12' }]}>
+                  <Ionicons name="sparkles" size={20} color={COLORS.focus} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bottomSheetOptionText}>Elegir Mascota LectorApp</Text>
+                  <Text style={styles.bottomSheetOptionSubtext}>Usa uno de nuestros personajes guías premium</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  styles.bottomSheetOptionBtn,
+                  { backgroundColor: pressed ? COLORS.surface : '#fff' }
+                ]}
+                onPress={handlePickAvatar}
+              >
+                <View style={[styles.bottomSheetOptionIcon, { backgroundColor: COLORS.swift + '12' }]}>
+                  <Ionicons name="image" size={20} color={COLORS.swift} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bottomSheetOptionText}>Subir Foto de Galería</Text>
+                  <Text style={styles.bottomSheetOptionSubtext}>Elige una foto de perfil personalizada</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
+              </Pressable>
+            </View>
+
+            <Pressable
+              style={({ pressed }) => [
+                styles.bottomSheetCancelBtn,
+                pressed && { opacity: 0.8 }
+              ]}
+              onPress={() => setAvatarMenuVisible(false)}
+            >
+              <Text style={styles.bottomSheetCancelText}>Cancelar</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Modal: Mascot Carousel ────────────────────────────────────────── */}
+      <Modal
+        visible={mascotModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setMascotModalVisible(false)}
+      >
+        <View style={styles.fullscreenModalOverlay}>
+          <View style={styles.mascotModalCard}>
+            <View style={styles.mascotModalHeader}>
+              <Text style={styles.mascotModalTitle}>Elige tu Mascota Guía</Text>
+              <Pressable onPress={() => setMascotModalVisible(false)} hitSlop={8}>
+                <Ionicons name="close-circle" size={24} color={COLORS.muted} />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.mascotCarousel}
+              snapToInterval={240}
+              decelerationRate="fast"
+            >
+              {MASCOTS.map((m) => {
+                const isSelected = profile.avatar === m.key && !profile.avatar_url;
+                return (
+                  <Pressable
+                    key={m.key}
+                    onPress={() => handleSelectMascot(m.key)}
+                    style={[
+                      styles.mascotCarouselCard,
+                      { borderColor: isSelected ? m.color : COLORS.border },
+                      isSelected && { backgroundColor: m.color + '05', borderWidth: 2 }
+                    ]}
+                  >
+                    <View style={[styles.mascotCarouselCharWrap, { backgroundColor: m.color + '12' }]}>
+                      <MascotChar which={m.key} size={88} breathing blinking />
+                    </View>
+                    <Text style={[styles.mascotCarouselName, { color: m.color }]}>{m.name}</Text>
+                    <Text style={styles.mascotCarouselDesc}>{m.desc}</Text>
+                    {isSelected && (
+                      <View style={[styles.mascotSelectedBadge, { backgroundColor: m.color }]}>
+                        <Ionicons name="checkmark" size={12} color="#fff" />
+                        <Text style={styles.mascotSelectedText}>Activo</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            
+            <Text style={styles.swipeTipText}>Desliza para explorar más personajes...</Text>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal: Diagnostic / Troubleshooting Guide ─────────────────────── */}
+      <Modal
+        visible={diagnosticVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setDiagnosticVisible(false)}
+      >
+        <View style={styles.fullscreenModalOverlay}>
+          <View style={[styles.mascotModalCard, { maxWidth: 380, maxHeight: '80%' }]}>
+            <View style={styles.mascotModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="pulse" size={20} color={COLORS.focus} />
+                <Text style={styles.mascotModalTitle}>Soporte Expo / Metro</Text>
+              </View>
+              <Pressable onPress={() => setDiagnosticVisible(false)} hitSlop={8}>
+                <Ionicons name="close-circle" size={24} color={COLORS.muted} />
+              </Pressable>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
+              <Text style={styles.diagnosticIntro}>
+                Si tienes problemas para conectar tu dispositivo físico (iOS o Android) al Metro bundler en tu PC, sigue esta guía técnica:
+              </Text>
+
+              <View style={styles.diagnosticStep}>
+                <View style={[styles.diagnosticStepNum, { backgroundColor: COLORS.focus }]}>
+                  <Text style={styles.diagnosticStepNumText}>1</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagnosticStepTitle}>Misma Red Wi-Fi</Text>
+                  <Text style={styles.diagnosticStepDesc}>
+                    Asegúrate de que tu celular y tu computadora estén conectados exactamente a la misma red de Wi-Fi local.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.diagnosticStep}>
+                <View style={[styles.diagnosticStepNum, { backgroundColor: COLORS.calm }]}>
+                  <Text style={styles.diagnosticStepNumText}>2</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagnosticStepTitle}>Iniciar en Modo Tunnel</Text>
+                  <Text style={styles.diagnosticStepDesc}>
+                    Si el router de tu casa tiene habilitado aislamiento inalámbrico (Wireless Client Isolation), inicia Expo usando el túnel externo de Ngrok:
+                  </Text>
+                  <View style={styles.codeBlock}>
+                    <Text style={styles.codeText}>npx expo start --tunnel</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.diagnosticStep}>
+                <View style={[styles.diagnosticStepNum, { backgroundColor: COLORS.swift }]}>
+                  <Text style={styles.diagnosticStepNumText}>3</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagnosticStepTitle}>Firewall de Windows</Text>
+                  <Text style={styles.diagnosticStepDesc}>
+                    Verifica que las reglas de entrada del Firewall de Windows permitan conexiones entrantes de "Node.js JavaScript Runtime" para redes privadas.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.diagnosticStep}>
+                <View style={[styles.diagnosticStepNum, { backgroundColor: COLORS.loci }]}>
+                  <Text style={styles.diagnosticStepNumText}>4</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.diagnosticStepTitle}>Evitar IPs Virtuales</Text>
+                  <Text style={styles.diagnosticStepDesc}>
+                    Si tienes activado Docker, VirtualBox o WSL, Metro puede publicar su red en un adaptador virtual inválido. Configura tu IP física real:
+                  </Text>
+                  <View style={styles.codeBlock}>
+                    <Text style={styles.codeText}>REACT_NATIVE_PACKAGER_HOSTNAME=tu-ip-local</Text>
+                  </View>
+                </View>
+              </View>
+            </ScrollView>
+            
+            <Pressable
+              style={({ pressed }) => [
+                styles.diagnosticCloseBtn,
+                pressed && { opacity: 0.9 }
+              ]}
+              onPress={() => setDiagnosticVisible(false)}
+            >
+              <Text style={styles.diagnosticCloseText}>Entendido</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Modal: Meta Diaria ───────────────────────────────────────────── */}
+      <Modal
+        visible={goalsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setGoalsModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setGoalsModalVisible(false)}>
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetKnob} />
+              <Text style={styles.bottomSheetTitle}>Meta Diaria</Text>
+              <Text style={styles.bottomSheetSubtitle}>Ajusta tus objetivos diarios de entrenamiento</Text>
+            </View>
+
+            <View style={{ gap: 14, marginBottom: 20 }}>
+              <View>
+                <Text style={styles.label}>Minutos al día</Text>
+                <View style={styles.stepperRow}>
+                  <Pressable
+                    style={styles.stepperBtn}
+                    onPress={() => setGoalMin(prev => Math.max(5, prev - 5))}
+                  >
+                    <Ionicons name="remove" size={18} color={COLORS.ink} />
+                  </Pressable>
+                  <Text style={styles.stepperValue}>{goalMin} min</Text>
+                  <Pressable
+                    style={styles.stepperBtn}
+                    onPress={() => setGoalMin(prev => Math.min(60, prev + 5))}
+                  >
+                    <Ionicons name="add" size={18} color={COLORS.ink} />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View>
+                <Text style={styles.label}>XP diaria</Text>
+                <View style={styles.stepperRow}>
+                  <Pressable
+                    style={styles.stepperBtn}
+                    onPress={() => setGoalXp(prev => Math.max(50, prev - 50))}
+                  >
+                    <Ionicons name="remove" size={18} color={COLORS.ink} />
+                  </Pressable>
+                  <Text style={styles.stepperValue}>{goalXp} XP</Text>
+                  <Pressable
+                    style={styles.stepperBtn}
+                    onPress={() => setGoalXp(prev => Math.min(500, prev + 50))}
+                  >
+                    <Ionicons name="add" size={18} color={COLORS.ink} />
+                  </Pressable>
+                </View>
+              </View>
+
+              <View>
+                <Text style={styles.label}>Ejercicios al día</Text>
+                <View style={styles.stepperRow}>
+                  <Pressable
+                    style={styles.stepperBtn}
+                    onPress={() => setGoalEx(prev => Math.max(1, prev - 1))}
+                  >
+                    <Ionicons name="remove" size={18} color={COLORS.ink} />
+                  </Pressable>
+                  <Text style={styles.stepperValue}>{goalEx} ejerc.</Text>
+                  <Pressable
+                    style={styles.stepperBtn}
+                    onPress={() => setGoalEx(prev => Math.min(10, prev + 1))}
+                  >
+                    <Ionicons name="add" size={18} color={COLORS.ink} />
+                  </Pressable>
+                </View>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                style={styles.editCancelBtn}
+                onPress={() => setGoalsModalVisible(false)}
+              >
+                <Text style={styles.editCancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSaveBtn}
+                onPress={async () => {
+                  await updatePrefs({
+                    daily_minutes_goal: goalMin,
+                    daily_xp_goal: goalXp,
+                    daily_exercises_goal: goalEx,
+                  });
+                  setGoalsModalVisible(false);
+                }}
+              >
+                <Text style={styles.editSaveText}>Guardar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Modal: Preferencias de Lectura ─────────────────────────────── */}
+      <Modal
+        visible={prefsModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPrefsModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPrefsModalVisible(false)}>
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetKnob} />
+              <Text style={styles.bottomSheetTitle}>Preferencias</Text>
+              <Text style={styles.bottomSheetSubtitle}>Personaliza tu experiencia de lectura</Text>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 350, marginBottom: 20 }}>
+              <View style={{ gap: 14 }}>
+                <View>
+                  <Text style={styles.label}>WPM por defecto</Text>
+                  <View style={styles.stepperRow}>
+                    <Pressable
+                      style={styles.stepperBtn}
+                      onPress={() => setPrefWpm(prev => Math.max(150, prev - 10))}
+                    >
+                      <Ionicons name="remove" size={18} color={COLORS.ink} />
+                    </Pressable>
+                    <Text style={styles.stepperValue}>{prefWpm} WPM</Text>
+                    <Pressable
+                      style={styles.stepperBtn}
+                      onPress={() => setPrefWpm(prev => Math.min(800, prev + 10))}
+                    >
+                      <Ionicons name="add" size={18} color={COLORS.ink} />
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={styles.label}>Tipografía</Text>
+                  <View style={styles.fontOptionGrid}>
+                    {(['Lexend', 'Nunito', 'Georgia'] as const).map(f => {
+                      const isActive = prefFont === f;
+                      return (
+                        <Pressable
+                          key={f}
+                          style={[styles.fontOptionBtn, isActive && styles.fontOptionBtnActive]}
+                          onPress={() => setPrefFont(f)}
+                        >
+                          <Text style={[styles.fontOptionText, { fontFamily: f }, isActive && styles.fontOptionTextActive]}>
+                            {f}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={styles.label}>Tamaño de letra</Text>
+                  <View style={styles.stepperRow}>
+                    <Pressable
+                      style={styles.stepperBtn}
+                      onPress={() => setPrefSize(prev => Math.max(12, prev - 1))}
+                    >
+                      <Ionicons name="remove" size={18} color={COLORS.ink} />
+                    </Pressable>
+                    <Text style={styles.stepperValue}>{prefSize} px</Text>
+                    <Pressable
+                      style={styles.stepperBtn}
+                      onPress={() => setPrefSize(prev => Math.min(24, prev + 1))}
+                    >
+                      <Ionicons name="add" size={18} color={COLORS.ink} />
+                    </Pressable>
+                  </View>
+                </View>
+
+                <View style={styles.toggleRow}>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={styles.toggleLabel}>Recordatorio Diario</Text>
+                    <Text style={styles.settingsSubtext}>Recibe una alerta para tu entrenamiento</Text>
+                  </View>
+                  <Switch
+                    value={prefNotif}
+                    onValueChange={setPrefNotif}
+                    trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                    thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                  />
+                </View>
+
+                {prefNotif && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text style={styles.label}>Hora del recordatorio</Text>
+                    <TextInput
+                      style={[styles.editInput, { width: 100, textAlign: 'center', paddingVertical: 6 }]}
+                      value={prefTime}
+                      onChangeText={setPrefTime}
+                      placeholder="20:00"
+                      maxLength={5}
+                    />
+                  </View>
+                )}
+              </View>
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                style={styles.editCancelBtn}
+                onPress={() => setPrefsModalVisible(false)}
+              >
+                <Text style={styles.editCancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSaveBtn}
+                onPress={async () => {
+                  await updatePrefs({
+                    wpm_default: prefWpm,
+                    font_family: prefFont,
+                    font_size: prefSize,
+                    notifications_enabled: prefNotif,
+                    notifications_time: prefTime,
+                  });
+                  if (prefNotif) {
+                    await scheduleDailyReminder(prefTime);
+                  } else {
+                    await cancelDailyReminder();
+                  }
+                  setPrefsModalVisible(false);
+                }}
+              >
+                <Text style={styles.editSaveText}>Guardar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Modal: Accesibilidad ───────────────────────────────────────── */}
+      <Modal
+        visible={accessModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAccessModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setAccessModalVisible(false)}>
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetKnob} />
+              <Text style={styles.bottomSheetTitle}>Accesibilidad</Text>
+              <Text style={styles.bottomSheetSubtitle}>Opciones de visualización adaptativa</Text>
+            </View>
+
+            <View style={{ gap: 8, marginBottom: 20 }}>
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.toggleLabel}>Fuente para Dislexia</Text>
+                  <Text style={styles.settingsSubtext}>Usa la tipografía adaptada OpenDyslexic</Text>
+                </View>
+                <Switch
+                  value={aDyslexia}
+                  onValueChange={setADyslexia}
+                  trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                />
+              </View>
+
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.toggleLabel}>Alto contraste</Text>
+                  <Text style={styles.settingsSubtext}>Optimiza colores para mejor lectura</Text>
+                </View>
+                <Switch
+                  value={aContrast}
+                  onValueChange={setAContrast}
+                  trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                />
+              </View>
+
+              <View style={styles.toggleRow}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={styles.toggleLabel}>Reducir movimiento</Text>
+                  <Text style={styles.settingsSubtext}>Desactiva animaciones de interfaz</Text>
+                </View>
+                <Switch
+                  value={aMotion}
+                  onValueChange={setAMotion}
+                  trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                  thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                style={styles.editCancelBtn}
+                onPress={() => setAccessModalVisible(false)}
+              >
+                <Text style={styles.editCancelText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                style={styles.editSaveBtn}
+                onPress={async () => {
+                  await updatePrefs({
+                    dyslexia_font: aDyslexia,
+                    high_contrast: aContrast,
+                    reduce_motion: aMotion,
+                  });
+                  setAccessModalVisible(false);
+                }}
+              >
+                <Text style={styles.editSaveText}>Aplicar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Modal: LectorApp PRO ───────────────────────────────────────── */}
+      <Modal
+        visible={proModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setProModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setProModalVisible(false)}>
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetKnob} />
+              <Text style={styles.bottomSheetTitle}>LectorApp PRO</Text>
+              <Text style={styles.bottomSheetSubtitle}>Desbloquea todo tu potencial cognitivo</Text>
+            </View>
+
+            <View style={styles.proGoldCard}>
+              <Text style={styles.proGoldTitle}>$4.99 <Text style={{ fontSize: 14, fontFamily: FONTS.heading }}>/mes</Text></Text>
+              <Text style={styles.proGoldSub}>Entrenamiento premium ilimitado y científico</Text>
+            </View>
+
+            <View style={{ gap: 10, marginBottom: 20 }}>
+              {[
+                { label: 'Ejercicios ilimitados', desc: 'Entrena sin límites de tiempo o intentos' },
+                { label: 'Análisis avanzado', desc: 'Gráficas detalladas de tu WPM y comprensión' },
+                { label: 'Biblioteca Premium', desc: 'Acceso completo a nuestro catálogo de más de 200 libros' },
+                { label: 'Modo Offline completo', desc: 'Entrena y lee en aviones o donde quieras' },
+                { label: 'Cero anuncios', desc: 'Una interfaz limpia enfocada en tu concentración' }
+              ].map((item, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
+                  <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#EAB3081A', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
+                    <Ionicons name="checkmark" size={12} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.proFeatureText}>{item.label}</Text>
+                    <Text style={styles.settingsSubtext}>{item.desc}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+
+            <View style={{ gap: 10 }}>
+              <Pressable
+                style={({ pressed }) => [styles.editSaveBtn, { backgroundColor: '#D97706' }, pressed && { opacity: 0.9 }]}
+                onPress={() => {
+                  Alert.alert('LectorApp PRO', '¡Gracias por tu interés! Esta funcionalidad premium estará disponible muy pronto.');
+                  setProModalVisible(false);
+                }}
+              >
+                <Text style={styles.editSaveText}>Probar 7 días gratis</Text>
+              </Pressable>
+              <Pressable
+                style={styles.bottomSheetCancelBtn}
+                onPress={() => setProModalVisible(false)}
+              >
+                <Text style={styles.bottomSheetCancelText}>Cerrar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* ── Modal: Acerca de LectorApp ─────────────────────────────────── */}
+      <Modal
+        visible={aboutModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setAboutModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setAboutModalVisible(false)}>
+          <View style={styles.bottomSheetContainer}>
+            <View style={styles.bottomSheetHeader}>
+              <View style={styles.bottomSheetKnob} />
+              <Text style={styles.bottomSheetTitle}>Acerca de LectorApp</Text>
+              <Text style={styles.bottomSheetSubtitle}>Tu coach de neuro-aprendizaje digital</Text>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300, marginBottom: 20 }}>
+              <View style={{ gap: 12 }}>
+                <Text style={styles.aboutText}>
+                  LectorApp es una plataforma interactiva diseñada en base a rigurosas investigaciones sobre neurociencia cognitiva y técnicas avanzadas de lectura veloz.
+                </Text>
+                <Text style={styles.aboutText}>
+                  Mediante ejercicios adaptativos y gamificados como Schulte, Loci y Word Span, entrenamos tu percepción visual y memoria de trabajo para aumentar exponencialmente tu velocidad de lectura y nivel de comprensión.
+                </Text>
+                <Text style={[styles.aboutText, { fontFamily: FONTS.headingSemi }]}>
+                  Versión: v1.0.0 (Beta)
+                </Text>
+                <Text style={styles.aboutText}>
+                  Desarrollado para optimizar el rendimiento humano. Sincronización en la nube mediante Supabase habilitada.
+                </Text>
+
+                <Pressable
+                  style={({ pressed }) => [styles.resetBtn, pressed && { backgroundColor: '#EF44441A' }]}
+                  onPress={() => {
+                    Alert.alert(
+                      'Restaurar Datos',
+                      '¿Estás absolutamente seguro de que deseas restablecer la aplicación? Esto eliminará todo tu historial, racha y progresos de forma irreversible.',
+                      [
+                        { text: 'Cancelar', style: 'cancel' },
+                        {
+                          text: 'Restablecer',
+                          style: 'destructive',
+                          onPress: async () => {
+                            await AsyncStorage.clear();
+                            Alert.alert('Completado', 'Los datos locales han sido restaurados. Por favor reinicia la aplicación.');
+                            setAboutModalVisible(false);
+                          }
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Text style={styles.resetBtnText}>Restaurar datos locales</Text>
+                </Pressable>
+              </View>
+            </ScrollView>
+
+            <Pressable
+              style={styles.bottomSheetCancelBtn}
+              onPress={() => setAboutModalVisible(false)}
+            >
+              <Text style={styles.bottomSheetCancelText}>Cerrar</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -242,47 +1101,517 @@ const styles = StyleSheet.create({
   safe:      { flex: 1, backgroundColor: COLORS.canvas },
   scroll:    { padding: 20 },
 
-  // Hero
   hero:        { backgroundColor: COLORS.white, borderRadius: 24, borderWidth: 1.5, borderColor: COLORS.focus + '40', padding: 20, alignItems: 'center', marginBottom: 16 },
   avatarWrap:  { width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.focus + '20', alignItems: 'center', justifyContent: 'center' },
   avatarImg:   { width: 88, height: 88, borderRadius: 44 },
   avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  avatarBadgeText: { fontSize: 12 },
   name:        { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
   bio:         { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 4 },
   levelRow:    { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 16 },
   levelLabel:  { fontFamily: FONTS.heading, fontSize: 14, color: COLORS.ink },
   levelXP:     { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted },
 
-  // Edit
   editInput:      { fontFamily: FONTS.body, fontSize: 15, borderWidth: 1.5, borderColor: COLORS.focus + '60', borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, color: COLORS.ink, backgroundColor: COLORS.surface },
   editCancelBtn:  { flex: 1, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center' },
   editCancelText: { fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.muted },
   editSaveBtn:    { flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: COLORS.focus, alignItems: 'center' },
   editSaveText:   { fontFamily: FONTS.headingSemi, fontSize: 13, color: '#fff' },
 
-  // Stats
-  statsGrid: { flexDirection: 'row', gap: 10, marginBottom: 20 },
-  statCard:  { flex: 1, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.border, padding: 12, alignItems: 'center' },
-  statValue: { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
-  statLabel: { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: 2 },
+  statsGrid:    { flexDirection: 'row', gap: 10, marginBottom: 20 },
+  statCard:     { flex: 1, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.border, padding: 12, alignItems: 'center' },
+  statIconRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  statValue:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  statLabel:    { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: 2 },
 
-  // Section title
   sectionTitle: { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, marginBottom: 10 },
 
-  // Achievements
-  achievementsGrid:  { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  achievementBadge:  { width: '30%', backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.focus + '40', padding: 10, alignItems: 'center', gap: 4 },
-  achievementLocked: { borderColor: COLORS.border },
-  achievementLabel:  { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.inkLight, textAlign: 'center' },
-  achievementCheck:  { fontSize: 9, color: '#22C55E', fontFamily: FONTS.heading },
+  achievementsGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  achievementBadge:   { width: '30%', backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.focus + '40', padding: 10, alignItems: 'center', gap: 4 },
+  achievementLocked:  { borderColor: COLORS.border },
+  achievementLabel:   { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.inkLight, textAlign: 'center' },
+  achievementCheckWrap: { position: 'absolute', top: 6, right: 6 },
 
-  // Settings card
   settingsCard:   { backgroundColor: COLORS.white, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 12, overflow: 'hidden' },
   settingsRow:    { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16 },
   settingsLabel:  { fontFamily: FONTS.body, fontSize: 15, color: COLORS.ink, flex: 1 },
 
-  // Sign out
   signOutBtn:  { marginTop: 4, paddingVertical: 14, borderRadius: 16, borderWidth: 1.5, borderColor: '#EF4444', alignItems: 'center' },
   signOutText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: '#EF4444' },
+
+  // Bottom Sheet Custom Modals Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  bottomSheetContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 28,
+    borderWidth: 1.2,
+    borderColor: COLORS.border,
+  },
+  bottomSheetHeader: {
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  bottomSheetKnob: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: COLORS.border,
+    marginBottom: 12,
+  },
+  bottomSheetTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 18,
+    color: COLORS.ink,
+  },
+  bottomSheetSubtitle: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.muted,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  bottomSheetOptions: {
+    gap: 12,
+    marginBottom: 20,
+  },
+  bottomSheetOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1.2,
+    borderColor: COLORS.border,
+    gap: 12,
+  },
+  bottomSheetOptionIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSheetOptionText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  bottomSheetOptionSubtext: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.subtle,
+    marginTop: 1,
+  },
+  bottomSheetCancelBtn: {
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomSheetCancelText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
+    color: COLORS.muted,
+  },
+
+  // Mascot Carousel Modal Styles
+  fullscreenModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 20,
+  },
+  mascotModalCard: {
+    backgroundColor: '#fff',
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    width: '100%',
+    maxWidth: 360,
+    padding: 20,
+    alignItems: 'center',
+  },
+  mascotModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 16,
+  },
+  mascotModalTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 18,
+    color: COLORS.ink,
+  },
+  mascotCarousel: {
+    paddingVertical: 10,
+    gap: 16,
+  },
+  mascotCarouselCard: {
+    width: 220,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    borderWidth: 1.2,
+    borderColor: COLORS.border,
+    padding: 16,
+    alignItems: 'center',
+  },
+  mascotCarouselCharWrap: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  mascotCarouselName: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 16,
+    marginBottom: 4,
+  },
+  mascotCarouselDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  mascotSelectedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    marginTop: 10,
+  },
+  mascotSelectedText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 10,
+    color: '#fff',
+  },
+  swipeTipText: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.subtle,
+    marginTop: 12,
+  },
+
+  // Diagnostic styles
+  diagnosticOpenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    backgroundColor: COLORS.focus + '12',
+  },
+  diagnosticOpenText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 12,
+    color: COLORS.focus,
+  },
+  diagnosticIntro: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.muted,
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  diagnosticStep: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 16,
+  },
+  diagnosticStepNum: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  diagnosticStepNumText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 12,
+    color: '#fff',
+  },
+  diagnosticStepTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
+    color: COLORS.ink,
+    marginBottom: 2,
+  },
+  diagnosticStepDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.muted,
+    lineHeight: 16,
+  },
+  codeBlock: {
+    backgroundColor: COLORS.canvas,
+    borderRadius: 8,
+    padding: 8,
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  codeText: {
+    fontFamily: Platform.OS === 'ios' ? 'Courier New' : 'monospace',
+    fontSize: 10,
+    color: COLORS.inkLight,
+  },
+  diagnosticCloseBtn: {
+    width: '100%',
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: COLORS.focus,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 16,
+  },
+  diagnosticCloseText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
+    color: '#fff',
+  },
+
+  // Additional Premium Custom Styles
+  statIconWrapLeft: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.canvas,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  sectionTitleRightBadge: {
+    backgroundColor: COLORS.focus + '15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+  },
+  sectionTitleRightBadgeText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 11,
+    color: COLORS.focus,
+  },
+  achievementsScroll: {
+    paddingVertical: 4,
+    paddingLeft: 4,
+    paddingRight: 20,
+    gap: 12,
+  },
+  achievementCard: {
+    width: 125,
+    height: 145,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.focus + '30',
+    padding: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    shadowColor: COLORS.focus,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  achievementCardLocked: {
+    borderColor: COLORS.border,
+    opacity: 0.5,
+    backgroundColor: COLORS.surface,
+  },
+  achievementIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  achievementCardTitle: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 12,
+    color: COLORS.ink,
+    textAlign: 'center',
+  },
+  achievementCardDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 9,
+    color: COLORS.muted,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  settingIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  settingsSubtext: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  settingsValueRight: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 12,
+    color: COLORS.muted,
+    marginRight: 6,
+  },
+  proBadge: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  proBadgeText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 9,
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  label: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11,
+    color: COLORS.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: COLORS.border,
+    marginTop: 4,
+  },
+  stepperBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.white,
+    borderWidth: 1.2,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperValue: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 15,
+    color: COLORS.ink,
+  },
+  fontOptionGrid: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  fontOptionBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.2,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fontOptionBtnActive: {
+    borderColor: COLORS.focus,
+    backgroundColor: COLORS.focus + '12',
+  },
+  fontOptionText: {
+    fontSize: 13,
+    color: COLORS.inkLight,
+  },
+  fontOptionTextActive: {
+    color: COLORS.focus,
+    fontFamily: FONTS.headingBold,
+  },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border + '30',
+  },
+  toggleLabel: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  proGoldCard: {
+    backgroundColor: '#D97706',
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 16,
+    width: '100%',
+  },
+  proGoldTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 22,
+    color: '#fff',
+  },
+  proGoldSub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.9)',
+    marginTop: 4,
+  },
+  proFeatureText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
+    color: COLORS.ink,
+  },
+  aboutText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: COLORS.inkLight,
+    lineHeight: 18,
+    marginBottom: 10,
+  },
+  resetBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+  },
+  resetBtnText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
+    color: '#EF4444',
+  },
 });

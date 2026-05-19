@@ -4,18 +4,22 @@ import Animated, {
   useSharedValue, useAnimatedStyle,
   withTiming, withSequence, withDelay, Easing,
 } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { FONTS } from '../../constants/typography';
 
-const ACHIEVEMENTS_META: Record<string, { emoji: string; title: string; desc: string }> = {
-  streak7:    { emoji: '🔥', title: 'Racha 7',       desc: '7 días seguidos' },
-  firstbook:  { emoji: '📚', title: 'Primer libro',  desc: 'Completaste tu primer libro' },
-  wpm300:     { emoji: '⚡', title: '300 WPM',        desc: 'Velocidad de lectura élite' },
-  loci:       { emoji: '🏛', title: 'Maestro Loci',   desc: 'Palacio de la memoria activado' },
-  comp90:     { emoji: '🧠', title: '90% comp.',      desc: 'Comprensión casi perfecta' },
-  level10:    { emoji: '👑', title: 'Nivel 10',       desc: 'Lector de nivel avanzado' },
-  sessions50: { emoji: '🎯', title: '50 sesiones',    desc: '50 ejercicios completados' },
-  schulte7:   { emoji: '🔲', title: 'Schulte 7×7',   desc: 'Cuadrícula experto dominada' },
-  wpm500:     { emoji: '🚀', title: '500 WPM',        desc: 'Velocidad supersónica' },
+type IconLib = 'Ionicons' | 'MaterialCommunityIcons';
+
+const ACHIEVEMENTS_META: Record<string, { icon: string; lib: IconLib; title: string; desc: string }> = {
+  streak7:    { icon: 'flame',           lib: 'Ionicons',              title: 'Racha 7',       desc: '7 días seguidos' },
+  firstbook:  { icon: 'library',         lib: 'Ionicons',              title: 'Primer libro',  desc: 'Completaste tu primer libro' },
+  wpm300:     { icon: 'flash',           lib: 'Ionicons',              title: '300 WPM',        desc: 'Velocidad de lectura élite' },
+  loci:       { icon: 'school',          lib: 'Ionicons',              title: 'Maestro Loci',   desc: 'Palacio de la memoria activado' },
+  comp90:     { icon: 'brain',           lib: 'MaterialCommunityIcons', title: '90% comp.',      desc: 'Comprensión casi perfecta' },
+  level10:    { icon: 'trophy',          lib: 'Ionicons',              title: 'Nivel 10',       desc: 'Lector de nivel avanzado' },
+  sessions50: { icon: 'radio-button-on', lib: 'Ionicons',              title: '50 sesiones',    desc: '50 ejercicios completados' },
+  schulte7:   { icon: 'grid',            lib: 'Ionicons',              title: 'Schulte 7×7',   desc: 'Cuadrícula experto dominada' },
+  wpm500:     { icon: 'rocket',          lib: 'Ionicons',              title: '500 WPM',        desc: 'Velocidad supersónica' },
 };
 
 interface Props {
@@ -63,15 +67,19 @@ export function AchievementToast({ achievementId, onDone }: Props) {
 
   return (
     <Animated.View style={[styles.toast, animStyle]} pointerEvents="none">
-      <View style={styles.emojiWrap}>
-        <Text style={styles.emoji}>{meta.emoji}</Text>
+      <View style={styles.iconWrap}>
+        {meta.lib === 'MaterialCommunityIcons' ? (
+          <MaterialCommunityIcons name={meta.icon as any} size={26} color="#fff" />
+        ) : (
+          <Ionicons name={meta.icon as any} size={26} color="#fff" />
+        )}
       </View>
       <View style={styles.textBlock}>
         <Text style={styles.label}>LOGRO DESBLOQUEADO</Text>
         <Text style={styles.title}>{meta.title}</Text>
         <Text style={styles.desc}>{meta.desc}</Text>
       </View>
-      <Text style={styles.sparkle}>✨</Text>
+      <Ionicons name="sparkles" size={20} color="#C4B5FD" style={{ alignSelf: 'flex-start', marginTop: 2 }} />
     </Animated.View>
   );
 }
@@ -98,7 +106,7 @@ const styles = StyleSheet.create({
     elevation: 12,
     zIndex: 100,
   },
-  emojiWrap: {
+  iconWrap: {
     width: 48,
     height: 48,
     borderRadius: 14,
@@ -106,7 +114,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emoji:     { fontSize: 26 },
   textBlock: { flex: 1 },
   label: {
     fontFamily: FONTS.headingSemi,
@@ -127,5 +134,4 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.7)',
     marginTop: 1,
   },
-  sparkle: { fontSize: 20, alignSelf: 'flex-start', marginTop: 2 },
 });

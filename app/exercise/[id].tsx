@@ -5,9 +5,12 @@ import {
 import { XPBanner } from '../../components/ui/XPBanner';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming,
 } from 'react-native-reanimated';
+import { MascotChar } from '../../components/ui/MascotChar';
 
 import { EXERCISES } from '../../constants/exercises';
 import { COLORS } from '../../constants/colors';
@@ -235,7 +238,7 @@ function ExerciseIntro({ exercise, onStart, onBack }: {
 
         <View style={[introStyles.whyCard, { borderColor: COLORS.border }]}>
           <View style={[introStyles.whyIcon, { backgroundColor: c + '15' }]}>
-            <Text style={{ fontSize: 20 }}>🧠</Text>
+            <MaterialCommunityIcons name="brain" size={20} color={c} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[introStyles.whyLabel, { color: c }]}>Por qué es efectivo</Text>
@@ -320,7 +323,7 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
       <ScrollView contentContainerStyle={resultStyles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View style={[resultStyles.hero, heroStyle]}>
           <View style={[resultStyles.heroCircle, { backgroundColor: result.passed ? c : '#9CA3AF' }, heroShadow(result.passed ? c : '#9CA3AF')]}>
-            <Text style={{ fontSize: 70 }}>{result.passed ? '🎉' : '💪'}</Text>
+            <MascotChar which={result.passed ? 'joy' : 'focus'} expression={result.passed ? 'happy' : 'wow'} size={90} breathing={false} blinking={false} />
           </View>
           <Text style={[resultStyles.heroLabel, { color: c }]}>
             {result.passed ? '¡Completado!' : 'Sigue intentando'}
@@ -338,7 +341,7 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
 
         {result.passed && (
           <View style={resultStyles.xpCard}>
-            <Text style={{ fontSize: 36 }}>⚡</Text>
+            <Ionicons name="flash" size={36} color="#78350F" />
             <View style={{ flex: 1 }}>
               <Text style={resultStyles.xpLabel}>Recompensa</Text>
               <Text style={resultStyles.xpValue}>+{result.xpEarned} XP</Text>
@@ -348,7 +351,7 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
 
         {result.insight ? (
           <View style={resultStyles.insightCard}>
-            <Text style={{ fontSize: 36 }}>💡</Text>
+            <Ionicons name="bulb" size={36} color="#EAB308" />
             <View style={{ flex: 1 }}>
               <Text style={[resultStyles.insightLabel, { color: c }]}>Tip</Text>
               <Text style={resultStyles.insightText}>{result.insight}</Text>

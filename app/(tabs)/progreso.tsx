@@ -8,6 +8,7 @@ const VictoryNative = Platform.OS !== 'web'
 import { useProfileStore } from '../../store/useProfileStore';
 import { useProgressStore } from '../../store/useProgressStore';
 import { useSessionStore } from '../../store/useSessionStore';
+import { usePrefsStore } from '../../store/usePrefsStore';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
@@ -23,6 +24,17 @@ export default function ProgresoScreen() {
   const profile = useProfileStore(s => s.profile);
   const all     = useProgressStore(s => s.all);
   const list    = useSessionStore(s => s.list);
+  const themeColor = usePrefsStore(s => s.prefs.theme_color) || COLORS.focus;
+
+  const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+  function hexToRgba(hex: string, opacity: number) {
+    const cleanHex = hex.replace('#', '');
+    const r = parseInt(cleanHex.substring(0, 2), 16);
+    const g = parseInt(cleanHex.substring(2, 4), 16);
+    const b = parseInt(cleanHex.substring(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+  }
 
   const sessions7d = useMemo(() => {
     const since = Date.now() - 7 * 86_400_000;
@@ -72,20 +84,39 @@ export default function ProgresoScreen() {
     });
   }, [list]);
 
-  // 28-day heatmap
-  const heatmap = useMemo(() => {
-    const all28 = list({ since: Date.now() - 28 * 86_400_000 });
-    const map: Record<string, number> = {};
-    for (const s of all28) {
+  // 18-week GitHub style horizontal heatmap (126 days, 18 weeks × 7 days)
+  const githubHeatmap = useMemo(() => {
+    const since = Date.now() - 130 * 86_400_000;
+    const allSessions = list({ since });
+    const sessionMap: Record<string, number> = {};
+    for (const s of allSessions) {
       const day = s.finished_at.split('T')[0];
-      map[day] = (map[day] || 0) + 1;
+      sessionMap[day] = (sessionMap[day] || 0) + 1;
     }
-    const days: { date: string; count: number }[] = [];
-    for (let d = 27; d >= 0; d--) {
-      const date = new Date(Date.now() - d * 86_400_000).toISOString().split('T')[0];
-      days.push({ date, count: map[date] || 0 });
+
+    const now = new Date();
+    const dayOfWeek = now.getDay(); // 0 is Sun, 1 is Mon, ..., 6 is Sat
+    const daysToSubtract = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // days since Monday
+    const currentMonday = new Date(now.getTime() - daysToSubtract * 86_400_000);
+    currentMonday.setHours(0, 0, 0, 0);
+
+    const startMonday = new Date(currentMonday.getTime() - 17 * 7 * 86_400_000);
+
+    const weeks: { date: string; count: number }[][] = [];
+    for (let w = 0; w < 18; w++) {
+      const weekDays: { date: string; count: number }[] = [];
+      const weekMonday = new Date(startMonday.getTime() + w * 7 * 86_400_000);
+      for (let d = 0; d < 7; d++) {
+        const dayDate = new Date(weekMonday.getTime() + d * 86_400_000);
+        const dateStr = dayDate.toISOString().split('T')[0];
+        weekDays.push({
+          date: dateStr,
+          count: sessionMap[dateStr] || 0,
+        });
+      }
+      weeks.push(weekDays);
     }
-    return days;
+    return weeks;
   }, [list]);
 
   if (!profile) return null;
@@ -182,15 +213,68 @@ export default function ProgresoScreen() {
         </View>
 
         {/* Heatmap */}
-        <Text style={styles.sectionTitle}>Actividad (28 días)</Text>
-        <View style={styles.heatmap}>
-          {heatmap.map(day => {
-            const intensity = Math.min(1, day.count / 4);
-            const bg = day.count === 0 ? COLORS.surface : `rgba(34,197,94,${0.15 + intensity * 0.75})`;
-            return (
-              <View key={day.date} style={[styles.heatCell, { backgroundColor: bg }]} />
-            );
-          })}
+        <Text style={styles.sectionTitle}>Mi actividad (18 semanas)</Text>
+        <View style={styles.heatmapCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <View style={styles.dayLabelsCol}>
+              <Text style={styles.dayLabel}>L</Text>
+              <Text style={styles.dayLabel}></Text>
+              <Text style={styles.dayLabel}>M</Text>
+              <Text style={styles.dayLabel}></Text>
+              <Text style={styles.dayLabel}>V</Text>
+              <Text style={styles.dayLabel}></Text>
+              <Text style={styles.dayLabel}>D</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.heatmapScroll}>
+              <View>
+                {/* Month Labels Row */}
+                <View style={styles.monthsRow}>
+                  {githubHeatmap.map((week, w) => {
+                    const firstDay = new Date(week[0].date + 'T12:00:00');
+                    const showMonth = w === 0 || (w > 0 && new Date(githubHeatmap[w - 1][0].date + 'T12:00:00').getMonth() !== firstDay.getMonth());
+                    return (
+                      <View key={w} style={{ width: 14 + 4 }}>
+                        {showMonth && (
+                          <Text style={[styles.monthText, { position: 'absolute', width: 50, left: 0 }]} numberOfLines={1}>
+                            {MONTH_NAMES[firstDay.getMonth()]}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Grid of columns */}
+                <View style={styles.gridRow}>
+                  {githubHeatmap.map((week, w) => (
+                    <View key={w} style={styles.gridColumn}>
+                      {week.map(day => {
+                        const intensity = Math.min(1, day.count / 4);
+                        const bg = day.count === 0 ? COLORS.surface : hexToRgba(themeColor, 0.25 + intensity * 0.75);
+                        return (
+                          <View
+                            key={day.date}
+                            style={[styles.heatCell, { backgroundColor: bg }]}
+                          />
+                        );
+                      })}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+
+          {/* Heatmap Legend */}
+          <View style={styles.legendRow}>
+            <Text style={styles.legendText}>Menos</Text>
+            <View style={[styles.legendCell, { backgroundColor: COLORS.surface }]} />
+            <View style={[styles.legendCell, { backgroundColor: hexToRgba(themeColor, 0.3) }]} />
+            <View style={[styles.legendCell, { backgroundColor: hexToRgba(themeColor, 0.5) }]} />
+            <View style={[styles.legendCell, { backgroundColor: hexToRgba(themeColor, 0.75) }]} />
+            <View style={[styles.legendCell, { backgroundColor: themeColor }]} />
+            <Text style={styles.legendText}>Más</Text>
+          </View>
         </View>
 
         {/* Exercise cards */}
@@ -239,8 +323,75 @@ const styles = StyleSheet.create({
   chartCard:   { backgroundColor: COLORS.white, borderRadius: 20, borderWidth: 1.5, borderColor: COLORS.border, padding: 12, marginBottom: 20, height: 180 },
   chartEmpty:  { flex: 1, alignItems: 'center', justifyContent: 'center' },
   chartEmptyText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.subtle, textAlign: 'center' },
-  heatmap:   { flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 20 },
-  heatCell:  { width: (require('react-native').Dimensions.get('window').width - 60) / 7 - 4, aspectRatio: 1, borderRadius: 4 },
+  heatmapCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    padding: 16,
+    marginBottom: 20,
+    flexDirection: 'column',
+  },
+  legendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 12,
+    gap: 4,
+    width: '100%',
+    paddingRight: 10,
+  },
+  legendText: {
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    color: COLORS.muted,
+    marginHorizontal: 2,
+  },
+  legendCell: {
+    width: 10,
+    height: 10,
+    borderRadius: 2,
+  },
+  dayLabelsCol: {
+    marginRight: 8,
+    marginTop: 18,
+    justifyContent: 'space-between',
+    height: 7 * 14 + 6 * 4,
+  },
+  dayLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 9,
+    color: COLORS.muted,
+    textAlign: 'center',
+    height: 14,
+    lineHeight: 14,
+  },
+  heatmapScroll: {
+    paddingRight: 10,
+  },
+  monthsRow: {
+    flexDirection: 'row',
+    height: 18,
+    marginBottom: 4,
+  },
+  monthText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 10,
+    color: COLORS.muted,
+  },
+  gridRow: {
+    flexDirection: 'row',
+  },
+  gridColumn: {
+    flexDirection: 'column',
+    gap: 4,
+    marginRight: 4,
+  },
+  heatCell: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+  },
   exerciseCard: { backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1.5, padding: 14, marginBottom: 10 },
   exRow:     { flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 },
   exDot:     { width: 10, height: 10, borderRadius: 5 },

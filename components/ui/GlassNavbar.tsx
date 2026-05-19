@@ -135,17 +135,17 @@ function NavTab({
 
   const pillStyle: ViewStyle = {
     backgroundColor: active ? accentColor : 'transparent',
-    borderRadius: 16,
-    paddingVertical: 8,
-    paddingHorizontal: active ? 14 : 10,
+    borderRadius: 20,
+    paddingVertical: 9,
+    paddingHorizontal: active ? 16 : 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     shadowColor: active ? accentColor : 'transparent',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: active ? 0.4 : 0,
-    shadowRadius: 8,
-    elevation: active ? 4 : 0,
+    shadowOpacity: active ? 0.5 : 0,
+    shadowRadius: 12,
+    elevation: active ? 6 : 0,
   };
 
   return (
@@ -155,7 +155,7 @@ function NavTab({
       onPress={onPress}
     >
       <Animated.View style={[pillStyle, animStyle]}>
-        <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={22} />
+        <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={24} />
         {active && (
           <Text style={styles.label}>{TAB_LABELS[id]}</Text>
         )}
@@ -167,32 +167,32 @@ function NavTab({
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
-    bottom: 12,
+    bottom: 14,
     left: 12,
     right: 12,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(17,24,39,0.08)',
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: Platform.OS === 'ios' ? 'rgba(255,255,255,0.6)' : 'rgba(17,24,39,0.08)',
     overflow: Platform.OS === 'ios' ? 'hidden' : 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.10,
+    shadowRadius: 24,
+    elevation: 10,
   },
   androidBg: {
-    backgroundColor: 'rgba(255,255,255,0.95)',
+    backgroundColor: 'rgba(255,255,255,0.97)',
   },
   inner: {
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 8,
-    paddingVertical: 10,
+    paddingVertical: 14,
   },
   label: {
     fontFamily: FONTS.heading,
-    fontSize: 12,
+    fontSize: 13,
     color: '#fff',
     letterSpacing: 0.3,
   },

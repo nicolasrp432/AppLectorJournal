@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
@@ -166,21 +167,66 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
             {mode === 'chunk' && <ChunkDisplay words={words} idx={idx} chunkSize={chunkSize} accent={accent} />}
           </View>
           <View style={styles.controls}>
-            <View style={styles.controlRow}>
-              <Pressable onPress={() => setIdx(i => Math.max(0, i - 5))} style={styles.controlBtn}>
-                <Text style={styles.controlBtnText}>−5</Text>
+            {/* 1. Visual Progress Bar */}
+            <View style={styles.progressRow}>
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBarFill, { width: `${(idx / (words.length - 1)) * 100}%`, backgroundColor: accent }]} />
+              </View>
+              <Text style={styles.progressText}>
+                Palabra {Math.min(words.length, idx + 1)} de {words.length}
+              </Text>
+            </View>
+
+            {/* 2. Primary Playback Control Row */}
+            <View style={styles.playbackRow}>
+              <Pressable
+                onPress={() => setIdx(i => Math.max(0, i - 5))}
+                style={({ pressed }) => [styles.secondaryControlBtn, pressed && styles.controlBtnPressed]}
+              >
+                <Ionicons name="play-back" size={20} color={COLORS.inkLight} />
               </Pressable>
-              <Pressable onPress={() => setPlaying(p => !p)} style={[styles.controlBtn, { flex: 1, backgroundColor: accent }]}>
-                <Text style={[styles.controlBtnText, { color: '#fff' }]}>{playing ? '❚❚ Pausa' : '▶ Reanudar'}</Text>
+
+              <Pressable
+                onPress={() => setPlaying(p => !p)}
+                style={({ pressed }) => [
+                  styles.primaryPlayBtn,
+                  { backgroundColor: accent },
+                  pressed && styles.controlBtnPressed
+                ]}
+              >
+                <Ionicons name={playing ? 'pause' : 'play'} size={28} color="#FFF" style={{ marginLeft: playing ? 0 : 2 }} />
               </Pressable>
-              <Pressable onPress={() => setIdx(i => Math.min(words.length - 1, i + 5))} style={styles.controlBtn}>
-                <Text style={styles.controlBtnText}>+5</Text>
+
+              <Pressable
+                onPress={() => setIdx(i => Math.min(words.length - 1, i + 5))}
+                style={({ pressed }) => [styles.secondaryControlBtn, pressed && styles.controlBtnPressed]}
+              >
+                <Ionicons name="play-forward" size={20} color={COLORS.inkLight} />
               </Pressable>
             </View>
-            <View style={styles.wpmStepper}>
-              <Pressable onPress={() => setWpm(w => Math.max(150, w - 10))} style={styles.stepBtn}><Text style={styles.stepBtnText}>−10</Text></Pressable>
-              <Text style={[styles.wpmDisplayText, { color: accent }]}>{wpm} WPM</Text>
-              <Pressable onPress={() => setWpm(w => Math.min(800, w + 10))} style={styles.stepBtn}><Text style={styles.stepBtnText}>+10</Text></Pressable>
+
+            {/* 3. WPM Controller Row */}
+            <View style={styles.wpmStepperRow}>
+              <Pressable
+                onPress={() => setWpm(w => Math.max(150, w - 10))}
+                style={({ pressed }) => [styles.wpmStepBtn, pressed && styles.controlBtnPressed]}
+              >
+                <Ionicons name="remove" size={18} color={COLORS.muted} />
+              </Pressable>
+
+              <View style={styles.wpmDisplayBadge}>
+                <Ionicons name="speedometer-outline" size={16} color={accent} style={{ marginRight: 6 }} />
+                <Text style={[styles.wpmTextValue, { color: COLORS.ink }]}>
+                  {wpm} <Text style={{ fontSize: 10, fontFamily: FONTS.body, color: COLORS.muted }}>WPM</Text>
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={() => setWpm(w => Math.min(800, w + 10))}
+                style={({ pressed }) => [styles.wpmStepBtn, pressed && styles.controlBtnPressed]}
+              >
+                <Ionicons name="add" size={18} color={COLORS.muted} />
+              </Pressable>
             </View>
           </View>
         </View>
@@ -338,10 +384,102 @@ const styles = StyleSheet.create({
   startBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   startBtnText:  { fontFamily: FONTS.heading, fontSize: 14, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },
   displayArea:   { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
-  controls:      { paddingHorizontal: 16, paddingBottom: 24, paddingTop: 14, borderTopWidth: 1, borderTopColor: COLORS.surface, backgroundColor: COLORS.white, gap: 10 },
-  controlRow:    { flexDirection: 'row', gap: 10, alignItems: 'center' },
-  controlBtn:    { paddingHorizontal: 14, paddingVertical: 12, backgroundColor: COLORS.surface, borderRadius: 12 },
-  controlBtnText:{ fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
+  controls: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    paddingTop: 16,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.surface,
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  progressRow: {
+    alignItems: 'center',
+    width: '100%',
+  },
+  progressBarContainer: {
+    width: '100%',
+    height: 6,
+    backgroundColor: COLORS.surface,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  progressText: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.muted,
+  },
+  playbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 28,
+  },
+  primaryPlayBtn: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  secondaryControlBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  controlBtnPressed: {
+    opacity: 0.7,
+    transform: [{ scale: 0.96 }],
+  },
+  wpmStepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 4,
+  },
+  wpmStepBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wpmDisplayBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  wpmTextValue: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+  },
   questionText:  { fontFamily: FONTS.heading, fontSize: 19, color: COLORS.ink, lineHeight: 26, marginTop: 8 },
   optionBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.border },
   optionCorrect: { backgroundColor: '#DCFCE7', borderColor: '#22C55E' },

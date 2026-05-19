@@ -1,12 +1,15 @@
 import React, { useState, useRef } from 'react';
 import { View, Text, FlatList, ScrollView, Pressable, StyleSheet, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { REWARDS } from '../../constants/rewards';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useRewardsStore } from '../../store/useRewardsStore';
+import { MascotChar } from '../../components/ui/MascotChar';
+import type { MascotKey } from '../../components/ui/MascotChar';
 import { COLORS, darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
-import type { RewardItem, RewardCategory } from '../../types/rewards';
+import type { RewardItem, RewardCategory, RewardType } from '../../types/rewards';
 
 type Filter = 'all' | RewardCategory;
 
@@ -19,6 +22,15 @@ const FILTERS: { id: Filter; label: string }[] = [
   { id: 'reading',  label: 'Lectura'    },
   { id: 'badges',   label: 'Insignias'  },
 ];
+
+const TYPE_ICON: Record<RewardType, string> = {
+  theme:      'color-palette',
+  avatar:     'person-circle',
+  powerup:    'flash',
+  background: 'image',
+  pack:       'albums',
+  badge:      'ribbon',
+};
 
 export default function TiendaScreen() {
   const [filter, setFilter] = useState<Filter>('all');
@@ -68,12 +80,12 @@ export default function TiendaScreen() {
         <View style={styles.titleRow}>
           <Text style={styles.eyebrow}>Tienda</Text>
           <View style={styles.xpBadge}>
-            <Text style={styles.xpText}>⚡ {xp} XP</Text>
+            <Ionicons name="flash" size={13} color="#78350F" />
+            <Text style={styles.xpText}>{xp} XP</Text>
           </View>
         </View>
         <Text style={styles.title}>Tu colección</Text>
 
-        {/* Filter pills */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 12 }}>
           {FILTERS.map(f => (
             <Pressable
@@ -135,25 +147,27 @@ function RewardCard({
         {r.type === 'theme' && (
           <View style={styles.themePreview}>
             <View style={[styles.themeCircle, { shadowColor: itemColor }]}>
-              <Text style={{ fontSize: 18 }}>✨</Text>
+              <Ionicons name="color-palette" size={22} color={itemColor} />
             </View>
           </View>
         )}
-        {r.type === 'avatar' && <Text style={{ fontSize: 48 }}>😊</Text>}
+        {r.type === 'avatar' && (
+          <MascotChar which={(r.mascot ?? 'focus') as MascotKey} size={48} breathing={false} blinking={false} />
+        )}
         {(r.type === 'powerup' || r.type === 'badge' || r.type === 'background' || r.type === 'pack') && (
           <View style={[styles.iconBox, { backgroundColor: itemColor + '18', borderColor: itemColor + '40' }]}>
-            <Text style={{ fontSize: 30 }}>⚡</Text>
+            <Ionicons name={TYPE_ICON[r.type] as any} size={30} color={itemColor} />
           </View>
         )}
         {isLocked && (
           <View style={styles.lockOverlay}>
-            <Text style={{ fontSize: 22 }}>🔒</Text>
+            <Ionicons name="lock-closed" size={22} color="#fff" />
             {r.requires && <Text style={styles.lockLabel}>{r.requires}</Text>}
           </View>
         )}
         {equipped && (
           <View style={styles.equippedBadge}>
-            <Text style={{ fontSize: 12 }}>✓</Text>
+            <Ionicons name="checkmark" size={14} color="#fff" />
           </View>
         )}
       </View>
@@ -179,7 +193,7 @@ const styles = StyleSheet.create({
   header:    { backgroundColor: COLORS.white, paddingTop: 8, paddingHorizontal: 20, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: COLORS.surface },
   titleRow:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
   eyebrow:   { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.subtle, textTransform: 'uppercase', letterSpacing: 1.2 },
-  xpBadge:   { backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  xpBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   xpText:    { fontFamily: FONTS.heading, fontSize: 13, color: '#78350F' },
   title:     { fontFamily: FONTS.heading, fontSize: 24, color: COLORS.ink },
   pill:      { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: COLORS.surface, borderRadius: 999, marginRight: 6 },

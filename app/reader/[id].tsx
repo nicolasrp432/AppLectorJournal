@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { Ionicons } from '@expo/vector-icons';
 
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useProfileStore } from '../../store/useProfileStore';
@@ -87,6 +88,19 @@ export default function ReaderScreen() {
     if (xp > 0) setShowBanner(true);
   };
 
+  const handleBack = () => {
+    const progress = mode === 'scroll'
+      ? scrollPct
+      : (words.length > 0 ? Math.min(1, wordIdx / words.length) : 0);
+    if (book?.id) {
+      update(book.id, {
+        progress,
+        last_read_at: new Date().toISOString(),
+      });
+    }
+    router.back();
+  };
+
   const startReading = () => {
     startRef.current = Date.now();
     setWordIdx(resumeWordIdx);
@@ -126,8 +140,8 @@ export default function ReaderScreen() {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
-          <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-            <Text style={styles.backIcon}>←</Text>
+          <Pressable onPress={handleBack} style={styles.backBtn} hitSlop={8}>
+            <Ionicons name="arrow-back" size={20} color={COLORS.ink} />
           </Pressable>
         </View>
 
@@ -175,7 +189,7 @@ export default function ReaderScreen() {
                       onPress={() => setWpm(w => Math.max(100, w - 25))}
                       style={styles.wpmBtn}
                     >
-                      <Text style={styles.wpmBtnText}>−</Text>
+                      <Ionicons name="remove" size={24} color={COLORS.ink} />
                     </Pressable>
                     <View style={styles.wpmDisplay}>
                       <Text style={[styles.wpmValue, { color: ACCENT }]}>{wpm}</Text>
@@ -185,7 +199,7 @@ export default function ReaderScreen() {
                       onPress={() => setWpm(w => Math.min(800, w + 25))}
                       style={styles.wpmBtn}
                     >
-                      <Text style={styles.wpmBtnText}>+</Text>
+                      <Ionicons name="add" size={24} color={COLORS.ink} />
                     </Pressable>
                   </View>
                 </>
@@ -234,8 +248,8 @@ export default function ReaderScreen() {
         {/* Top bar */}
         <SafeAreaView edges={['top']} style={{ backgroundColor: COLORS.canvas }}>
           <View style={styles.topBar}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-              <Text style={styles.backIcon}>←</Text>
+            <Pressable onPress={handleBack} style={styles.backBtn} hitSlop={8}>
+              <Ionicons name="arrow-back" size={20} color={COLORS.ink} />
             </Pressable>
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
               <ProgressBar value={progress} color={ACCENT} height={6} />
@@ -265,19 +279,19 @@ export default function ReaderScreen() {
               onPress={() => setWpm(w => Math.max(100, w - 25))}
               style={styles.wpmBtn}
             >
-              <Text style={styles.wpmBtnText}>−</Text>
+              <Ionicons name="remove" size={22} color={COLORS.ink} />
             </Pressable>
             <Pressable
               onPress={() => setPlaying(p => !p)}
               style={[styles.playBtn, { backgroundColor: ACCENT }]}
             >
-              <Text style={styles.playBtnText}>{playing ? '⏸' : '▶'}</Text>
+              <Ionicons name={playing ? 'pause' : 'play'} size={24} color="#fff" />
             </Pressable>
             <Pressable
               onPress={() => setWpm(w => Math.min(800, w + 25))}
               style={styles.wpmBtn}
             >
-              <Text style={styles.wpmBtnText}>+</Text>
+              <Ionicons name="add" size={22} color={COLORS.ink} />
             </Pressable>
             <View style={styles.wpmDisplay}>
               <Text style={[styles.wpmValue, { color: ACCENT }]}>{wpm}</Text>
@@ -295,8 +309,8 @@ export default function ReaderScreen() {
       <View style={styles.safe}>
         <SafeAreaView edges={['top']} style={{ backgroundColor: COLORS.canvas }}>
           <View style={styles.topBar}>
-            <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
-              <Text style={styles.backIcon}>←</Text>
+            <Pressable onPress={handleBack} style={styles.backBtn} hitSlop={8}>
+              <Ionicons name="arrow-back" size={20} color={COLORS.ink} />
             </Pressable>
             <View style={{ flex: 1, paddingHorizontal: 12 }}>
               <ProgressBar value={scrollPct} color={ACCENT} height={6} />

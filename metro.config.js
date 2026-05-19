@@ -6,8 +6,8 @@ const config = getDefaultConfig(__dirname);
 // Web: resolve .web.ts/.web.tsx before .ts/.tsx so platform-specific
 // overrides work (e.g. charts.web.tsx vs charts.tsx)
 config.resolver.sourceExts = [
-  'web.tsx', 'web.ts', 'web.jsx', 'web.js',
   ...config.resolver.sourceExts,
+  'web.tsx', 'web.ts', 'web.jsx', 'web.js',
 ];
 
 // Allow Skia WASM binary to be bundled for web
