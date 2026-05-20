@@ -4,11 +4,15 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { PushButton } from '../../components/ui/PushButton';
 import { OutlineButton } from '../../components/ui/OutlineButton';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const [email,    setEmail]    = useState('');
@@ -28,16 +32,46 @@ export default function LoginScreen() {
   const handleGoogle = async () => {
     setLoading(true);
     setError('');
-    const { error: err } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: Platform.OS === 'web' 
-          ? window.location.origin 
-          : 'lectorapp://google-auth',
-      },
-    });
-    setLoading(false);
-    if (err) setError(err.message);
+    try {
+      // 1. Crear la URL de redirección compatible con Expo Go y Builds Nativos
+      const redirectUrl = Linking.createURL('google-auth');
+      
+      // 2. Solicitar URL de autenticación de Supabase
+      const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true, // Esto nos devuelve la URL en lugar de redirigir
+        },
+      });
+
+      if (oauthErr) throw oauthErr;
+
+      if (data?.url) {
+        // 3. Abrir la URL en una ventana de navegador segura dentro de la app
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        
+        // 4. Si el login fue exitoso, extraer la sesión
+        if (result.type === 'success' && result.url) {
+          const parsedUrl = Linking.parse(result.url);
+          const { access_token, refresh_token } = parsedUrl.queryParams || {};
+          
+          if (access_token && refresh_token) {
+            const { error: sessionErr } = await supabase.auth.setSession({
+              access_token: String(access_token),
+              refresh_token: String(refresh_token),
+            });
+            if (sessionErr) throw sessionErr;
+            router.replace('/(tabs)/ruta');
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('Error en Google Sign-in:', err);
+      setError(err.message || 'Error al iniciar sesión con Google.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleGuest = () => router.replace('/(tabs)/ruta');
