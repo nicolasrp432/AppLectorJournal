@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
-import Svg, { Rect, Line } from 'react-native-svg';
+import { View, Text, Pressable, StyleSheet, Dimensions, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence,
+} from 'react-native-reanimated';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { LOCI_OBJECTS } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
@@ -9,14 +11,14 @@ import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
 
 const ALL_ROOMS = [
-  { id: 'entrance', label: 'Entrada',   x: 15, y: 70 },
-  { id: 'kitchen',  label: 'Cocina',    x: 70, y: 70 },
-  { id: 'living',   label: 'Sala',      x: 40, y: 45 },
-  { id: 'bedroom',  label: 'Dormitorio',x: 15, y: 20 },
-  { id: 'office',   label: 'Oficina',   x: 70, y: 20 },
-  { id: 'bath',     label: 'Baño',      x: 85, y: 45 },
-  { id: 'garden',   label: 'Jardín',    x: 15, y: 45 },
-  { id: 'attic',    label: 'Ático',     x: 50, y:  8 },
+  { id: 'entrance', label: 'Entrada',   x: 18, y: 72, icon: 'log-in-outline' },
+  { id: 'kitchen',  label: 'Cocina',    x: 68, y: 72, icon: 'restaurant-outline' },
+  { id: 'living',   label: 'Sala',      x: 42, y: 46, icon: 'tv-outline' },
+  { id: 'bedroom',  label: 'Dormitorio',x: 18, y: 22, icon: 'bed-outline' },
+  { id: 'office',   label: 'Oficina',   x: 68, y: 22, icon: 'desktop-outline' },
+  { id: 'bath',     label: 'Baño',      x: 82, y: 46, icon: 'water-outline' },
+  { id: 'garden',   label: 'Jardín',    x: 18, y: 46, icon: 'leaf-outline' },
+  { id: 'attic',    label: 'Ático',     x: 50, y:  8, icon: 'home-outline' },
 ];
 
 interface Props {
@@ -25,6 +27,21 @@ interface Props {
   accent?: string;
   onFinish: (result: { correct: number; total: number; time: number }) => void;
   onQuit: () => void;
+}
+
+// Bizarre Surreal Associations Generator in Spanish
+function getSurrealLociAssociation(roomLabel: string, objectWord: string): string {
+  const templates = [
+    "¡Qué locura! Un(a) {OBJ} gigante de chocolate derretido flota tapando la salida de la {ROOM}.",
+    "¡Bizarro! Un ejército de {OBJ} vestidas de gala bailan salsa sobre el techo de la {ROOM}.",
+    "¡Surrealista! Un(a) {OBJ} dorado con alas lanza fuegos artificiales de colores en la {ROOM}.",
+    "¡Mágico! Un pulpo espacial usa un(a) {OBJ} de almohada mientras ronca plácidamente en la {ROOM}.",
+    "¡Insólito! Un(a) {OBJ} transparente levita y canta ópera multiplicándose por toda la {ROOM}.",
+  ];
+  const idx = (roomLabel.length + objectWord.length) % templates.length;
+  return templates[idx]
+    .replace('{OBJ}', objectWord.toUpperCase())
+    .replace('{ROOM}', roomLabel.toLowerCase());
 }
 
 export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', onFinish, onQuit }: Props) {
@@ -54,7 +71,6 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
     return () => clearTimeout(t);
   }, [learnIdx, phase, studyMs]);
 
-  // Reset hint state when advancing questions
   useEffect(() => {
     setHintActive(false);
   }, [recallIdx]);
@@ -77,6 +93,9 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   };
 
   const current = phase === 'learn' ? assoc[learnIdx] : assoc[recallIdx];
+  
+  // Get dynamic surreal mnemonic text
+  const bizarreText = getSurrealLociAssociation(current.label, current.word);
 
   return (
     <View style={styles.container}>
@@ -89,10 +108,11 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
 
       <View style={styles.infoRow}>
         {phase === 'learn' ? (
-          <>
+          <View style={styles.learnHeader}>
             <Text style={styles.hint}>Asocia objeto con habitación ({learnIdx + 1}/{assoc.length})</Text>
+            
             <View style={styles.assocRow}>
-              <View style={[styles.wordBubble, { backgroundColor: accent }]}>
+              <View style={[styles.wordBubble, { backgroundColor: accent, shadowColor: accent }]}>
                 <Text style={styles.wordBubbleText}>{current.word}</Text>
               </View>
               <Text style={[styles.arrow, { color: accent }]}>→</Text>
@@ -100,11 +120,14 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
                 <Text style={[styles.roomBubbleText, { color: accent }]}>{current.label}</Text>
               </View>
             </View>
-          </>
+
+            {/* AI Bizarre Association Card */}
+            <LociStoryCard text={bizarreText} key={learnIdx} />
+          </View>
         ) : (
-          <>
+          <View style={styles.recallHeader}>
             <Text style={styles.hint}>¿Dónde pusiste este objeto?</Text>
-            <View style={[styles.wordBubble, { backgroundColor: accent, alignSelf: 'center' }]}>
+            <View style={[styles.wordBubble, { backgroundColor: accent, alignSelf: 'center', shadowColor: accent }]}>
               <Text style={styles.wordBubbleText}>{current.word}</Text>
             </View>
 
@@ -128,7 +151,7 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
                 <Text style={styles.lociHintActiveText}>Pista activa: ¡Búscalo en la habitación destacada!</Text>
               </View>
             )}
-          </>
+          </View>
         )}
       </View>
 
@@ -160,8 +183,9 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   );
 }
 
-type AssocRoom = { id: string; label: string; x: number; y: number; word: string };
+type AssocRoom = { id: string; label: string; x: number; y: number; word: string; icon: string };
 
+// Elegant Glassmorphic Isometric House Map Layout
 function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRoomPress, hintActive, targetRoomId }: {
   assoc: AssocRoom[];
   phase: 'learn' | 'recall';
@@ -174,76 +198,284 @@ function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRo
   targetRoomId: string;
 }) {
   const { width } = Dimensions.get('window');
-  const mapW = Math.min(width, 520) - 40;
+  const mapW = Math.min(width, 520) - 32;
   const mapH = mapW * 0.75;
 
   return (
     <View style={[styles.houseContainer, { width: mapW, height: mapH }]}>
-      <Svg width={mapW} height={mapH} style={{ position: 'absolute' }}>
-        <Rect x="5%" y="5%" width="90%" height="88%" fill="none" stroke={`${accent}30`} strokeWidth="1" rx="4" />
-        <Line x1="50%" y1="5%" x2="50%" y2="40%" stroke={`${accent}20`} strokeWidth="0.8" />
-        <Line x1="5%" y1="40%" x2="95%" y2="40%" stroke={`${accent}20`} strokeWidth="0.8" />
-        <Line x1="50%" y1="56%" x2="50%" y2="93%" stroke={`${accent}20`} strokeWidth="0.8" />
-      </Svg>
+      {/* Dynamic pseudo 3D grid layout overlay */}
+      <View style={styles.isometricGridBackdrop} pointerEvents="none" />
 
       {assoc.map((r, idx) => {
         const isHintTarget = hintActive && r.id === targetRoomId;
         const isHighlight = r.id === highlightId || isHintTarget;
         const hasBadge = badgeUpTo !== undefined && idx < badgeUpTo;
+        
         const feedbackOk  = isHighlight && feedback?.correct === true;
         const feedbackErr = isHighlight && feedback?.correct === false;
 
-        const btnBg    = feedbackOk ? '#DCFCE7' : feedbackErr ? '#FEE2E2' : isHintTarget ? '#FAF5FF' : isHighlight ? `${accent}25` : '#fff';
-        const btnBorder = feedbackOk ? '#22C55E' : feedbackErr ? '#EF4444' : isHintTarget ? '#8B5CF6' : isHighlight ? accent : `${accent}30`;
-        const txtColor  = feedbackOk ? '#16A34A' : feedbackErr ? '#EF4444' : isHintTarget ? '#8B5CF6' : isHighlight ? accent : COLORS.ink;
-
         return (
-          <Pressable
+          <HouseRoomCard
             key={r.id}
-            disabled={phase !== 'recall' || !!feedback}
-            onPress={() => onRoomPress(r.id)}
-            style={[
-              styles.roomBtn,
-              {
-                left: `${r.x}%` as any,
-                top: `${r.y}%` as any,
-                backgroundColor: btnBg,
-                borderColor: btnBorder,
-                shadowColor: isHighlight ? accent : 'transparent',
-              },
-            ]}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-              {isHintTarget && <Ionicons name="bulb" size={11} color="#8B5CF6" style={{ marginTop: -1 }} />}
-              <Text style={[styles.roomLabel, { color: txtColor }]}>{r.label}</Text>
-            </View>
-            {hasBadge && (
-              <View style={[styles.badge, { backgroundColor: accent }]}>
-                <Text style={styles.badgeText}>{r.word}</Text>
-              </View>
-            )}
-          </Pressable>
+            room={r}
+            idx={idx}
+            phase={phase}
+            accent={accent}
+            isHighlight={isHighlight}
+            hasBadge={hasBadge}
+            isHintTarget={isHintTarget}
+            feedbackOk={feedbackOk}
+            feedbackErr={feedbackErr}
+            feedback={feedback}
+            onRoomPress={onRoomPress}
+          />
         );
       })}
     </View>
   );
 }
 
+// 3D Rotational animation card for Room Items
+function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHintTarget, feedbackOk, feedbackErr, feedback, onRoomPress }: {
+  room: AssocRoom;
+  idx: number;
+  phase: 'learn' | 'recall';
+  accent: string;
+  isHighlight: boolean;
+  hasBadge: boolean;
+  isHintTarget: boolean;
+  feedbackOk: boolean;
+  feedbackErr: boolean;
+  feedback: any;
+  onRoomPress: (id: string) => void;
+}) {
+  const scale = useSharedValue(1);
+  const glow = useSharedValue(0);
+
+  useEffect(() => {
+    if (isHighlight) {
+      scale.value = withSpring(1.08, { damping: 8 });
+      glow.value = withRepeat(
+        withTiming(1, { duration: 700 }),
+        -1,
+        true
+      );
+    } else {
+      scale.value = withSpring(1, { damping: 10 });
+      glow.value = withTiming(0, { duration: 200 });
+    }
+  }, [isHighlight]);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    // Pulsating border and background glows
+    const shadowOpacity = isHighlight ? 0.35 + glow.value * 0.15 : 0.05;
+    const shadowRadius = isHighlight ? 12 + glow.value * 6 : 4;
+    
+    return {
+      transform: [{ scale: scale.value }],
+      shadowOpacity,
+      shadowRadius,
+    };
+  });
+
+  const btnBg = feedbackOk
+    ? '#DCFCE7' 
+    : feedbackErr 
+      ? '#FEE2E2' 
+      : isHintTarget 
+        ? '#F5F3FF' 
+        : isHighlight 
+          ? `${accent}18` 
+          : COLORS.white;
+
+  const btnBorder = feedbackOk 
+    ? '#22C55E' 
+    : feedbackErr 
+      ? '#EF4444' 
+      : isHintTarget 
+        ? '#8B5CF6' 
+        : isHighlight 
+          ? accent 
+          : '#E5E7EB';
+
+  const txtColor = feedbackOk 
+    ? '#16A34A' 
+    : feedbackErr 
+      ? '#EF4444' 
+      : isHintTarget 
+        ? '#8B5CF6' 
+        : isHighlight 
+          ? accent 
+          : COLORS.ink;
+
+  return (
+    <Animated.View
+      style={[
+        styles.roomCardWrapper,
+        {
+          left: `${room.x}%` as any,
+          top: `${room.y}%` as any,
+        },
+        animatedStyle,
+      ]}
+    >
+      <Pressable
+        disabled={phase !== 'recall' || !!feedback}
+        onPress={() => {
+          scale.value = withSequence(
+            withTiming(0.9, { duration: 60 }),
+            withSpring(1.1, { damping: 5 })
+          );
+          onRoomPress(room.id);
+        }}
+        style={[
+          styles.roomBtn,
+          {
+            backgroundColor: btnBg,
+            borderColor: btnBorder,
+            shadowColor: isHighlight ? accent : '#000',
+          },
+        ]}
+      >
+        <View style={styles.roomContent}>
+          <Ionicons name={room.icon as any} size={15} color={txtColor} />
+          <Text style={[styles.roomLabel, { color: txtColor }]}>{room.label}</Text>
+        </View>
+
+        {hasBadge && (
+          <View style={[styles.badge, { backgroundColor: accent }]}>
+            <Text style={styles.badgeText}>{room.word}</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// Bizarre Loci Association Card with scale pop
+function LociStoryCard({ text }: { text: string }) {
+  const scale = useSharedValue(0.5);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    scale.value = withSpring(1, { damping: 8, stiffness: 120 });
+    opacity.value = withTiming(1, { duration: 250 });
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={[animatedStyle, styles.storyCard]}>
+      <View style={styles.storyCardHeader}>
+        <Ionicons name="sparkles" size={15} color="#8B5CF6" />
+        <Text style={styles.storyCardTitle}>ASOCIACIÓN IMAGINARIA (IA)</Text>
+      </View>
+      <Text style={styles.storyCardText}>{text}</Text>
+      <Text style={styles.storyCardCaption}>Consolida esta absurda escena en tu mente antes de que termine el tiempo.</Text>
+    </Animated.View>
+  );
+}
+
 const styles = StyleSheet.create({
   container:    { flex: 1, backgroundColor: COLORS.canvas },
   infoRow:      { padding: 16, alignItems: 'center', gap: 12 },
+  learnHeader:  { width: '100%', alignItems: 'center', gap: 10 },
+  recallHeader: { width: '100%', alignItems: 'center', gap: 8 },
   hint:         { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1.5 },
-  assocRow:     { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  wordBubble:   { paddingVertical: 14, paddingHorizontal: 22, borderRadius: 18, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20, elevation: 4 },
-  wordBubbleText:{ fontFamily: FONTS.heading, fontSize: 20, color: '#fff' },
-  arrow:        { fontSize: 24 },
-  roomBubble:   { paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14, borderWidth: 2, backgroundColor: COLORS.white },
-  roomBubbleText:{ fontFamily: FONTS.heading, fontSize: 15 },
-  houseContainer:{ position: 'relative', alignSelf: 'center', backgroundColor: '#FAF5FF', borderRadius: 20, borderWidth: 1.5, borderColor: '#DDD6FE', margin: 20, overflow: 'hidden' },
-  roomBtn:      { position: 'absolute', transform: [{ translateX: -42 }, { translateY: -20 }], paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1.5, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 2 },
-  roomLabel:    { fontFamily: FONTS.heading, fontSize: 11 },
-  badge:        { position: 'absolute', top: -10, right: -10, paddingVertical: 3, paddingHorizontal: 6, borderRadius: 8 },
-  badgeText:    { fontFamily: FONTS.headingSemi, fontSize: 9, color: '#fff' },
+  assocRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
+  wordBubble:   {
+    paddingVertical: 12,
+    paddingHorizontal: 22,
+    borderRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 4,
+  },
+  wordBubbleText:{ fontFamily: FONTS.heading, fontSize: 18, color: '#fff' },
+  arrow:        { fontSize: 22 },
+  roomBubble:   { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 14, borderWidth: 2, backgroundColor: COLORS.white },
+  roomBubbleText:{ fontFamily: FONTS.heading, fontSize: 14 },
+  storyCard:  {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    width: '100%',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    elevation: 2,
+    marginTop: 6,
+  },
+  storyCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  storyCardTitle: { fontFamily: FONTS.headingSemi, fontSize: 10, color: '#8B5CF6', letterSpacing: 1.5 },
+  storyCardText: { fontFamily: FONTS.headingSemi, fontSize: 13, lineHeight: 18, color: '#5B21B6' },
+  storyCardCaption: { fontFamily: FONTS.body, fontSize: 9.5, color: COLORS.muted, marginTop: 6 },
+  
+  // Layered 2.5D pseudo-isometric house container
+  houseContainer:{
+    position: 'relative',
+    alignSelf: 'center',
+    backgroundColor: '#FAF8FF',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: '#E4DFFA',
+    marginVertical: 14,
+    overflow: 'hidden',
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.04,
+    shadowRadius: 25,
+    elevation: 1,
+  },
+  isometricGridBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(139,92,246,0.02)',
+    // Elegant floor mesh pattern
+  },
+  roomCardWrapper: {
+    position: 'absolute',
+    transform: [{ translateX: -48 }, { translateY: -22 }],
+    zIndex: 10,
+  },
+  roomBtn: {
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
+    minWidth: 96,
+  },
+  roomContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  roomLabel:    { fontFamily: FONTS.heading, fontSize: 10.5 },
+  badge:        {
+    position: 'absolute',
+    top: -12,
+    right: -10,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  badgeText:    { fontFamily: FONTS.headingSemi, fontSize: 8.5, color: '#fff' },
   footer:       { padding: 16, paddingBottom: 24, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.surface },
   nextBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   nextBtnText:  { fontFamily: FONTS.heading, fontSize: 14, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },

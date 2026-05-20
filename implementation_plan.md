@@ -1,80 +1,76 @@
-# Plan de Implementación: LectorApp Neuro-Journey
+# Plan de Implementación: Estadísticas Universales (Web & Móvil) y Auditoría de Login Profesional
 
-> **Estado general:** Fases 1–4 completadas. Quedan 4 fases nuevas para llevar la app a producción.
-
----
-
-## Estado de las Fases Originales
-
-### ~~Fase 1: Corrección de Diseño~~ ✅ COMPLETADA
-- [x] **Login Screen** — `socialRow` centrado, `content` con `maxWidth: 480` y `alignSelf: 'center'`
-- [x] **Ruta de Aprendizaje** — `W = Math.min(width, 520) - 40`, scroll centrado, `LociExercise` también corregido
-
-### ~~Fase 2: Backend y Autenticación~~ ✅ COMPLETADA
-- [x] **Registro** conectado a `supabase.auth.signUp` con `options.data.name`
-- [x] **Aislamiento por usuario** — RLS en todas las tablas, stores leen por `userId`
-- [x] **Sesión persistente** — `AsyncStorage` via Zustand persist; `supabase.auth.onAuthStateChange` en `_layout.tsx`
-- [x] **Perfil** — foto (`expo-image-picker` + Supabase Storage), nombre, bio, nivel, XP
-
-### ~~Fase 3: Motor de Ejercicios~~ ✅ COMPLETADA
-- [x] **7 ejercicios** funcionales: Schulte, FocalReading, WordSpan, Loci, Comprehension, Boss, FreeReading
-- [x] **Desbloqueo secuencial** — `resolveNodeLocked()` en `ruta.tsx`; Zona 2 requiere `z1_boss`, Zona 3 requiere `z2_boss`
-- [x] **`useNodeStore`** — `completeNode()` persiste en AsyncStorage + Supabase `node_completions`
-- [x] **SQL** — `002_node_completions.sql` creado ⚠️ *pendiente ejecutar en Supabase Dashboard*
-
-### ~~Fase 4: Lector Inmersivo~~ ✅ COMPLETADA
-- [x] **`reader/[id].tsx`** — Modo RSVP (palabra a palabra, WPM variable) y Scroll (texto continuo)
-- [x] **XP al terminar** — `addXP()` llamado al completar capítulo
+Este plan detalla las soluciones técnicas para resolver dos problemas críticos identificados en la plataforma:
+1. **Gráficos de Estadísticas en Web**: Actualmente las estadísticas usan `victory-native` que depende del motor nativo de Canvas/Skia, haciendo que fallen o no se muestren en la versión web. Habilitaremos gráficos hermosos, ligeros, responsivos e interactivos en ambas plataformas.
+2. **Redirección de Login con Google (OAuth)**: El error de redirección a `localhost` en producción ocurre cuando la URL solicitada no coincide con los dominios permitidos en el panel de control de Supabase, activando el fallback por defecto. Crearemos una arquitectura de login universal robusta y explicaremos los ajustes de configuración de URLs en Supabase.
 
 ---
 
-## Nuevas Fases (En desarrollo)
+## 🙋 Revisión y Ajustes Requeridos del Usuario
 
-### ~~Fase 5: Logros y Gamificación~~ ✅ COMPLETADA
-- [x] **`store/useAchievementsStore.ts`** — 9 condiciones reales, `checkAll()`, `fetchUnlocked()`, persistencia AsyncStorage + Supabase `owned_rewards`
-- [x] **`components/ui/AchievementToast.tsx`** — toast animado (slide desde arriba, Reanimated, color violeta, cola de logros múltiples)
-- [x] **`perfil.tsx`** — usa `useAchievementsStore` en lugar de condición hardcodeada; badge verde ✓ en logros desbloqueados
-- [x] **`exercise/[id].tsx`** — llama `checkAll()` al terminar cada ejercicio; muestra `AchievementToast` en pantalla de resultado
-- [x] **`_layout.tsx`** — `fetchUnlocked(userId)` incluido en `syncUser` (carga al iniciar sesión)
-
-### ~~Fase 6: Biblioteca y Lector conectados~~ ✅ COMPLETADA
-- [x] **`constants/catalogContent.ts`** — extractos originales en español de ~500 palabras para los 8 libros del catálogo
-- [x] **`libros.tsx`** — `handleCatalogPress`: inserta el libro en el store con contenido al primer toque; navega directamente si ya está en biblioteca; spinner de carga; badge "En tu biblioteca"; empty state en "Mis libros"
-- [x] **`_layout.tsx`** — `fetchLibrary(userId)` incluido en `syncUser` (restaura biblioteca desde Supabase al login)
-- [x] **`reader/[id].tsx`** — reanuda RSVP desde posición guardada (`resumeWordIdx`); botón "Continuar (X% leído)" o "Comenzar desde el principio"
-
-### ~~Fase 7: Tienda funcional~~ ✅ COMPLETADA
-- [x] **Equipar tema** — `useRewardsStore.equip()` llama `usePrefsStore.update({ theme_color: value })`; `GlassNavbar` lo recibe vía `app/(tabs)/_layout.tsx`
-- [x] **Equipar avatar** — `equip()` llama `useProfileStore.updateProfile({ avatar: mascot })`; persiste en Supabase `profiles`
-- [x] **Compra con XP** — verificación `xp < r.cost` en `handleAction`; `addXP(-r.cost)` antes de `buy()`; `buy()` persiste `owned_rewards` en Supabase
-- [x] **`fetchOwned(userId)`** — carga IDs comprados desde `owned_rewards` (excluye IDs de achievements); integrado en `syncUser`
-
-### ~~Fase 8: Estadísticas reales (progreso.tsx)~~ ✅ COMPLETADA
-- [x] **WPM trend chart** — `wpmTrend` useMemo: un punto por día durante 7 días desde `useSessionStore.list()`
-- [x] **Activity heatmap** — 28 celdas con conteo real de sesiones por fecha desde `useSessionStore`
-- [x] **KPIs reales** — minutes7d, avgWpm, avgComp calculados desde sesiones reales; streak desde `profile.streak`
-- [x] **Mock data eliminado** — `useSessionStore` arranca con `sessions: []`; `fetchRecent(userId)` en `syncUser` carga desde Supabase
+> [!IMPORTANT]
+> **Configuración en el Dashboard de Supabase (Indispensable para Google OAuth)**
+> Para que el inicio de sesión con Google funcione tanto en desarrollo local como en producción sin redirigir a `localhost`, debes configurar los siguientes campos en tu **Supabase Dashboard → Authentication → URL Configuration**:
+> 1. **Site URL**: Configura la URL base de tu aplicación web de producción: `https://lectorapp.space` (y `https://www.lectorapp.space` si aplica).
+> 2. **Redirect URLs** (Additional Redirect URLs): Añade las URLs de redirección permitidas para desarrollo y entorno nativo:
+>    - `http://localhost:8081` (Desarrollo Web en puerto Expo 8081)
+>    - `http://localhost:19006` (Puerto secundario Expo Web)
+>    - `lectorapp://google-auth` (Redirección para la aplicación móvil nativa)
 
 ---
 
-## Infraestructura Pendiente (No-código)
+## 🛠️ Cambios Propuestos
 
-| Tarea | Dónde |
-|-------|-------|
-| Ejecutar `002_node_completions.sql` | Supabase Dashboard → SQL Editor |
-| Crear bucket `avatars` en Supabase Storage | Supabase Dashboard → Storage |
-| Habilitar proveedor Google OAuth (opcional) | Supabase Dashboard → Auth → Providers |
+### Componente: Estadísticas Universales
+
+#### [MODIFY] [progreso.tsx](file:///c:/Users/TP412/Dropbox/PC/Documents/LectorApp_Neuro-Journey/lectorapp/app/(tabs)/progreso.tsx)
+Reemplazar la dependencia de Skia/`victory-native` con implementaciones de gráficos customizadas que funcionan de forma idéntica y con alto rendimiento (60 FPS) tanto en Web como en Móvil:
+
+1. **`UniversalLineChart` (Gráfico de Línea de WPM - SVG Puro)**:
+   - Utilizaremos `react-native-svg` (compatible de forma nativa en web y móvil).
+   - Generaremos un trazado suave (`Path`) conectando las lecturas WPM diarias de la semana.
+   - Añadiremos un gradiente translúcido en la zona inferior de la curva usando `<LinearGradient>` para dar un acabado Dribbble premium.
+   - Añadiremos líneas guía horizontales discontinuas y puntos de datos (círculos) con brillo de neón.
+   - Usaremos `viewBox` responsivo de SVG para que el gráfico se adapte automáticamente al tamaño de cualquier pantalla.
+
+2. **`UniversalBarChart` (Gráfico de Barras de Sesiones - Flexbox/CSS)**:
+   - Crearemos un gráfico de barras interactivo de alto impacto utilizando contenedores estándar de React Native y estilos Flexbox.
+   - Cada barra representará las sesiones diarias, con bordes redondeados (`borderTopLeftRadius` y `borderTopRightRadius`) y sombras suaves.
+   - Cada barra tendrá interacción al tacto/hover, mostrando un pequeño globo de texto flotante con la cantidad exacta de sesiones al ser pulsada.
+   - Totalmente responsivo en móvil y navegadores de escritorio.
 
 ---
 
-## Orden de Ejecución Recomendado
+### Componente: Login y Registro Profesional (Universal OAuth)
 
-```
-Fase 5 (Logros)  →  Fase 8 (Stats reales)  →  Fase 6 (Biblioteca)  →  Fase 7 (Tienda)
-```
+#### [MODIFY] [login.tsx](file:///c:/Users/TP412/Dropbox/PC/Documents/LectorApp_Neuro-Journey/lectorapp/app/(auth)/login.tsx)
+Reestructurar la lógica de inicio de sesión con Google (`handleGoogle`) para implementar un flujo híbrido según la plataforma:
 
-**Justificación:** Los logros y estadísticas son lo que más retención genera en apps de aprendizaje. La biblioteca y tienda necesitan contenido (libros reales) y XP acumulado que vendrá de completar ejercicios.
+1. **Flujo para Navegadores Web (Platform.OS === 'web')**:
+   - Evitar el uso de `WebBrowser.openAuthSessionAsync` (que abre molestas ventanas emergentes propensas a ser bloqueadas por el navegador).
+   - Utilizar el redireccionamiento directo nativo del navegador mediante `supabase.auth.signInWithOAuth`.
+   - Calcular la URL de redirección dinámicamente usando `window.location.origin`, permitiendo que funcione sin modificaciones en desarrollo (`localhost`) y en producción.
+   - Supabase detectará automáticamente el hash `#access_token` en la URL al retornar al origen y autenticará la sesión de manera transparente.
+
+2. **Flujo para Aplicaciones Móviles (iOS / Android)**:
+   - Mantener el flujo in-app seguro con `WebBrowser.openAuthSessionAsync` para abrir la sesión OAuth de Google sin salir de la aplicación.
+   - Utilizar el esquema deep-link de la aplicación (`lectorapp://google-auth`) para un regreso limpio.
+
+3. **Retroalimentación de Carga y Manejo de Errores**:
+   - Asegurar que el spinner de carga persista visualmente durante toda la transacción.
+   - Sanitizar errores técnicos y presentarlos al usuario en español legible.
 
 ---
 
-> Confirma el orden o indica por cuál fase quieres comenzar.
+## 🧪 Plan de Verificación
+
+### 1. Pruebas en Web (Local & Producción)
+- **Estadísticas**: Abrir la página `/progreso` en un navegador web y verificar que la gráfica de línea de WPM y las barras de actividad diaria se rendericen con perfecta resolución, colores HSL nítidos y sin causar crashes en la consola.
+- **Login de Google**: Pulsar "Google Sign-In" en la web. Verificar que redirija al formulario de consentimiento de Google y retorne correctamente a la ruta de la aplicación activa (`/ruta`), sincronizando el perfil del usuario.
+
+### 2. Pruebas en Dispositivos Móviles
+- **Estadísticas**: Abrir en Expo Go o build nativo. Verificar que los mismos componentes de gráficos SVG y Flexbox se rendericen a 60 FPS sin ralentizar el scroll.
+- **Login de Google**: Verificar que se abra el modal seguro de `WebBrowser` y regrese exitosamente a la aplicación a través de `lectorapp://google-auth`.
+
+### 3. Validación de Tipados
+- Ejecutar `npx tsc --noEmit` para garantizar la integridad absoluta de las modificaciones de TypeScript.

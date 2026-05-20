@@ -2,10 +2,7 @@ import React, { useMemo } from 'react';
 import { View, Text, ScrollView, StyleSheet, Dimensions, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-// Victory Native uses Skia (CanvasKit/WASM) — only load on native platforms
-const VictoryNative = Platform.OS !== 'web'
-  ? require('victory-native')
-  : null;
+import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useProgressStore } from '../../store/useProgressStore';
 import { useSessionStore } from '../../store/useSessionStore';
@@ -20,6 +17,189 @@ import type { ExerciseId } from '../../types/db';
 const SCREEN_W = Dimensions.get('window').width;
 
 const EX_IDS: ExerciseId[] = ['schulte', 'reading', 'wordspan', 'loci', 'comprehension', 'boss'];
+
+function hexToRgba(hex: string, opacity: number) {
+  const cleanHex = hex.replace('#', '');
+  const r = parseInt(cleanHex.substring(0, 2), 16);
+  const g = parseInt(cleanHex.substring(2, 4), 16);
+  const b = parseInt(cleanHex.substring(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+}
+
+// ─── UNIVERSAL SVG LINE CHART (WPM TREND) ───────────────────────────────────
+function UniversalLineChart({ data, themeColor }: { data: { day: string; wpm: number }[]; themeColor: string }) {
+  const maxWpm = Math.max(...data.map(d => d.wpm), 200);
+
+  const width = 320;
+  const height = 120;
+  const paddingLeft = 32;
+  const paddingRight = 12;
+  const paddingTop = 15;
+  const paddingBottom = 22;
+
+  const chartW = width - paddingLeft - paddingRight;
+  const chartH = height - paddingTop - paddingBottom;
+
+  const gridLines = [0, 0.33, 0.66, 1];
+
+  const points = data.map((d, i) => {
+    const x = paddingLeft + (i / (data.length - 1)) * chartW;
+    const y = paddingTop + chartH - (d.wpm / maxWpm) * chartH;
+    return { x, y, value: d.wpm, day: d.day };
+  });
+
+  let pathD = '';
+  let fillD = '';
+  
+  if (points.length > 0) {
+    pathD = `M ${points[0].x} ${points[0].y}`;
+    fillD = `M ${points[0].x} ${paddingTop + chartH} L ${points[0].x} ${points[0].y}`;
+    
+    for (let i = 1; i < points.length; i++) {
+      pathD += ` L ${points[i].x} ${points[i].y}`;
+      fillD += ` L ${points[i].x} ${points[i].y}`;
+    }
+    
+    fillD += ` L ${points[points.length - 1].x} ${paddingTop + chartH} Z`;
+  }
+
+  return (
+    <View style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}>
+      <Svg width="100%" height="100%" viewBox={`0 0 ${width} ${height}`}>
+        <Defs>
+          <LinearGradient id="lineGrad" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0%" stopColor={themeColor} stopOpacity={0.25} />
+            <Stop offset="100%" stopColor={themeColor} stopOpacity={0.0} />
+          </LinearGradient>
+        </Defs>
+
+        {gridLines.map((ratio, idx) => {
+          const y = paddingTop + chartH - ratio * chartH;
+          const valLabel = Math.round(ratio * maxWpm);
+          return (
+            <React.Fragment key={idx}>
+              <Line
+                x1={paddingLeft}
+                y1={y}
+                x2={width - paddingRight}
+                y2={y}
+                stroke={COLORS.border}
+                strokeWidth={1}
+                strokeDasharray="4,4"
+              />
+              <SvgText
+                x={paddingLeft - 6}
+                y={y + 3}
+                fontSize={8}
+                fontFamily={FONTS.body}
+                fill={COLORS.muted}
+                textAnchor="end"
+              >
+                {valLabel}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+
+        {fillD ? <Path d={fillD} fill="url(#lineGrad)" /> : null}
+
+        {pathD ? (
+          <Path
+            d={pathD}
+            fill="none"
+            stroke={themeColor}
+            strokeWidth={2.5}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+
+        {points.map((pt, idx) => {
+          const hasVal = pt.value > 0;
+          return (
+            <React.Fragment key={idx}>
+              {hasVal && (
+                <>
+                  <Circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={3.5}
+                    fill={themeColor}
+                    stroke={COLORS.white}
+                    strokeWidth={1.5}
+                  />
+                  <Circle
+                    cx={pt.x}
+                    cy={pt.y}
+                    r={7}
+                    fill={themeColor}
+                    fillOpacity={0.12}
+                  />
+                </>
+              )}
+              <SvgText
+                x={pt.x}
+                y={height - 4}
+                fontSize={9}
+                fontFamily={FONTS.headingSemi}
+                fill={COLORS.muted}
+                textAnchor="middle"
+              >
+                {pt.day}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+      </Svg>
+    </View>
+  );
+}
+
+// ─── UNIVERSAL INTERACTIVE BAR CHART (SESSIONS) ────────────────────────────
+function UniversalBarChart({ data, themeColor }: { data: { day: string; count: number }[]; themeColor: string }) {
+  const maxVal = Math.max(...data.map(d => d.count), 4);
+  const [selectedIdx, setSelectedIdx] = React.useState<number | null>(null);
+
+  return (
+    <View style={barStyles.container}>
+      <View style={barStyles.barsRow}>
+        {data.map((item, idx) => {
+          const percentage = maxVal > 0 ? (item.count / maxVal) * 100 : 0;
+          const isSelected = selectedIdx === idx;
+          return (
+            <Pressable
+              key={idx}
+              onPressIn={() => setSelectedIdx(idx)}
+              onPressOut={() => setSelectedIdx(null)}
+              style={barStyles.column}
+            >
+              <View style={[barStyles.tooltip, { opacity: isSelected ? 1 : 0, transform: [{ translateY: isSelected ? 0 : 4 }] }]}>
+                <Text style={barStyles.tooltipText}>{item.count} ses</Text>
+                <View style={[barStyles.tooltipArrow, { borderTopColor: COLORS.ink }]} />
+              </View>
+
+              <View style={barStyles.track}>
+                <View
+                  style={[
+                    barStyles.barFill,
+                    {
+                      height: `${percentage}%`,
+                      backgroundColor: isSelected ? themeColor : hexToRgba(themeColor, 0.75),
+                    },
+                  ]}
+                />
+              </View>
+
+              <Text style={[barStyles.dayLabel, isSelected && { color: themeColor, fontFamily: FONTS.headingSemi }]}>
+                {item.day}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
 
 export default function ProgresoScreen() {
   const profile = useProfileStore(s => s.profile);
@@ -153,62 +333,26 @@ export default function ProgresoScreen() {
           ))}
         </View>
 
-        {/* WPM Trend chart — native only (Skia) */}
+        {/* WPM Trend chart */}
         <Text style={styles.sectionTitle}>Velocidad lectora (7 días)</Text>
         <View style={styles.chartCard}>
-          {VictoryNative && wpmTrend.some(d => d.wpm > 0) ? (
-            <VictoryNative.CartesianChart
-              data={wpmTrend}
-              xKey="day"
-              yKeys={['wpm']}
-              axisOptions={{ font: undefined, labelColor: COLORS.muted, lineColor: COLORS.border, tickCount: { x: 7, y: 4 } }}
-              domainPadding={{ top: 20, bottom: 10 }}
-            >
-              {({ points }: any) => (
-                <VictoryNative.Line
-                  points={points.wpm}
-                  color={COLORS.calm}
-                  strokeWidth={2.5}
-                  animate={{ type: 'timing', duration: 600 }}
-                  connectMissingData
-                />
-              )}
-            </VictoryNative.CartesianChart>
+          {wpmTrend.some(d => d.wpm > 0) ? (
+            <UniversalLineChart data={wpmTrend} themeColor={COLORS.calm} />
           ) : (
             <View style={styles.chartEmpty}>
-              <Text style={styles.chartEmptyText}>
-                {wpmTrend.some(d => d.wpm > 0) ? 'Gráficas disponibles en la app' : 'Sin datos de WPM esta semana'}
-              </Text>
+              <Text style={styles.chartEmptyText}>Sin datos de WPM esta semana</Text>
             </View>
           )}
         </View>
 
-        {/* Sessions bar chart — native only (Skia) */}
+        {/* Sessions bar chart */}
         <Text style={styles.sectionTitle}>Sesiones por día</Text>
         <View style={styles.chartCard}>
-          {VictoryNative && sessionsByDay.some(d => d.count > 0) ? (
-            <VictoryNative.CartesianChart
-              data={sessionsByDay}
-              xKey="day"
-              yKeys={['count']}
-              axisOptions={{ font: undefined, labelColor: COLORS.muted, lineColor: COLORS.border, tickCount: { x: 7, y: 4 } }}
-              domainPadding={{ left: 20, right: 20, top: 20, bottom: 10 }}
-            >
-              {({ points, chartBounds }: any) => (
-                <VictoryNative.Bar
-                  points={points.count}
-                  chartBounds={chartBounds}
-                  color={COLORS.focus}
-                  roundedCorners={{ topLeft: 6, topRight: 6 }}
-                  animate={{ type: 'timing', duration: 600 }}
-                />
-              )}
-            </VictoryNative.CartesianChart>
+          {sessionsByDay.some(d => d.count > 0) ? (
+            <UniversalBarChart data={sessionsByDay} themeColor={COLORS.focus} />
           ) : (
             <View style={styles.chartEmpty}>
-              <Text style={styles.chartEmptyText}>
-                {sessionsByDay.some(d => d.count > 0) ? 'Gráficas disponibles en la app' : 'Completa ejercicios para ver estadísticas'}
-              </Text>
+              <Text style={styles.chartEmptyText}>Completa ejercicios para ver estadísticas</Text>
             </View>
           )}
         </View>
@@ -409,3 +553,79 @@ const styles = StyleSheet.create({
   exStats:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   exStat:    { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted },
 });
+
+const barStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: 10,
+  },
+  barsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    height: 120,
+    paddingHorizontal: 8,
+  },
+  column: {
+    alignItems: 'center',
+    flex: 1,
+    height: '100%',
+    justifyContent: 'flex-end',
+    position: 'relative',
+  },
+  track: {
+    width: 14,
+    height: 80,
+    backgroundColor: COLORS.surface,
+    borderRadius: 6,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+  },
+  barFill: {
+    width: '100%',
+    borderRadius: 6,
+  },
+  dayLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    color: COLORS.muted,
+    marginTop: 6,
+    textAlign: 'center',
+  },
+  tooltip: {
+    position: 'absolute',
+    bottom: 95,
+    backgroundColor: COLORS.ink,
+    borderRadius: 6,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 46,
+    zIndex: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  tooltipText: {
+    color: COLORS.white,
+    fontFamily: FONTS.headingSemi,
+    fontSize: 9,
+  },
+  tooltipArrow: {
+    position: 'absolute',
+    bottom: -4,
+    width: 0,
+    height: 0,
+    backgroundColor: 'transparent',
+    borderStyle: 'solid',
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderTopWidth: 4,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+});
+

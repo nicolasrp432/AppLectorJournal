@@ -2,6 +2,8 @@ import 'react-native-url-polyfill/auto';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import { Platform } from 'react-native';
+
 const SUPABASE_URL  = process.env.EXPO_PUBLIC_SUPABASE_URL  ?? '';
 const SUPABASE_ANON = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
@@ -54,7 +56,7 @@ function makeClient(): SupabaseClient {
       storage: AsyncStorage,
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false,
+      detectSessionInUrl: Platform.OS === 'web',
     },
   });
 }

@@ -33,25 +33,34 @@ export default function LoginScreen() {
     setLoading(true);
     setError('');
     try {
-      // 1. Crear la URL de redirección compatible con Expo Go y Builds Nativos
+      // 1. Manejo para plataforma Web (Redirección directa del navegador)
+      if (Platform.OS === 'web') {
+        const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (oauthErr) throw oauthErr;
+        return;
+      }
+
+      // 2. Manejo para plataforma Móvil Nativa (iOS / Android)
       const redirectUrl = Linking.createURL('google-auth');
       
-      // 2. Solicitar URL de autenticación de Supabase
       const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           redirectTo: redirectUrl,
-          skipBrowserRedirect: true, // Esto nos devuelve la URL en lugar de redirigir
+          skipBrowserRedirect: true,
         },
       });
 
       if (oauthErr) throw oauthErr;
 
       if (data?.url) {
-        // 3. Abrir la URL en una ventana de navegador segura dentro de la app
         const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
         
-        // 4. Si el login fue exitoso, extraer la sesión
         if (result.type === 'success' && result.url) {
           const parsedUrl = Linking.parse(result.url);
           const { access_token, refresh_token } = parsedUrl.queryParams || {};
@@ -70,7 +79,10 @@ export default function LoginScreen() {
       console.warn('Error en Google Sign-in:', err);
       setError(err.message || 'Error al iniciar sesión con Google.');
     } finally {
-      setLoading(false);
+      // Nota: En web, redireccionamos fuera, por lo que loading puede quedar en true hasta salir
+      if (Platform.OS !== 'web') {
+        setLoading(false);
+      }
     }
   };
 

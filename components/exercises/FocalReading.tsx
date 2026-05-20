@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withRepeat,
+  withSequence,
+  withTiming,
+  withSpring,
+} from 'react-native-reanimated';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
@@ -16,6 +24,24 @@ interface FocalReadingResult {
   comprehension: number;
   correct: number;
   total: number;
+}
+
+function FadeInWrapper({ children }: { children: React.ReactNode }) {
+  const opacity = useSharedValue(0);
+  const scale = useSharedValue(0.95);
+
+  useEffect(() => {
+    opacity.value = withTiming(1, { duration: 400 });
+    scale.value = withSpring(1, { damping: 12 });
+  }, []);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+    transform: [{ scale: scale.value }],
+    flex: 1,
+  }));
+
+  return <Animated.View style={animatedStyle}>{children}</Animated.View>;
 }
 
 interface Props {
@@ -237,56 +263,102 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
   // Quiz phase
   const q = passage.questions[qIdx];
   return (
-    <View style={styles.container}>
-      <ExerciseTopBar progress={qIdx / passage.questions.length} accent={accent} onQuit={onQuit} title={`Pregunta ${qIdx + 1}/${passage.questions.length}`} />
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.eyebrow}>Comprensión</Text>
-        <Text style={styles.questionText}>{q.q}</Text>
-        <View style={{ marginTop: 18, gap: 8 }}>
-          {q.opts.map((opt, i) => {
-            const isPicked = picked[qIdx] === i;
-            const showCorrect = feedback && i === q.correct;
-            const showWrong = feedback && isPicked && i !== q.correct;
-            return (
-              <Pressable
-                key={i}
-                onPress={() => handleAnswer(qIdx, i)}
-                disabled={!!feedback}
-                style={[
-                  styles.optionBtn,
-                  showCorrect && styles.optionCorrect,
-                  showWrong && styles.optionWrong,
-                  isPicked && !showCorrect && !showWrong && { backgroundColor: accent + '15', borderColor: accent },
-                ]}
-              >
-                <View style={[styles.optionBadge, showCorrect && { backgroundColor: '#22C55E' }, showWrong && { backgroundColor: '#EF4444' }]}>
-                  <Text style={[styles.optionBadgeText, (showCorrect || showWrong) && { color: '#fff' }]}>
-                    {showCorrect ? '✓' : showWrong ? '✕' : String.fromCharCode(65 + i)}
-                  </Text>
-                </View>
-                <Text style={styles.optionText}>{opt}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </ScrollView>
-    </View>
+    <FadeInWrapper>
+      <View style={[styles.container, { flex: 1 }]}>
+        <ExerciseTopBar progress={qIdx / passage.questions.length} accent={accent} onQuit={onQuit} title={`Pregunta ${qIdx + 1}/${passage.questions.length}`} />
+        <ScrollView contentContainerStyle={styles.scroll}>
+          <Text style={styles.eyebrow}>Comprensión</Text>
+          <Text style={styles.questionText}>{q.q}</Text>
+          <View style={{ marginTop: 18, gap: 8 }}>
+            {q.opts.map((opt, i) => {
+              const isPicked = picked[qIdx] === i;
+              const showCorrect = feedback && i === q.correct;
+              const showWrong = feedback && isPicked && i !== q.correct;
+              return (
+                <Pressable
+                  key={i}
+                  onPress={() => handleAnswer(qIdx, i)}
+                  disabled={!!feedback}
+                  style={[
+                    styles.optionBtn,
+                    showCorrect && styles.optionCorrect,
+                    showWrong && styles.optionWrong,
+                    isPicked && !showCorrect && !showWrong && { backgroundColor: accent + '15', borderColor: accent },
+                  ]}
+                >
+                  <View style={[styles.optionBadge, showCorrect && { backgroundColor: '#22C55E' }, showWrong && { backgroundColor: '#EF4444' }]}>
+                    <Text style={[styles.optionBadgeText, (showCorrect || showWrong) && { color: '#fff' }]}>
+                      {showCorrect ? '✓' : showWrong ? '✕' : String.fromCharCode(65 + i)}
+                    </Text>
+                  </View>
+                  <Text style={styles.optionText}>{opt}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </ScrollView>
+      </View>
+    </FadeInWrapper>
   );
 }
 
 function RSVPDisplay({ word, accent }: { word: string; accent: string }) {
   if (!word) return <View />;
   const orpIdx = Math.max(0, Math.min(word.length - 1, Math.floor(word.length * 0.35)));
+
+  const prefix = word.slice(0, orpIdx);
+  const orpLetter = word[orpIdx];
+  const suffix = word.slice(orpIdx + 1);
+
+  // Subtle breathing animation for the laser focus
+  const pulse = useSharedValue(0.85);
+  useEffect(() => {
+    pulse.value = withRepeat(
+      withSequence(
+        withTiming(1.05, { duration: 600 }),
+        withTiming(0.85, { duration: 600 }),
+      ),
+      -1,
+      true
+    );
+  }, [word]); // restart on word change for visual consistency
+
+  const pulseStyle = useAnimatedStyle(() => ({
+    opacity: pulse.value,
+    transform: [{ scale: pulse.value }],
+  }));
+
   return (
     <View style={rsvpStyles.container}>
-      <View style={rsvpStyles.crossV} />
-      <View style={rsvpStyles.crossVBottom} />
-      <Text style={rsvpStyles.word}>
-        <Text style={{ color: COLORS.ink }}>{word.slice(0, orpIdx)}</Text>
-        <Text style={{ color: accent, fontFamily: FONTS.headingSemi }}>{word[orpIdx]}</Text>
-        <Text style={{ color: COLORS.ink }}>{word.slice(orpIdx + 1)}</Text>
-      </Text>
-      <View style={[rsvpStyles.underline, { backgroundColor: accent }]} />
+      {/* Top Laser Vertical Guide Line */}
+      <View style={[rsvpStyles.laserLineTop, { backgroundColor: accent }]} />
+      {/* Glowing Laser Dot Top */}
+      <Animated.View style={[rsvpStyles.laserDotTop, { backgroundColor: accent }, pulseStyle]} />
+
+      {/* Main Word Row with exact centering on ORP */}
+      <View style={rsvpStyles.wordContainer}>
+        {/* Left Prefix */}
+        <View style={rsvpStyles.prefixAlign}>
+          <Text style={rsvpStyles.wordTextSide}>{prefix}</Text>
+        </View>
+
+        {/* Center ORP Letter with Focal Lens */}
+        <View style={rsvpStyles.orpCenterContainer}>
+          {/* Glassmorphic glowing circular Focal Lens */}
+          <Animated.View style={[rsvpStyles.focalLens, { borderColor: accent, shadowColor: accent }, pulseStyle]} />
+          <Text style={[rsvpStyles.wordTextORP, { color: accent }]}>{orpLetter}</Text>
+        </View>
+
+        {/* Right Suffix */}
+        <View style={rsvpStyles.suffixAlign}>
+          <Text style={rsvpStyles.wordTextSide}>{suffix}</Text>
+        </View>
+      </View>
+
+      {/* Bottom Laser Vertical Guide Line */}
+      <View style={[rsvpStyles.laserLineBottom, { backgroundColor: accent }]} />
+      {/* Glowing Laser Dot Bottom */}
+      <Animated.View style={[rsvpStyles.laserDotBottom, { backgroundColor: accent }, pulseStyle]} />
     </View>
   );
 }
@@ -332,11 +404,91 @@ function ChunkDisplay({ words, idx, chunkSize, accent }: { words: string[]; idx:
 }
 
 const rsvpStyles = StyleSheet.create({
-  container:   { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  crossV:      { position: 'absolute', top: 0, left: '50%', width: 1, height: '15%', backgroundColor: COLORS.border },
-  crossVBottom:{ position: 'absolute', bottom: 0, left: '50%', width: 1, height: '15%', backgroundColor: COLORS.border },
-  word:        { fontFamily: FONTS.body, fontSize: 38, color: COLORS.ink, letterSpacing: 1, paddingVertical: 10 },
-  underline:   { width: 12, height: 2, borderRadius: 1, marginTop: 2 },
+  container: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flex: 1,
+    width: '100%',
+    height: 180,
+    backgroundColor: 'rgba(15, 23, 42, 0.03)', // subtle slate background
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  wordContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    paddingHorizontal: 20,
+  },
+  prefixAlign: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  suffixAlign: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  orpCenterContainer: {
+    width: 44,
+    height: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  wordTextSide: {
+    fontFamily: FONTS.body,
+    fontSize: 34,
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  wordTextORP: {
+    fontFamily: FONTS.heading,
+    fontSize: 36,
+    fontWeight: '900',
+  },
+  focalLens: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  laserLineTop: {
+    position: 'absolute',
+    top: 0,
+    width: 2,
+    height: 48,
+    opacity: 0.7,
+  },
+  laserDotTop: {
+    position: 'absolute',
+    top: 44,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  laserLineBottom: {
+    position: 'absolute',
+    bottom: 0,
+    width: 2,
+    height: 48,
+    opacity: 0.7,
+  },
+  laserDotBottom: {
+    position: 'absolute',
+    bottom: 44,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
 });
 
 const guideStyles = StyleSheet.create({
