@@ -27,7 +27,30 @@ export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { get, update } = useLibraryStore();
   const { addXP } = useProfileStore();
-  const defaultWpm = usePrefsStore(s => s.prefs.wpm_default);
+  const prefs = usePrefsStore(s => s.prefs);
+  const defaultWpm = prefs?.wpm_default;
+
+  const isDyslexia = prefs?.dyslexia_font ?? false;
+  const fontSize = prefs?.font_size || 16;
+  const lineHeight = isDyslexia ? Math.round(fontSize * 1.8) : Math.round(fontSize * 1.5);
+  const letterSpacing = isDyslexia ? 1.5 : undefined;
+
+  let fontBg = 'Lexend_400Regular';
+  let fontHeading = 'Nunito_900Black';
+
+  if (isDyslexia) {
+    fontBg = 'Georgia';
+    fontHeading = 'Georgia';
+  } else {
+    const family = prefs?.font_family ?? 'Lexend';
+    if (family === 'Nunito') {
+      fontBg = 'Nunito_700Bold';
+      fontHeading = 'Nunito_900Black';
+    } else if (family === 'Georgia') {
+      fontBg = 'Georgia';
+      fontHeading = 'Georgia';
+    }
+  }
 
   const book = get(id ?? '');
 
@@ -263,7 +286,7 @@ export default function ReaderScreen() {
           <View style={styles.focusLines}>
             <View style={[styles.focusLine, { backgroundColor: ACCENT }]} />
             <View style={styles.wordBox}>
-              <Text style={[styles.rsvpWord, { color: COLORS.ink }]}>
+              <Text style={[styles.rsvpWord, { color: COLORS.ink, fontFamily: fontHeading, fontSize: isDyslexia ? 38 : 36, letterSpacing }]}>
                 {currentWord}
               </Text>
             </View>
@@ -328,7 +351,7 @@ export default function ReaderScreen() {
           <Text style={styles.bookTitle}>{book.title}</Text>
           {book.author && <Text style={styles.bookAuthor}>{book.author}</Text>}
           <View style={styles.divider} />
-          <Text style={styles.scrollText}>{book.content}</Text>
+          <Text style={[styles.scrollText, { fontFamily: fontBg, fontSize, lineHeight, letterSpacing }]}>{book.content}</Text>
           <View style={{ height: 100 }} />
         </ScrollView>
 

@@ -19,12 +19,14 @@ interface LibraryState {
   update: (id: string, patch: Partial<LibraryItem>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   fetchAll: (userId: string) => Promise<void>;
+  reset: () => void;
 }
 
 export const useLibraryStore = create<LibraryState>()(
   persist(
     (set, get) => ({
       items: DEFAULT_LIBRARY,
+      reset: () => set({ items: DEFAULT_LIBRARY }),
 
       list: () => get().items,
 

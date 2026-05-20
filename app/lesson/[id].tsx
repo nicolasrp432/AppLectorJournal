@@ -185,22 +185,60 @@ const PERIPHERAL_WORDS = [
   'AGIL', 'LECTOR', 'NEURONA', 'VELOZ', 'VISUAL'
 ];
 function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; accent: string }) {
+  const [isConfiguring, setIsConfiguring] = useState(true);
+  const [focusMode, setFocusMode] = useState<'free' | '30s' | '60s' | '120s'>('free');
   const [pressed, setPressed] = useState(false);
   const [count, setCount] = useState(0);
   const [flashWord, setFlashWord] = useState('');
   const [flashPos, setFlashPos] = useState<'left' | 'right' | 'top' | 'bottom'>('left');
+  
+  // Timer states
+  const [timeLeft, setTimeLeft] = useState(30);
+  const [duration, setDuration] = useState(30);
 
   const flashOpacity = useSharedValue(0);
   const flashScale = useSharedValue(0.8);
   const pulseScale = useSharedValue(1);
+
+  // Initialize timer limit based on mode
+  useEffect(() => {
+    if (focusMode === '30s') {
+      setTimeLeft(30);
+      setDuration(30);
+    } else if (focusMode === '60s') {
+      setTimeLeft(60);
+      setDuration(60);
+    } else if (focusMode === '120s') {
+      setTimeLeft(120);
+      setDuration(120);
+    }
+  }, [focusMode]);
+
+  // Handle countdown timer when pressed
+  useEffect(() => {
+    if (isConfiguring || focusMode === 'free' || !pressed) return;
+
+    const interval = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          onComplete();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isConfiguring, focusMode, pressed]);
 
   // Center button pulse when active
   useEffect(() => {
     if (pressed) {
       pulseScale.value = withRepeat(
         withSequence(
-          withTiming(1.22, { duration: 700 }),
-          withTiming(1, { duration: 700 })
+          withTiming(1.2, { duration: 600 }),
+          withTiming(1, { duration: 600 })
         ),
         -1,
         false
@@ -214,11 +252,12 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
 
   // Flash peripheral words periodically when pressed
   useEffect(() => {
-    if (!pressed) return;
+    if (isConfiguring || !pressed) return;
 
     let timer: any;
     const flash = () => {
-      if (count >= 15) {
+      // For free mode, check total count of 15
+      if (focusMode === 'free' && count >= 15) {
         onComplete();
         return;
       }
@@ -236,27 +275,27 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
       flashOpacity.value = 0;
       flashScale.value = withSpring(1.05, { damping: 12 });
       flashOpacity.value = withSequence(
-        withTiming(1, { duration: 250 }),
-        withTiming(1, { duration: 550 }), // Hold visible
-        withTiming(0, { duration: 200 }, (finished) => {
+        withTiming(1, { duration: 200 }),
+        withTiming(1, { duration: 600 }), // Hold visible
+        withTiming(0, { duration: 150 }, (finished) => {
           if (finished) {
             runOnJS(setCount)(count + 1);
           }
         })
       );
 
-      timer = setTimeout(flash, 1500);
+      timer = setTimeout(flash, 1400);
     };
 
     // First delay before flash
-    timer = setTimeout(flash, 800);
+    timer = setTimeout(flash, 600);
 
     return () => clearTimeout(timer);
-  }, [pressed, count]);
+  }, [isConfiguring, pressed, count, focusMode]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
-    shadowOpacity: pressed ? 0.45 : 0.15,
+    shadowOpacity: pressed ? 0.35 : 0.1,
   }));
 
   const flashStyle = useAnimatedStyle(() => ({
@@ -266,32 +305,99 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
 
   const getPositionCoords = (): any => {
     switch (flashPos) {
-      case 'left':   return { left: 15, top: '48%', transform: [{ translateY: -12 }] };
-      case 'right':  return { right: 15, top: '48%', transform: [{ translateY: -12 }] };
-      case 'top':    return { top: 15, left: '50%', transform: [{ translateX: -40 }] };
-      case 'bottom': return { bottom: 15, left: '50%', transform: [{ translateX: -40 }] };
+      case 'left':   return { left: 10, top: '48%', transform: [{ translateY: -12 }] };
+      case 'right':  return { right: 10, top: '48%', transform: [{ translateY: -12 }] };
+      case 'top':    return { top: 10, left: '50%', transform: [{ translateX: -40 }] };
+      case 'bottom': return { bottom: 10, left: '50%', transform: [{ translateX: -40 }] };
     }
   };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  };
+
+  if (isConfiguring) {
+    return (
+      <View style={styles.configContainer}>
+        <Ionicons name="eye-outline" size={54} color={accent} style={{ marginBottom: 12, marginTop: 24 }} />
+        <Text style={styles.configTitle}>Entrenamiento Periférico</Text>
+        <Text style={styles.configSubtitle}>
+          Entrena tu visión de reojo enfocándote en el centro mientras capturas palabras periféricas.
+        </Text>
+
+        <Text style={styles.sectionLabel}>Tiempo de Enfoque</Text>
+        <View style={styles.optionsRow}>
+          <Pressable
+            style={[styles.optionBtn, focusMode === 'free' && { borderColor: accent, backgroundColor: `${accent}15` }]}
+            onPress={() => setFocusMode('free')}
+          >
+            <Text style={[styles.optionText, focusMode === 'free' && { color: accent }]}>Libre</Text>
+            <Text style={styles.optionSubText}>15 palabras</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.optionBtn, focusMode === '30s' && { borderColor: accent, backgroundColor: `${accent}15` }]}
+            onPress={() => setFocusMode('30s')}
+          >
+            <Text style={[styles.optionText, focusMode === '30s' && { color: accent }]}>30s</Text>
+            <Text style={styles.optionSubText}>Rápido</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.optionBtn, focusMode === '60s' && { borderColor: accent, backgroundColor: `${accent}15` }]}
+            onPress={() => setFocusMode('60s')}
+          >
+            <Text style={[styles.optionText, focusMode === '60s' && { color: accent }]}>1 min</Text>
+            <Text style={styles.optionSubText}>Estándar</Text>
+          </Pressable>
+
+          <Pressable
+            style={[styles.optionBtn, focusMode === '120s' && { borderColor: accent, backgroundColor: `${accent}15` }]}
+            onPress={() => setFocusMode('120s')}
+          >
+            <Text style={[styles.optionText, focusMode === '120s' && { color: accent }]}>2 min</Text>
+            <Text style={styles.optionSubText}>Intenso</Text>
+          </Pressable>
+        </View>
+
+        <Pressable
+          style={({ pressed: btnAct }) => [
+            styles.startBtn,
+            { backgroundColor: accent, opacity: btnAct ? 0.8 : 1 }
+          ]}
+          onPress={() => setIsConfiguring(false)}
+        >
+          <Text style={styles.startBtnText}>Iniciar práctica</Text>
+          <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
+        </Pressable>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.gameContainer}>
-      <Text style={styles.gameInstructions}>
-        {pressed
-          ? '¡Excelente! Mantén presionado y mira fijo al OJO central. Lee las palabras de los extremos con tu visión periférica sin desviar los ojos.'
-          : 'Presiona y mantén presionado el círculo central de fijación para expandir tu enfoque ocular.'}
-      </Text>
-
-      {/* Progress Bar */}
-      <View style={styles.progressContainer}>
-        <ProgressBar value={count / 15} color={accent} height={8} />
-        <Text style={styles.progressText}>{count} de 15 expansiones completadas</Text>
+      {/* Sleek top status panel */}
+      <View style={styles.sleekStatusPanel}>
+        {focusMode === 'free' ? (
+          <View style={{ width: '100%' }}>
+            <ProgressBar value={count / 15} color={accent} height={6} />
+            <Text style={styles.sleekStatusText}>{count} / 15 palabras completadas</Text>
+          </View>
+        ) : (
+          <View style={{ width: '100%' }}>
+            <ProgressBar value={(duration - timeLeft) / duration} color={accent} height={6} />
+            <Text style={styles.sleekStatusText}>Tiempo restante: {formatTime(timeLeft)}</Text>
+          </View>
+        )}
       </View>
 
       {/* Visual ring area */}
       <View style={styles.playboard}>
         {/* Ring guides */}
-        <View style={[styles.ring, { width: 140, height: 140 }]} />
-        <View style={[styles.ring, { width: 240, height: 240 }]} />
+        <View style={[styles.ring, { width: 130, height: 130 }]} />
+        <View style={[styles.ring, { width: 230, height: 230 }]} />
 
         {/* Flashing Peripheral Word */}
         {flashWord !== '' && (
@@ -315,14 +421,14 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
         </Pressable>
       </View>
 
-      {!pressed && (
-        <View style={styles.pressedTipRow}>
-          <Ionicons name="finger-print" size={20} color={accent} />
-          <Text style={[styles.pressedTipText, { color: accent }]}>
-            Mantén presionado el centro para comenzar...
-          </Text>
-        </View>
-      )}
+      <View style={styles.tipsSection}>
+        <Ionicons name={pressed ? 'happy-outline' : 'finger-print'} size={20} color={accent} />
+        <Text style={[styles.tipsText, { color: accent }]}>
+          {pressed 
+            ? 'Mira fijamente al ojo central y lee de reojo.' 
+            : 'Mantén presionado el ojo central para reanudar el flujo...'}
+        </Text>
+      </View>
     </View>
   );
 }
@@ -986,6 +1092,130 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     alignItems: 'center',
+  },
+  configContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 400,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  configTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 22,
+    color: COLORS.ink,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  configSubtitle: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: COLORS.inkLight,
+    textAlign: 'center',
+    lineHeight: 19,
+    marginBottom: 28,
+  },
+  sectionLabel: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 12,
+    color: COLORS.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  optionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    width: '100%',
+    justifyContent: 'center',
+    marginBottom: 32,
+  },
+  optionBtn: {
+    width: '46%',
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  optionText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  optionSubText: {
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  startBtn: {
+    height: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  startBtnText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 15,
+    color: '#fff',
+  },
+  sleekStatusPanel: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginBottom: 32,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 8,
+    elevation: 1,
+  },
+  sleekStatusText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11,
+    color: COLORS.inkLight,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  tipsSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 36,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    maxWidth: 320,
+  },
+  tipsText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11,
+    flex: 1,
+    textAlign: 'center',
   },
   gameInstructions: {
     fontFamily: FONTS.body,

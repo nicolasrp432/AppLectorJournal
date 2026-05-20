@@ -7,12 +7,14 @@ interface NodeState {
   completed: string[];
   completeNode: (nodeId: string) => Promise<void>;
   fetchCompleted: (userId: string) => Promise<void>;
+  reset: () => void;
 }
 
 export const useNodeStore = create<NodeState>()(
   persist(
     (set, get) => ({
       completed: [],
+      reset: () => set({ completed: [] }),
 
       completeNode: async (nodeId: string) => {
         const current = get().completed;

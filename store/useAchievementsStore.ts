@@ -37,6 +37,7 @@ interface AchievementsState {
   clearNew: () => void;
   fetchUnlocked: (userId: string) => Promise<void>;
   checkAll: (ctx: AchievementContext) => Promise<string[]>;
+  reset: () => void;
 }
 
 export const useAchievementsStore = create<AchievementsState>()(
@@ -46,6 +47,7 @@ export const useAchievementsStore = create<AchievementsState>()(
       newlyUnlocked: [],
 
       clearNew: () => set({ newlyUnlocked: [] }),
+      reset: () => set({ unlocked: [], newlyUnlocked: [] }),
 
       fetchUnlocked: async (userId: string) => {
         const { data } = await supabase

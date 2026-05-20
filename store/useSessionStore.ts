@@ -16,12 +16,14 @@ interface SessionState {
   list: (filter?: SessionFilter) => Session[];
   insert: (sess: Omit<Session, 'id' | 'user_id'>) => Promise<Session>;
   fetchRecent: (userId: string, limit?: number) => Promise<void>;
+  reset: () => void;
 }
 
 export const useSessionStore = create<SessionState>()(
   persist(
     (set, get) => ({
       sessions: [],
+      reset: () => set({ sessions: [] }),
 
       list: (filter?: SessionFilter) => {
         let s = [...get().sessions];

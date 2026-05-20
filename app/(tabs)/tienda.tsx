@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { REWARDS } from '../../constants/rewards';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useRewardsStore } from '../../store/useRewardsStore';
+import { usePrefsStore } from '../../store/usePrefsStore';
 import { MascotChar } from '../../components/ui/MascotChar';
 import type { MascotKey } from '../../components/ui/MascotChar';
 import { COLORS, darken } from '../../constants/colors';
@@ -39,7 +40,8 @@ export default function TiendaScreen() {
 
   const profile    = useProfileStore(s => s.profile);
   const { addXP }  = useProfileStore();
-  const { owned, equipped, buy, equip, isOwned, isEquipped } = useRewardsStore();
+  const { owned, equipped, buy, equip, consume, isOwned, isEquipped } = useRewardsStore();
+  const themeColor = usePrefsStore(s => s.prefs.theme_color) || COLORS.focus;
 
   const xp = profile?.xp ?? 0;
 
@@ -55,9 +57,23 @@ export default function TiendaScreen() {
   const handleAction = async (r: RewardItem) => {
     if (r.locked) { showToast(`Requiere: ${r.requires}`, 'lock'); return; }
 
-    if (isOwned(r.id) && !r.consumable) {
-      equip(r.id, r.type, r.value, r.mascot);
-      showToast('¡Equipado!', 'ok');
+    if (isOwned(r.id)) {
+      if (r.consumable) {
+        if (r.id === 'pw-xp2x') {
+          showToast('¡XP Doble listo! Se activará en tu pantalla de resultados al pasar una lección.', 'ok');
+        } else if (r.id === 'pw-streak') {
+          showToast('¡Congelador de racha listo! Te protegerá automáticamente de perder tu racha.', 'ok');
+        } else if (r.id === 'pw-hint') {
+          showToast('¡Pista de loci lista! Verás un botón de lámpara morada durante tu lección de Loci.', 'ok');
+        } else if (r.id === 'pw-skip') {
+          showToast('¡Saltar pregunta listo! Verás un botón naranja durante tus ejercicios de comprensión.', 'ok');
+        } else {
+          showToast('¡Power-up listo! Se activará o consumirá automáticamente durante tus ejercicios.', 'ok');
+        }
+      } else {
+        equip(r.id, r.type, r.value, r.mascot);
+        showToast('¡Equipado!', 'ok');
+      }
       return;
     }
 
@@ -68,7 +84,7 @@ export default function TiendaScreen() {
 
     await addXP(-r.cost);
     buy(r.id, r.cost, r.type, r.value, r.mascot);
-    showToast(r.consumable ? `${r.title} listo para usar` : `¡${r.title} desbloqueado!`, 'ok');
+    showToast(r.consumable ? `¡${r.title} comprado! Listo para usar.` : `¡${r.title} desbloqueado!`, 'ok');
   };
 
   const filtered = filter === 'all' ? REWARDS : REWARDS.filter(r => r.cat === filter);
@@ -91,7 +107,7 @@ export default function TiendaScreen() {
             <Pressable
               key={f.id}
               onPress={() => setFilter(f.id)}
-              style={[styles.pill, filter === f.id && styles.pillActive]}
+              style={[styles.pill, filter === f.id && styles.pillActive, filter === f.id && { backgroundColor: themeColor }]}
             >
               <Text style={[styles.pillText, filter === f.id && styles.pillTextActive]}>{f.label}</Text>
             </Pressable>
@@ -135,13 +151,14 @@ function RewardCard({
 }: {
   r: RewardItem; owned: boolean; equipped: boolean; canAfford: boolean; onAction: () => void;
 }) {
+  const themeColor  = usePrefsStore(s => s.prefs.theme_color) || COLORS.focus;
   const isLocked    = r.locked ?? false;
   const itemColor   = r.value?.startsWith('#') ? r.value : (r.color ?? COLORS.muted);
-  const btnColor    = equipped ? COLORS.focus : owned ? COLORS.ink : isLocked ? COLORS.subtle : canAfford ? COLORS.joy : COLORS.border;
-  const btnLabel    = equipped ? 'EN USO' : owned ? (r.consumable ? 'USAR' : 'EQUIPAR') : isLocked ? 'BLOQ.' : `${r.cost} XP`;
+  const btnColor    = equipped ? themeColor : owned ? (r.consumable ? COLORS.muted : COLORS.ink) : isLocked ? COLORS.subtle : canAfford ? COLORS.joy : COLORS.border;
+  const btnLabel    = equipped ? 'EN USO' : owned ? (r.consumable ? 'EN INVENTARIO' : 'EQUIPAR') : isLocked ? 'BLOQ.' : `${r.cost} XP`;
 
   return (
-    <View style={[styles.card, equipped && { borderColor: COLORS.focus }, { flex: 1 }]}>
+    <View style={[styles.card, equipped && { borderColor: themeColor }, { flex: 1 }]}>
       {/* Preview */}
       <View style={[styles.preview, r.type === 'theme' ? { backgroundColor: itemColor } : { backgroundColor: COLORS.surface }]}>
         {r.type === 'theme' && (
@@ -166,7 +183,7 @@ function RewardCard({
           </View>
         )}
         {equipped && (
-          <View style={styles.equippedBadge}>
+          <View style={[styles.equippedBadge, { backgroundColor: themeColor }]}>
             <Ionicons name="checkmark" size={14} color="#fff" />
           </View>
         )}

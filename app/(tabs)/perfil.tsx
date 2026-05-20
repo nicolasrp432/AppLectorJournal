@@ -8,12 +8,17 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
 import { useProfileStore } from '../../store/useProfileStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useProgressStore } from '../../store/useProgressStore';
+import { useNodeStore } from '../../store/useNodeStore';
+import { useRewardsStore } from '../../store/useRewardsStore';
+import { useSubscriptionStore } from '../../store/useSubscriptionStore';
+import { PremiumPaywall } from '../../components/ui/PremiumPaywall';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { MascotChar } from '../../components/ui/MascotChar';
 import type { MascotKey } from '../../components/ui/MascotChar';
@@ -22,6 +27,7 @@ import { FONTS } from '../../constants/typography';
 import { levelProgress, xpForNextLevel } from '../../lib/xpEngine';
 import { scheduleDailyReminder, cancelDailyReminder } from '../../lib/notifications';
 import { supabase } from '../../lib/supabase';
+import { REWARDS } from '../../constants/rewards';
 
 type IconLib = 'Ionicons' | 'MaterialCommunityIcons';
 
@@ -58,6 +64,11 @@ export default function PerfilScreen() {
   const prefs                = usePrefsStore(s => s.prefs);
   const { update: updatePrefs } = usePrefsStore();
   const unlockedAchievements = useAchievementsStore(s => s.unlocked);
+  const themeColor = prefs?.theme_color || COLORS.focus;
+  
+  // Equip badges integration
+  const equippedBadge = useRewardsStore(s => s.equipped.badge);
+  const activeBadgeItem = REWARDS.find(r => r.id === equippedBadge);
 
   // Additional stores for dynamic calculated stats
   const sessions = useSessionStore(s => s.sessions);
@@ -123,6 +134,12 @@ export default function PerfilScreen() {
       setAMotion(prefs.reduce_motion ?? false);
     }
   }, [accessModalVisible, prefs]);
+
+  useEffect(() => {
+    useSubscriptionStore.getState().initialize().catch(err => {
+      console.warn('Failed to initialize subscription store:', err);
+    });
+  }, []);
 
   if (!profile) return null;
 
@@ -192,23 +209,76 @@ export default function PerfilScreen() {
   };
 
   const handleSignOut = () => {
-    Alert.alert('Cerrar sesión', '¿Seguro que quieres salir?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Salir', style: 'destructive', onPress: () => supabase.auth.signOut() },
-    ]);
+    const performSignOut = async () => {
+      console.log('[Perfil] Starting signout sequence...');
+      try {
+        // 1. Reset all Zustand stores to pristine defaults in memory instantly
+        console.log('[Perfil] Resetting Zustand stores...');
+        useProfileStore.getState().reset();
+        usePrefsStore.getState().reset();
+        useRewardsStore.getState().reset();
+        useAchievementsStore.getState().reset();
+        useLibraryStore.getState().reset();
+        useNodeStore.getState().reset();
+        useProgressStore.getState().reset();
+        useSessionStore.getState().reset();
+        useSubscriptionStore.getState().reset();
+        
+        // 2. Clear AsyncStorage to guarantee clean slate
+        console.log('[Perfil] Clearing local storage...');
+        try {
+          await AsyncStorage.clear();
+          console.log('[Perfil] AsyncStorage cleared successfully.');
+        } catch (e) {
+          console.warn('[Perfil] AsyncStorage clear failed:', e);
+        }
+        
+        // 3. Trigger supabase.auth.signOut() asynchronously
+        console.log('[Perfil] Triggering Supabase auth signout...');
+        supabase.auth.signOut().then(() => {
+          console.log('[Perfil] Supabase signout completed successfully.');
+        }).catch(e => {
+          console.warn('[Perfil] Background Supabase signout failed/ignored:', e);
+        });
+      } catch (err) {
+        console.error('[Perfil] Error during signout execution:', err);
+      } finally {
+        // 4. Redirect immediately to welcome screen (always run as fallback)
+        console.log('[Perfil] Redirecting to welcome onboarding screen.');
+        router.replace('/(auth)/welcome');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm) {
+        if (window.confirm('¿Seguro que quieres salir?')) {
+          performSignOut();
+        }
+      } else {
+        performSignOut();
+      }
+    } else {
+      Alert.alert('Cerrar sesión', '¿Seguro que quieres salir?', [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Salir', style: 'destructive', onPress: performSignOut }
+      ]);
+    }
   };
 
   const isGuest = profile.id === 'local';
+  const isPremiumRC = useSubscriptionStore(s => s.isPremium);
+  const isProfilePremium = useProfileStore(s => s.isPremium());
+  const isPremium = isPremiumRC || isProfilePremium;
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
         {/* ── Hero ─────────────────────────────────────────────────────────── */}
-        <View style={styles.hero}>
-          <Pressable onPress={() => setAvatarMenuVisible(true)} style={styles.avatarWrap} disabled={uploading}>
+        <View style={[styles.hero, { borderColor: themeColor + '40' }]}>
+          <Pressable onPress={() => setAvatarMenuVisible(true)} style={[styles.avatarWrap, { backgroundColor: themeColor + '20' }]} disabled={uploading}>
             {uploading ? (
-              <ActivityIndicator color={COLORS.focus} size="large" />
+              <ActivityIndicator color={themeColor} size="large" />
             ) : profile.avatar_url ? (
               <Image source={{ uri: profile.avatar_url }} style={styles.avatarImg} />
             ) : (
@@ -222,7 +292,7 @@ export default function PerfilScreen() {
           {editing ? (
             <View style={{ width: '100%', gap: 10, marginTop: 10 }}>
               <TextInput
-                style={styles.editInput}
+                style={[styles.editInput, { borderColor: themeColor + '60' }]}
                 value={editName}
                 onChangeText={setEditName}
                 placeholder="Tu nombre"
@@ -230,7 +300,7 @@ export default function PerfilScreen() {
                 maxLength={40}
               />
               <TextInput
-                style={[styles.editInput, { height: 60 }]}
+                style={[styles.editInput, { height: 60, borderColor: themeColor + '60' }]}
                 value={editBio}
                 onChangeText={setEditBio}
                 placeholder="Una frase sobre ti..."
@@ -242,15 +312,30 @@ export default function PerfilScreen() {
                 <Pressable onPress={() => setEditing(false)} style={styles.editCancelBtn}>
                   <Text style={styles.editCancelText}>Cancelar</Text>
                 </Pressable>
-                <Pressable onPress={saveEdit} style={styles.editSaveBtn}>
+                <Pressable onPress={saveEdit} style={[styles.editSaveBtn, { backgroundColor: themeColor }]}>
                   <Text style={styles.editSaveText}>Guardar</Text>
                 </Pressable>
               </View>
             </View>
           ) : (
             <>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 10 }}>
                 <Text style={styles.name}>{profile.name}</Text>
+                
+                {isPremium && (
+                  <View style={styles.heroProBadge}>
+                    <Ionicons name="ribbon" size={12} color="#fff" />
+                    <Text style={styles.heroProBadgeText}>PRO</Text>
+                  </View>
+                )}
+
+                {activeBadgeItem && (
+                  <View style={[styles.heroEquippedBadge, { backgroundColor: activeBadgeItem.color + '1A', borderColor: activeBadgeItem.color }]}>
+                    <Ionicons name={activeBadgeItem.icon as any} size={12} color={activeBadgeItem.color} />
+                    <Text style={[styles.heroEquippedBadgeText, { color: activeBadgeItem.color }]}>{activeBadgeItem.title}</Text>
+                  </View>
+                )}
+
                 <Pressable onPress={startEdit} hitSlop={8}>
                   <Ionicons name="pencil" size={16} color={COLORS.muted} />
                 </Pressable>
@@ -264,7 +349,7 @@ export default function PerfilScreen() {
             <Text style={styles.levelXP}>{xpForNextLevel(profile.xp)} XP para Nivel {profile.level + 1}</Text>
           </View>
           <View style={{ marginTop: 8, width: '100%' }}>
-            <ProgressBar value={levelProgress(profile.xp)} color={COLORS.focus} height={10} />
+            <ProgressBar value={levelProgress(profile.xp)} color={themeColor} height={10} />
           </View>
         </View>
 
@@ -280,9 +365,9 @@ export default function PerfilScreen() {
             </View>
           </View>
 
-          <View style={[styles.statCard, { borderLeftColor: '#22C55E', borderLeftWidth: 4 }]}>
+          <View style={[styles.statCard, { borderLeftColor: themeColor, borderLeftWidth: 4 }]}>
             <View style={styles.statIconWrapLeft}>
-              <Ionicons name="speedometer" size={20} color="#22C55E" />
+              <Ionicons name="speedometer" size={20} color={themeColor} />
             </View>
             <View style={{ minWidth: 0, flex: 1 }}>
               <Text style={styles.statValue}>{maxWpm}</Text>
@@ -314,8 +399,8 @@ export default function PerfilScreen() {
         {/* ── Achievements ─────────────────────────────────────────────────── */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Logros</Text>
-          <View style={styles.sectionTitleRightBadge}>
-            <Text style={styles.sectionTitleRightBadgeText}>
+          <View style={[styles.sectionTitleRightBadge, { backgroundColor: themeColor + '15' }]}>
+            <Text style={[styles.sectionTitleRightBadgeText, { color: themeColor }]}>
               {ACHIEVEMENTS.filter(a => unlockedAchievements.includes(a.id) || a.cond).length}/{ACHIEVEMENTS.length}
             </Text>
           </View>
@@ -329,7 +414,7 @@ export default function PerfilScreen() {
           {ACHIEVEMENTS.map(a => {
             const unlocked = unlockedAchievements.includes(a.id) || a.cond;
             return (
-              <View key={a.id} style={[styles.achievementCard, !unlocked && styles.achievementCardLocked]}>
+              <View key={a.id} style={[styles.achievementCard, !unlocked && styles.achievementCardLocked, unlocked && { borderColor: themeColor + '30', shadowColor: themeColor }]}>
                 <View style={[styles.achievementIconCircle, { backgroundColor: unlocked ? (a.color + '1A') : COLORS.surface }, !unlocked && { opacity: 0.6 }]}>
                   <AchIcon icon={unlocked ? a.icon : 'lock-closed'} lib={unlocked ? a.lib : 'Ionicons'} size={24} color={unlocked ? a.color : COLORS.subtle} />
                 </View>
@@ -352,8 +437,8 @@ export default function PerfilScreen() {
             style={({ pressed }) => [styles.settingsRow, pressed && { backgroundColor: COLORS.surface }]}
             onPress={() => setGoalsModalVisible(true)}
           >
-            <View style={[styles.settingIconWrap, { backgroundColor: '#22C55E1A' }]}>
-              <MaterialCommunityIcons name="target" size={18} color="#22C55E" />
+            <View style={[styles.settingIconWrap, { backgroundColor: themeColor + '1A' }]}>
+              <MaterialCommunityIcons name="target" size={18} color={themeColor} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.settingsLabel}>Meta diaria</Text>
@@ -405,11 +490,15 @@ export default function PerfilScreen() {
             </View>
             <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={styles.settingsLabel}>Plan actual</Text>
-              <View style={styles.proBadge}>
-                <Text style={styles.proBadgeText}>PRO</Text>
-              </View>
+              {isPremium && (
+                <View style={styles.proBadge}>
+                  <Text style={styles.proBadgeText}>PRO</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.settingsValueRight}>Gratuito</Text>
+            <Text style={[styles.settingsValueRight, isPremium && { color: '#D97706', fontFamily: FONTS.heading }]}>
+              {isPremium ? 'Premium' : 'Gratuito'}
+            </Text>
             <Ionicons name="chevron-forward" size={16} color={COLORS.subtle} />
           </Pressable>
 
@@ -428,11 +517,9 @@ export default function PerfilScreen() {
           </Pressable>
         </View>
 
-        {!isGuest && (
-          <Pressable onPress={handleSignOut} style={styles.signOutBtn}>
-            <Text style={styles.signOutText}>Cerrar sesión</Text>
-          </Pressable>
-        )}
+        <Pressable onPress={handleSignOut} style={styles.signOutBtn}>
+          <Text style={styles.signOutText}>{isGuest ? 'Salir (Volver al Inicio)' : 'Cerrar sesión'}</Text>
+        </Pressable>
 
         <View style={{ height: 110 }} />
       </ScrollView>
@@ -463,8 +550,8 @@ export default function PerfilScreen() {
                   setMascotModalVisible(true);
                 }}
               >
-                <View style={[styles.bottomSheetOptionIcon, { backgroundColor: COLORS.focus + '12' }]}>
-                  <Ionicons name="sparkles" size={20} color={COLORS.focus} />
+                <View style={[styles.bottomSheetOptionIcon, { backgroundColor: themeColor + '12' }]}>
+                  <Ionicons name="sparkles" size={20} color={themeColor} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.bottomSheetOptionText}>Elegir Mascota LectorApp</Text>
@@ -571,7 +658,7 @@ export default function PerfilScreen() {
           <View style={[styles.mascotModalCard, { maxWidth: 380, maxHeight: '80%' }]}>
             <View style={styles.mascotModalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="pulse" size={20} color={COLORS.focus} />
+                <Ionicons name="pulse" size={20} color={themeColor} />
                 <Text style={styles.mascotModalTitle}>Soporte Expo / Metro</Text>
               </View>
               <Pressable onPress={() => setDiagnosticVisible(false)} hitSlop={8}>
@@ -580,6 +667,9 @@ export default function PerfilScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ width: '100%' }}>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <MascotChar which={(profile.avatar as MascotKey) ?? 'focus'} size={72} expression="happy" breathing blinking />
+              </View>
               <Text style={styles.diagnosticIntro}>
                 Si tienes problemas para conectar tu dispositivo físico (iOS o Android) al Metro bundler en tu PC, sigue esta guía técnica:
               </Text>
@@ -642,6 +732,7 @@ export default function PerfilScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.diagnosticCloseBtn,
+                { backgroundColor: themeColor },
                 pressed && { opacity: 0.9 }
               ]}
               onPress={() => setDiagnosticVisible(false)}
@@ -734,7 +825,7 @@ export default function PerfilScreen() {
                 <Text style={styles.editCancelText}>Cancelar</Text>
               </Pressable>
               <Pressable
-                style={styles.editSaveBtn}
+                style={[styles.editSaveBtn, { backgroundColor: themeColor }]}
                 onPress={async () => {
                   await updatePrefs({
                     daily_minutes_goal: goalMin,
@@ -834,7 +925,7 @@ export default function PerfilScreen() {
                   <Switch
                     value={prefNotif}
                     onValueChange={setPrefNotif}
-                    trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                    trackColor={{ false: COLORS.border, true: themeColor }}
                     thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                   />
                 </View>
@@ -862,7 +953,7 @@ export default function PerfilScreen() {
                 <Text style={styles.editCancelText}>Cancelar</Text>
               </Pressable>
               <Pressable
-                style={styles.editSaveBtn}
+                style={[styles.editSaveBtn, { backgroundColor: themeColor }]}
                 onPress={async () => {
                   await updatePrefs({
                     wpm_default: prefWpm,
@@ -910,7 +1001,7 @@ export default function PerfilScreen() {
                 <Switch
                   value={aDyslexia}
                   onValueChange={setADyslexia}
-                  trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                  trackColor={{ false: COLORS.border, true: themeColor }}
                   thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                 />
               </View>
@@ -923,7 +1014,7 @@ export default function PerfilScreen() {
                 <Switch
                   value={aContrast}
                   onValueChange={setAContrast}
-                  trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                  trackColor={{ false: COLORS.border, true: themeColor }}
                   thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                 />
               </View>
@@ -936,7 +1027,7 @@ export default function PerfilScreen() {
                 <Switch
                   value={aMotion}
                   onValueChange={setAMotion}
-                  trackColor={{ false: COLORS.border, true: COLORS.focus }}
+                  trackColor={{ false: COLORS.border, true: themeColor }}
                   thumbColor={Platform.OS === 'android' ? '#fff' : undefined}
                 />
               </View>
@@ -950,7 +1041,7 @@ export default function PerfilScreen() {
                 <Text style={styles.editCancelText}>Cancelar</Text>
               </Pressable>
               <Pressable
-                style={styles.editSaveBtn}
+                style={[styles.editSaveBtn, { backgroundColor: themeColor }]}
                 onPress={async () => {
                   await updatePrefs({
                     dyslexia_font: aDyslexia,
@@ -968,65 +1059,10 @@ export default function PerfilScreen() {
       </Modal>
 
       {/* ── Modal: LectorApp PRO ───────────────────────────────────────── */}
-      <Modal
+      <PremiumPaywall
         visible={proModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setProModalVisible(false)}
-      >
-        <Pressable style={styles.modalOverlay} onPress={() => setProModalVisible(false)}>
-          <View style={styles.bottomSheetContainer}>
-            <View style={styles.bottomSheetHeader}>
-              <View style={styles.bottomSheetKnob} />
-              <Text style={styles.bottomSheetTitle}>LectorApp PRO</Text>
-              <Text style={styles.bottomSheetSubtitle}>Desbloquea todo tu potencial cognitivo</Text>
-            </View>
-
-            <View style={styles.proGoldCard}>
-              <Text style={styles.proGoldTitle}>$4.99 <Text style={{ fontSize: 14, fontFamily: FONTS.heading }}>/mes</Text></Text>
-              <Text style={styles.proGoldSub}>Entrenamiento premium ilimitado y científico</Text>
-            </View>
-
-            <View style={{ gap: 10, marginBottom: 20 }}>
-              {[
-                { label: 'Ejercicios ilimitados', desc: 'Entrena sin límites de tiempo o intentos' },
-                { label: 'Análisis avanzado', desc: 'Gráficas detalladas de tu WPM y comprensión' },
-                { label: 'Biblioteca Premium', desc: 'Acceso completo a nuestro catálogo de más de 200 libros' },
-                { label: 'Modo Offline completo', desc: 'Entrena y lee en aviones o donde quieras' },
-                { label: 'Cero anuncios', desc: 'Una interfaz limpia enfocada en tu concentración' }
-              ].map((item, idx) => (
-                <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
-                  <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: '#EAB3081A', alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
-                    <Ionicons name="checkmark" size={12} color="#D97706" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.proFeatureText}>{item.label}</Text>
-                    <Text style={styles.settingsSubtext}>{item.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-
-            <View style={{ gap: 10 }}>
-              <Pressable
-                style={({ pressed }) => [styles.editSaveBtn, { backgroundColor: '#D97706' }, pressed && { opacity: 0.9 }]}
-                onPress={() => {
-                  Alert.alert('LectorApp PRO', '¡Gracias por tu interés! Esta funcionalidad premium estará disponible muy pronto.');
-                  setProModalVisible(false);
-                }}
-              >
-                <Text style={styles.editSaveText}>Probar 7 días gratis</Text>
-              </Pressable>
-              <Pressable
-                style={styles.bottomSheetCancelBtn}
-                onPress={() => setProModalVisible(false)}
-              >
-                <Text style={styles.bottomSheetCancelText}>Cerrar</Text>
-              </Pressable>
-            </View>
-          </View>
-        </Pressable>
-      </Modal>
+        onClose={() => setProModalVisible(false)}
+      />
 
       {/* ── Modal: Acerca de LectorApp ─────────────────────────────────── */}
       <Modal
@@ -1044,6 +1080,9 @@ export default function PerfilScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 300, marginBottom: 20 }}>
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <MascotChar which={(profile.avatar as MascotKey) ?? 'focus'} size={72} expression="happy" breathing blinking />
+              </View>
               <View style={{ gap: 12 }}>
                 <Text style={styles.aboutText}>
                   LectorApp es una plataforma interactiva diseñada en base a rigurosas investigaciones sobre neurociencia cognitiva y técnicas avanzadas de lectura veloz.
@@ -1061,25 +1100,78 @@ export default function PerfilScreen() {
                 <Pressable
                   style={({ pressed }) => [styles.resetBtn, pressed && { backgroundColor: '#EF44441A' }]}
                   onPress={() => {
-                    Alert.alert(
-                      'Restaurar Datos',
-                      '¿Estás absolutamente seguro de que deseas restablecer la aplicación? Esto eliminará todo tu historial, racha y progresos de forma irreversible.',
-                      [
-                        { text: 'Cancelar', style: 'cancel' },
-                        {
-                          text: 'Restablecer',
-                          style: 'destructive',
-                          onPress: async () => {
-                            await AsyncStorage.clear();
-                            Alert.alert('Completado', 'Los datos locales han sido restaurados. Por favor reinicia la aplicación.');
-                            setAboutModalVisible(false);
-                          }
+                    const performReset = async () => {
+                      try {
+                        // 1. Reset all 8 Zustand stores to pristine defaults in memory instantly
+                        useProfileStore.getState().reset();
+                        usePrefsStore.getState().reset();
+                        useRewardsStore.getState().reset();
+                        useAchievementsStore.getState().reset();
+                        useLibraryStore.getState().reset();
+                        useNodeStore.getState().reset();
+                        useProgressStore.getState().reset();
+                        useSessionStore.getState().reset();
+                        
+                        // 2. Clear AsyncStorage to guarantee clean slate
+                        try {
+                          await AsyncStorage.clear();
+                        } catch (e) {
+                          console.warn('AsyncStorage clear failed:', e);
                         }
-                      ]
-                    );
+                        
+                        // 3. Trigger supabase.auth.signOut() asynchronously
+                        supabase.auth.signOut().catch(e => {
+                          console.warn('Background Supabase signout failed/ignored:', e);
+                        });
+
+                        if (Platform.OS === 'web') {
+                          alert('Los datos locales han sido restaurados. Volviendo al inicio.');
+                        } else {
+                          Alert.alert('Completado', 'Los datos locales han sido restaurados. Volviendo al inicio.');
+                        }
+                      } catch (err) {
+                        console.error('Error during local reset execution:', err);
+                      } finally {
+                        setAboutModalVisible(false);
+                        router.replace('/(auth)/welcome');
+                      }
+                    };
+
+                    if (Platform.OS === 'web') {
+                      if (typeof window !== 'undefined' && window.confirm) {
+                        if (window.confirm('¿Estás absolutamente seguro de que deseas restablecer la aplicación? Esto eliminará todo tu historial, racha y progresos de forma irreversible.')) {
+                          performReset();
+                        }
+                      } else {
+                        performReset();
+                      }
+                    } else {
+                      Alert.alert(
+                        'Restaurar Datos',
+                        '¿Estás absolutamente seguro de que deseas restablecer la aplicación? Esto eliminará todo tu historial, racha y progresos de forma irreversible.',
+                        [
+                          { text: 'Cancelar', style: 'cancel' },
+                          { text: 'Restablecer', style: 'destructive', onPress: performReset }
+                        ]
+                      );
+                    }
                   }}
                 >
                   <Text style={styles.resetBtnText}>Restaurar datos locales</Text>
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.diagnosticCloseBtn,
+                    { backgroundColor: themeColor + '15', borderWidth: 1.5, borderColor: themeColor, marginTop: 12, height: 44 },
+                    pressed && { opacity: 0.8 }
+                  ]}
+                  onPress={() => {
+                    setAboutModalVisible(false);
+                    setDiagnosticVisible(true);
+                  }}
+                >
+                  <Text style={[styles.diagnosticCloseText, { color: themeColor }]}>Guía de Diagnóstico Metro / Expo</Text>
                 </Pressable>
               </View>
             </ScrollView>
@@ -1106,6 +1198,39 @@ const styles = StyleSheet.create({
   avatarImg:   { width: 88, height: 88, borderRadius: 44 },
   avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
   name:        { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
+  heroProBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#D97706', // Premium Golden color
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    shadowColor: '#D97706',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  heroProBadgeText: {
+    fontFamily: FONTS.headingSemi, // Safe fallback style matching fontsLoaded
+    fontSize: 10,
+    color: '#fff',
+    letterSpacing: 0.6,
+  },
+  heroEquippedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  heroEquippedBadgeText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 9.5,
+  },
   bio:         { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 4 },
   levelRow:    { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginTop: 16 },
   levelLabel:  { fontFamily: FONTS.heading, fontSize: 14, color: COLORS.ink },

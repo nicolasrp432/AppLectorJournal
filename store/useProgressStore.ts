@@ -20,6 +20,7 @@ interface ProgressState {
   get: (exId: ExerciseId) => ExerciseProgress;
   update: (exId: ExerciseId, patch: Partial<ExerciseProgress>) => Promise<void>;
   fetchAll: (userId: string) => Promise<void>;
+  reset: () => void;
 }
 
 const EMPTY: ExerciseProgress = {
@@ -31,6 +32,7 @@ export const useProgressStore = create<ProgressState>()(
   persist(
     (set, get) => ({
       all: DEFAULT_PROGRESS,
+      reset: () => set({ all: DEFAULT_PROGRESS }),
 
       get: (exId: ExerciseId) => get().all[exId] ?? { ...EMPTY, exercise_id: exId },
 

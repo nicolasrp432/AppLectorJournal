@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+import { useRewardsStore } from '../../store/useRewardsStore';
 
 type Phase = 'read' | 'quiz';
 
@@ -24,6 +26,10 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
   const readStart = React.useRef(Date.now());
   const readTimeRef = React.useRef(0);
 
+  // Rewards powerup skip question state
+  const { owned, consume } = useRewardsStore();
+  const hasSkip = owned.includes('pw-skip');
+
   const handlePick = (i: number) => {
     if (showFeedback) return;
     setPicked(i);
@@ -42,6 +48,28 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
         setQIdx(i => i + 1);
       }
     }, 1200);
+  };
+
+  const handleSkipQuestion = () => {
+    if (showFeedback) return;
+    consume('pw-skip');
+    
+    // Count this current question as correct
+    const newAnswers = [...answers, true];
+    setAnswers(newAnswers);
+    
+    if (qIdx + 1 >= passage.questions.length) {
+      const wordCount = passage.text.split(/\s+/).length;
+      const wpm = readTimeRef.current > 0 ? Math.round((wordCount / readTimeRef.current) * 60) : 0;
+      onFinish({
+        correct: newAnswers.filter(Boolean).length,
+        total: passage.questions.length,
+        wpm,
+        time: (Date.now() - startTime.current) / 1000
+      });
+    } else {
+      setQIdx(i => i + 1);
+    }
   };
 
   if (phase === 'read') {
@@ -105,6 +133,19 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
             );
           })}
         </View>
+
+        {hasSkip && !showFeedback && (
+          <View style={styles.skipContainer}>
+            <View style={styles.divider} />
+            <Pressable
+              onPress={handleSkipQuestion}
+              style={[styles.skipBtn, { borderColor: '#F97316' }]}
+            >
+              <Ionicons name="sparkles" size={16} color="#F97316" />
+              <Text style={styles.skipBtnText}>Saltar pregunta (Usar power-up)</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -130,4 +171,31 @@ const styles = StyleSheet.create({
   badge:        { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   badgeText:    { fontFamily: FONTS.heading, fontSize: 11, color: COLORS.muted },
   optionText:   { fontFamily: FONTS.body, fontSize: 14, color: COLORS.ink, flex: 1 },
+  skipContainer: {
+    marginTop: 24,
+    alignItems: 'center',
+    gap: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    width: '100%',
+  },
+  skipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    width: '100%',
+    backgroundColor: '#FFF7ED',
+  },
+  skipBtnText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
+    color: '#EA580C',
+  },
 });

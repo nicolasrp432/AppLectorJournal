@@ -12,6 +12,9 @@ export interface Profile {
   streak: number;
   last_active: string | null;
   created_at: string;
+  subscription_tier?: string;
+  subscription_status?: string;
+  subscription_expires_at?: string | null;
 }
 
 export interface Session {

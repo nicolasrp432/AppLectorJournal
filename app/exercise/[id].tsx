@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Platform,
+  View, Text, ScrollView, Pressable, StyleSheet, Platform, Modal,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { XPBanner } from '../../components/ui/XPBanner';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -23,6 +25,7 @@ import { useSessionStore } from '../../store/useSessionStore';
 import { useNodeStore } from '../../store/useNodeStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
+import { useRewardsStore } from '../../store/useRewardsStore';
 import { supabase } from '../../lib/supabase';
 import { AchievementToast } from '../../components/ui/AchievementToast';
 
@@ -66,7 +69,14 @@ export default function ExerciseScreen() {
   const exerciseId = (id ?? 'schulte') as ExerciseId;
   const exercise = EXERCISES[exerciseId];
 
-  const { addXP }                          = useProfileStore();
+  const {
+    addXP,
+    fetchDailySessionsCount,
+    canStartSession,
+    incrementSessionCountLocal,
+    isPremium,
+  } = useProfileStore();
+
   const { get: getProgress, update: updateProgress } = useProgressStore();
   const { insert: insertSession }          = useSessionStore();
   const { completeNode }                   = useNodeStore();
@@ -75,6 +85,11 @@ export default function ExerciseScreen() {
   const [phase, setPhase]                  = useState<Phase>('intro');
   const [result, setResult]                = useState<BuiltResult | null>(null);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
+  const [showLimitModal, setShowLimitModal]   = useState(false);
+
+  React.useEffect(() => {
+    fetchDailySessionsCount();
+  }, []);
 
   // Customizable parametric states for exercises
   const [schulteSize, setSchulteSize] = useState<number>(5);
@@ -106,6 +121,7 @@ export default function ExerciseScreen() {
     const prog = getProgress(exerciseId);
     const built = buildResult(exerciseId, exercise, raw);
     setResult(built);
+    incrementSessionCountLocal();
 
     const score = built.passed ? (raw.comprehension ?? (raw.correct && raw.total ? raw.correct / raw.total : 0.9)) : 0.4;
     const clampedScore = Math.max(0, Math.min(1, score as number));
@@ -161,25 +177,82 @@ export default function ExerciseScreen() {
 
   if (phase === 'intro') {
     return (
-      <ExerciseIntro
-        exercise={exercise}
-        onStart={() => setPhase('playing')}
-        onBack={() => router.back()}
-        schulteSize={schulteSize}
-        setSchulteSize={setSchulteSize}
-        wordSpanCount={wordSpanCount}
-        setWordSpanCount={setWordSpanCount}
-        wordSpanInterval={wordSpanInterval}
-        setWordSpanInterval={setWordSpanInterval}
-        lociCount={lociCount}
-        setLociCount={setLociCount}
-        lociStudyTime={lociStudyTime}
-        setLociStudyTime={setLociStudyTime}
-        readingWpm={readingWpm}
-        setReadingWpm={setReadingWpm}
-        readingMode={readingMode}
-        setReadingMode={setReadingMode}
-      />
+      <>
+        <ExerciseIntro
+          exercise={exercise}
+          onStart={() => {
+            if (!canStartSession()) {
+              setShowLimitModal(true);
+            } else {
+              setPhase('playing');
+            }
+          }}
+          onBack={() => router.back()}
+          schulteSize={schulteSize}
+          setSchulteSize={setSchulteSize}
+          wordSpanCount={wordSpanCount}
+          setWordSpanCount={setWordSpanCount}
+          wordSpanInterval={wordSpanInterval}
+          setWordSpanInterval={setWordSpanInterval}
+          lociCount={lociCount}
+          setLociCount={setLociCount}
+          lociStudyTime={lociStudyTime}
+          setLociStudyTime={setLociStudyTime}
+          readingWpm={readingWpm}
+          setReadingWpm={setReadingWpm}
+          readingMode={readingMode}
+          setReadingMode={setReadingMode}
+        />
+
+        {/* Animated Premium/Rest Limit Modal */}
+        <Modal
+          visible={showLimitModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowLimitModal(false)}
+        >
+          <View style={limitStyles.modalOverlay}>
+            <BlurView intensity={70} style={StyleSheet.absoluteFill} tint="dark" />
+            <View style={limitStyles.limitCard}>
+              <View style={limitStyles.mascotContainer}>
+                <MascotChar which="calm" size={105} expression="sleepy" />
+              </View>
+
+              <Text style={limitStyles.limitTitle}>¡Mente en Descanso!</Text>
+
+              <Text style={limitStyles.limitText}>
+                Has completado tus <Text style={{ fontFamily: FONTS.headingBold, color: COLORS.focus }}>3 sesiones diarias gratuitas</Text> de hoy. Tu cerebro necesita tiempo para asimilar las nuevas conexiones neuronales creadas. ¡Gran trabajo!
+              </Text>
+
+              <Text style={limitStyles.limitTip}>
+                Espera hasta mañana para seguir gratis o desbloquea el entrenamiento ilimitado ahora mismo.
+              </Text>
+
+              <Pressable
+                style={limitStyles.upgradeBtn}
+                onPress={() => {
+                  setShowLimitModal(false);
+                  router.push('/(tabs)/tienda');
+                }}
+              >
+                <LinearGradient
+                  colors={['#F59E0B', '#D97706']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={limitStyles.gradientBtn}
+                >
+                  <Ionicons name="sparkles" size={16} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={limitStyles.upgradeText}>Entrenar sin Límites (PRO)</Text>
+                </LinearGradient>
+              </Pressable>
+
+              <Pressable style={limitStyles.closeBtn} onPress={() => setShowLimitModal(false)}>
+                <Text style={limitStyles.closeText}>Entendido, descansaré mi mente</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
+      </>
     );
   }
 
@@ -569,6 +642,11 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
   onRetry: () => void;
 }) {
   const c = exercise.color;
+  const { owned, consume } = useRewardsStore();
+  const { addXP } = useProfileStore();
+  const hasDoubleXp = owned.includes('pw-xp2x') && result.passed;
+  const [xp2xActivated, setXp2xActivated] = React.useState(false);
+
   const heroShadow = (color: string) => Platform.select({
     web: { boxShadow: `0 20px 50px ${color}66` } as any,
     default: { shadowColor: color, shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.4, shadowRadius: 50, elevation: 8 },
@@ -621,7 +699,7 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
           ))}
         </View>
 
-        {result.passed && (
+        {result.passed && !xp2xActivated && (
           <View style={resultStyles.xpCard}>
             <Ionicons name="flash" size={36} color="#78350F" />
             <View style={{ flex: 1 }}>
@@ -629,6 +707,41 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
               <Text style={resultStyles.xpValue}>+{result.xpEarned} XP</Text>
             </View>
           </View>
+        )}
+
+        {xp2xActivated && (
+          <View style={[resultStyles.xpCard, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+            <Ionicons name="sparkles" size={36} color="#D97706" />
+            <View style={{ flex: 1 }}>
+              <Text style={[resultStyles.xpLabel, { color: '#92400E' }]}>Multiplicador Activo</Text>
+              <Text style={[resultStyles.xpValue, { color: '#D97706' }]}>+{result.xpEarned * 2} XP (¡Duplicado con éxito!)</Text>
+            </View>
+          </View>
+        )}
+
+        {hasDoubleXp && !xp2xActivated && (
+          <Pressable
+            onPress={async () => {
+              consume('pw-xp2x');
+              await addXP(result.xpEarned);
+              setXp2xActivated(true);
+            }}
+            style={resultStyles.doubleXpCard}
+          >
+            <LinearGradient
+              colors={['#FCD34D', '#F59E0B', '#D97706']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={resultStyles.doubleXpGradient}
+            >
+              <Ionicons name="sparkles" size={24} color="#fff" />
+              <View style={{ flex: 1 }}>
+                <Text style={resultStyles.doubleXpTitle}>¡POTENCIADOR XP x2 DISPONIBLE!</Text>
+                <Text style={resultStyles.doubleXpDesc}>Toca aquí para consumir tu potenciador y ganar +{result.xpEarned} XP extra (Total: {result.xpEarned * 2} XP).</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#fff" />
+            </LinearGradient>
+          </Pressable>
         )}
 
         {result.insight ? (
@@ -882,4 +995,130 @@ const resultStyles = StyleSheet.create({
   retryBtnText: { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
   continueBtn:  { flex: 1, paddingVertical: 14, borderRadius: 14, alignItems: 'center' },
   continueBtnText:{ fontFamily: FONTS.heading, fontSize: 14, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },
+  doubleXpCard: {
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 14,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  doubleXpGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  doubleXpTitle: {
+    fontFamily: FONTS.headingBold || 'System',
+    fontSize: 12,
+    color: '#fff',
+    letterSpacing: 0.8,
+  },
+  doubleXpDesc: {
+    fontFamily: FONTS.body || 'System',
+    fontSize: 11,
+    color: '#fff',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+});
+
+const limitStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  limitCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.8)',
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  mascotContainer: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#DBEAFE',
+  },
+  limitTitle: {
+    fontFamily: FONTS.heading || 'System',
+    fontSize: 22,
+    color: '#1E3A8A',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  limitText: {
+    fontFamily: FONTS.body || 'System',
+    fontSize: 14,
+    color: '#4B5563',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  limitTip: {
+    fontFamily: FONTS.bodyLight || 'System',
+    fontSize: 12.5,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 20,
+    paddingHorizontal: 8,
+  },
+  upgradeBtn: {
+    width: '100%',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 10,
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  gradientBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+  },
+  upgradeText: {
+    fontFamily: FONTS.heading || 'System',
+    fontSize: 13,
+    color: '#fff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  closeBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(243, 244, 246, 0.8)',
+  },
+  closeText: {
+    fontFamily: FONTS.headingSemi || 'System',
+    fontSize: 12,
+    color: '#4B5563',
+  },
 });

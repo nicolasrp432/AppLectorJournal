@@ -14,6 +14,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
+import { useRewardsStore } from '../../store/useRewardsStore';
 import { COLORS, darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { MascotChar, MascotKey } from '../../components/ui/MascotChar';
@@ -303,6 +304,101 @@ function SpeedLine({ left }: { left: number }) {
   );
 }
 
+// ─── ANIMATED CAFE RAIN BACKDROP (bg-cafe) ──────────────────────────────────
+function CafeRainBackdrop() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <RainDrop left={40} speed={1500} delay={0} />
+      <RainDrop left={110} speed={1800} delay={200} />
+      <RainDrop left={W - 120} speed={1600} delay={400} />
+      <RainDrop left={W - 40} speed={1400} delay={100} />
+      <RainDrop left={70} speed={2000} delay={600} />
+      <RainDrop left={W - 80} speed={1700} delay={800} />
+    </View>
+  );
+}
+
+function RainDrop({ left, speed, delay }: { left: number; speed: number; delay: number }) {
+  const dropY = useSharedValue(-100);
+
+  React.useEffect(() => {
+    dropY.value = withTiming(800, { duration: speed });
+    
+    const interval = setInterval(() => {
+      dropY.value = -100;
+      dropY.value = withTiming(800, { duration: speed });
+    }, speed + delay + 100);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left,
+    top: dropY.value,
+    opacity: 0.18,
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <Svg width={4} height={40} viewBox="0 0 4 40" fill="none">
+        <Line x1="2" y1="0" x2="2" y2="40" stroke="#38BDF8" strokeWidth={1.5} opacity={0.6} />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// ─── ANIMATED LIBRARY BACKDROP (bg-library) ─────────────────────────────────
+function LibraryBackdrop() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <FloatingMote left={30} top={80} size={6} />
+      <FloatingMote left={W - 70} top={150} size={8} />
+      <FloatingMote left={50} top={290} size={5} />
+      <FloatingMote left={W - 90} top={410} size={7} />
+      <FloatingMote left={110} top={530} size={9} />
+      <FloatingMote left={W - 50} top={650} size={6} />
+    </View>
+  );
+}
+
+function FloatingMote({ left, top, size }: { left: number; top: number; size: number }) {
+  const floatY = useSharedValue(0);
+  const driftX = useSharedValue(0);
+  const opacity = useSharedValue(0.1);
+
+  React.useEffect(() => {
+    floatY.value = withRepeat(
+      withSequence(withTiming(15, { duration: 3000 }), withTiming(-15, { duration: 3000 })),
+      -1,
+      true
+    );
+    driftX.value = withRepeat(
+      withSequence(withTiming(10, { duration: 2500 }), withTiming(-10, { duration: 2500 })),
+      -1,
+      true
+    );
+    opacity.value = withRepeat(
+      withSequence(withTiming(0.35, { duration: 2000 }), withTiming(0.1, { duration: 2000 })),
+      -1,
+      true
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left: left + driftX.value,
+    top: top + floatY.value,
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: '#FCD34D' }} />
+    </Animated.View>
+  );
+}
+
 // ─── MAIN ROUTE SCREEN ───────────────────────────────────────────────────────
 export default function RutaScreen() {
   const profile   = useProfileStore(s => s.profile);
@@ -320,15 +416,21 @@ export default function RutaScreen() {
     const checkWelcome = async () => {
       try {
         const value = await AsyncStorage.getItem('lectorapp_has_seen_welcome');
-        if (!value) {
+        // Un usuario es nuevo si tiene 0 XP (o no definido) y no ha completado ninguna lección/nodo
+        const isNewUser = (!profile || profile.xp === 0) && completed.length === 0;
+        
+        if (!value && isNewUser) {
           setShowWelcome(true);
+        } else if (!value) {
+          // Si el usuario no es nuevo pero no tiene la marca, la guardamos silenciosamente para no molestarle
+          await AsyncStorage.setItem('lectorapp_has_seen_welcome', 'true');
         }
       } catch (err) {
         console.warn('Error reading AsyncStorage welcome key:', err);
       }
     };
     checkWelcome();
-  }, []);
+  }, [profile, completed]);
 
   const handleCloseWelcome = async () => {
     setShowWelcome(false);
@@ -415,17 +517,42 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
       })
     : -1;
 
+  const equippedBackground = useRewardsStore(s => s.equipped.background);
+
   // Rich Scenic Gradients
-  const bgColors: readonly [string, string, ...string[]] =
+  let bgColors: readonly [string, string, ...string[]] =
     zone.title === 'Zona 1' ? ['#022C22', '#064E3B'] :
     zone.title === 'Zona 2' ? ['#0A0E1A', '#1E1B4B'] :
     ['#020617', '#0F172A'];
 
+  if (equippedBackground === 'bg-cafe') {
+    bgColors = ['#2E1005', '#451A03'];
+  } else if (equippedBackground === 'bg-library') {
+    bgColors = ['#1C1917', '#292524'];
+  } else if (equippedBackground === 'bg-forest') {
+    bgColors = ['#022C22', '#064E3B'];
+  } else if (equippedBackground === 'bg-space') {
+    bgColors = ['#030712', '#0F172A'];
+  }
+
   const renderBackdrop = () => {
-    if (zone.title === 'Zona 1') return <ForestBackdrop />;
-    if (zone.title === 'Zona 2') return <CosmosBackdrop />;
+    const activeBg = equippedBackground || (
+      zone.title === 'Zona 1' ? 'bg-forest' :
+      zone.title === 'Zona 2' ? 'bg-space' :
+      'bg-cyber'
+    );
+
+    if (activeBg === 'bg-forest') return <ForestBackdrop />;
+    if (activeBg === 'bg-space') return <TwinklingStarBackdrop />; // TwinklingStar mapped
+    if (activeBg === 'bg-cafe') return <CafeRainBackdrop />;
+    if (activeBg === 'bg-library') return <LibraryBackdrop />;
     return <CyberBackdrop />;
   };
+
+  // Fallback map stars
+  function TwinklingStarBackdrop() {
+    return <CosmosBackdrop />;
+  }
 
   return (
     <LinearGradient colors={bgColors} style={styles.zoneCard}>
@@ -729,7 +856,7 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
       
       mascotBounce.value = withRepeat(
         withSequence(
-          withTiming(-12, { duration: 800 }),
+          withTiming(-8, { duration: 800 }),
           withTiming(0, { duration: 800 })
         ),
         -1,
@@ -757,7 +884,7 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={handleDismiss}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
+        <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
         <Animated.View style={[styles.welcomeCard, cardStyle]}>
           {/* Top Decorative Spark */}
           <View style={styles.welcomeBannerDecor}>
@@ -771,26 +898,26 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
 
           {/* Animated Mascot wrapper */}
           <Animated.View style={[styles.welcomeMascotWrap, mascotStyle]}>
-            <MascotChar which="focus" size={110} expression="happy" />
+            <MascotChar which="focus" size={100} expression="happy" />
           </Animated.View>
 
-          <Text style={styles.welcomeHeader}>¡HOLA, NEURO-VIAJERO!</Text>
-          <Text style={styles.welcomeTitle}>Te damos la bienvenida a LectorApp</Text>
+          <Text style={styles.welcomeHeader}>¡BIENVENIDO!</Text>
+          <Text style={styles.welcomeTitle}>Tu viaje neuro-cognitivo comienza hoy</Text>
 
           <View style={styles.welcomeDivider} />
 
           <Text style={styles.welcomeBody}>
-            Estamos listos para expandir tus límites cognitivos. A través de este viaje gamificado entrenarás tu visión periférica, reprogramarás tu memoria y potenciarás tu velocidad de lectura.
+            Entrena tu visión periférica, agudiza tu memoria y duplica tu velocidad de lectura.
           </Text>
 
           <View style={styles.welcomeHighlights}>
             <View style={styles.welcomeHighlightRow}>
-              <Ionicons name="sparkles" size={18} color="#10B981" />
-              <Text style={styles.welcomeHighlightText}>Ejercicios visuales y de memoria interactivos</Text>
+              <Ionicons name="sparkles" size={16} color="#10B981" />
+              <Text style={styles.welcomeHighlightText}>Ejercicios interactivos personalizados</Text>
             </View>
             <View style={styles.welcomeHighlightRow}>
-              <Ionicons name="stats-chart" size={18} color="#3B82F6" />
-              <Text style={styles.welcomeHighlightText}>Gráficos de velocidad de lectura (WPM)</Text>
+              <Ionicons name="stats-chart" size={16} color="#3B82F6" />
+              <Text style={styles.welcomeHighlightText}>Métricas de velocidad y progreso</Text>
             </View>
           </View>
 
@@ -801,8 +928,8 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <Text style={styles.welcomeBtnText}>¡Comenzar mi Entrenamiento!</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+            <Text style={styles.welcomeBtnText}>Comenzar entrenamiento</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
           </Pressable>
         </Animated.View>
       </View>
@@ -1019,7 +1146,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   welcomeHighlightText: {
-    fontFamily: FONTS.bodyMedium,
+    fontFamily: FONTS.body,
     fontSize: 12,
     color: '#334155',
     flex: 1,

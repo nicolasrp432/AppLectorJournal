@@ -8,12 +8,17 @@ import type { Profile, MascotKey } from '../types/db';
 interface ProfileState {
   profile: Profile | null;
   isLoading: boolean;
+  dailySessionsCount: number;
   fetchProfile: () => Promise<void>;
   addXP: (amount: number) => Promise<{ newXP: number; newLevel: number }>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
   uploadAvatar: (uri: string, mimeType?: string, base64?: string) => Promise<string | null>;
   setProfileLocal: (profile: Profile) => void;
   reset: () => void;
+  isPremium: () => boolean;
+  fetchDailySessionsCount: () => Promise<void>;
+  canStartSession: () => boolean;
+  incrementSessionCountLocal: () => void;
 }
 
 const DEFAULT_PROFILE: Profile = {
@@ -27,6 +32,8 @@ const DEFAULT_PROFILE: Profile = {
   streak: 7,
   last_active: null,
   created_at: new Date().toISOString(),
+  subscription_tier: 'free',
+  subscription_status: 'inactive',
 };
 
 // Pure JavaScript Base64 to ArrayBuffer decoder
@@ -75,6 +82,7 @@ export const useProfileStore = create<ProfileState>()(
     (set, get) => ({
       profile: DEFAULT_PROFILE,
       isLoading: false,
+      dailySessionsCount: 0,
 
       fetchProfile: async () => {
         set({ isLoading: true });
@@ -151,7 +159,45 @@ export const useProfileStore = create<ProfileState>()(
 
       setProfileLocal: (profile: Profile) => set({ profile }),
 
-      reset: () => set({ profile: DEFAULT_PROFILE }),
+      reset: () => set({ profile: DEFAULT_PROFILE, dailySessionsCount: 0 }),
+
+      isPremium: () => {
+        const p = get().profile;
+        if (!p) return false;
+        return p.subscription_tier === 'premium' || p.subscription_status === 'active';
+      },
+
+      fetchDailySessionsCount: async () => {
+        const current = get().profile;
+        if (!current || current.id === 'local') return;
+
+        try {
+          const startOfDay = new Date();
+          startOfDay.setHours(0, 0, 0, 0);
+          const startOfDayISO = startOfDay.toISOString();
+
+          const { data, error } = await supabase.rpc('get_user_daily_session_count', {
+            p_user_id: current.id,
+            p_start_of_day: startOfDayISO
+          });
+
+          if (!error && data !== null) {
+            set({ dailySessionsCount: Number(data) });
+          }
+        } catch (err) {
+          console.warn('Error fetching daily sessions count:', err);
+        }
+      },
+
+      canStartSession: () => {
+        const isPrem = get().isPremium();
+        if (isPrem) return true;
+        return get().dailySessionsCount < 3;
+      },
+
+      incrementSessionCountLocal: () => {
+        set(state => ({ dailySessionsCount: state.dailySessionsCount + 1 }));
+      },
     }),
     {
       name:    'lectorapp-profile',

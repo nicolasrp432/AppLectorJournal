@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
 import Svg, { Rect, Line } from 'react-native-svg';
+import { Ionicons } from '@expo/vector-icons';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { LOCI_OBJECTS } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+import { useRewardsStore } from '../../store/useRewardsStore';
 
 const ALL_ROOMS = [
   { id: 'entrance', label: 'Entrada',   x: 15, y: 70 },
@@ -38,6 +40,11 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   const [feedback, setFeedback] = useState<{ room: string; correct: boolean } | null>(null);
   const startTime = React.useRef(Date.now());
 
+  // Loci Hint state
+  const { owned, consume } = useRewardsStore();
+  const hasHint = owned.includes('pw-hint');
+  const [hintActive, setHintActive] = useState(false);
+
   useEffect(() => {
     if (phase !== 'learn') return;
     const t = setTimeout(() => {
@@ -46,6 +53,11 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
     }, studyMs);
     return () => clearTimeout(t);
   }, [learnIdx, phase, studyMs]);
+
+  // Reset hint state when advancing questions
+  useEffect(() => {
+    setHintActive(false);
+  }, [recallIdx]);
 
   const handleRoomPick = (roomId: string) => {
     if (feedback) return;
@@ -95,6 +107,27 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
             <View style={[styles.wordBubble, { backgroundColor: accent, alignSelf: 'center' }]}>
               <Text style={styles.wordBubbleText}>{current.word}</Text>
             </View>
+
+            {/* Glowing Loci Hint Button */}
+            {hasHint && !hintActive && !feedback && (
+              <Pressable
+                onPress={() => {
+                  consume('pw-hint');
+                  setHintActive(true);
+                }}
+                style={styles.lociHintBtn}
+              >
+                <Ionicons name="bulb" size={16} color="#fff" />
+                <Text style={styles.lociHintBtnText}>Revelar habitación (Usar pista)</Text>
+              </Pressable>
+            )}
+
+            {hintActive && (
+              <View style={styles.lociHintActiveBanner}>
+                <Ionicons name="sparkles" size={14} color="#8B5CF6" />
+                <Text style={styles.lociHintActiveText}>Pista activa: ¡Búscalo en la habitación destacada!</Text>
+              </View>
+            )}
           </>
         )}
       </View>
@@ -107,6 +140,8 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
         feedback={feedback}
         accent={accent}
         onRoomPress={handleRoomPick}
+        hintActive={hintActive}
+        targetRoomId={current.id}
       />
 
       {phase === 'learn' && (
@@ -127,7 +162,7 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
 
 type AssocRoom = { id: string; label: string; x: number; y: number; word: string };
 
-function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRoomPress }: {
+function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRoomPress, hintActive, targetRoomId }: {
   assoc: AssocRoom[];
   phase: 'learn' | 'recall';
   highlightId?: string;
@@ -135,6 +170,8 @@ function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRo
   feedback: { room: string; correct: boolean } | null;
   accent: string;
   onRoomPress: (id: string) => void;
+  hintActive: boolean;
+  targetRoomId: string;
 }) {
   const { width } = Dimensions.get('window');
   const mapW = Math.min(width, 520) - 40;
@@ -150,14 +187,15 @@ function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRo
       </Svg>
 
       {assoc.map((r, idx) => {
-        const isHighlight = r.id === highlightId;
+        const isHintTarget = hintActive && r.id === targetRoomId;
+        const isHighlight = r.id === highlightId || isHintTarget;
         const hasBadge = badgeUpTo !== undefined && idx < badgeUpTo;
         const feedbackOk  = isHighlight && feedback?.correct === true;
         const feedbackErr = isHighlight && feedback?.correct === false;
 
-        const btnBg    = feedbackOk ? '#DCFCE7' : feedbackErr ? '#FEE2E2' : isHighlight ? `${accent}25` : '#fff';
-        const btnBorder = feedbackOk ? '#22C55E' : feedbackErr ? '#EF4444' : isHighlight ? accent : `${accent}30`;
-        const txtColor  = feedbackOk ? '#16A34A' : feedbackErr ? '#EF4444' : isHighlight ? accent : COLORS.ink;
+        const btnBg    = feedbackOk ? '#DCFCE7' : feedbackErr ? '#FEE2E2' : isHintTarget ? '#FAF5FF' : isHighlight ? `${accent}25` : '#fff';
+        const btnBorder = feedbackOk ? '#22C55E' : feedbackErr ? '#EF4444' : isHintTarget ? '#8B5CF6' : isHighlight ? accent : `${accent}30`;
+        const txtColor  = feedbackOk ? '#16A34A' : feedbackErr ? '#EF4444' : isHintTarget ? '#8B5CF6' : isHighlight ? accent : COLORS.ink;
 
         return (
           <Pressable
@@ -175,7 +213,10 @@ function HouseMap({ assoc, phase, highlightId, badgeUpTo, feedback, accent, onRo
               },
             ]}
           >
-            <Text style={[styles.roomLabel, { color: txtColor }]}>{r.label}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              {isHintTarget && <Ionicons name="bulb" size={11} color="#8B5CF6" style={{ marginTop: -1 }} />}
+              <Text style={[styles.roomLabel, { color: txtColor }]}>{r.label}</Text>
+            </View>
             {hasBadge && (
               <View style={[styles.badge, { backgroundColor: accent }]}>
                 <Text style={styles.badgeText}>{r.word}</Text>
@@ -206,4 +247,41 @@ const styles = StyleSheet.create({
   footer:       { padding: 16, paddingBottom: 24, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.surface },
   nextBtn:      { borderRadius: 14, paddingVertical: 14, alignItems: 'center' },
   nextBtnText:  { fontFamily: FONTS.heading, fontSize: 14, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },
+  lociHintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#8B5CF6',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    marginTop: 8,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  lociHintBtnText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 12,
+    color: '#fff',
+  },
+  lociHintActiveBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    marginTop: 8,
+  },
+  lociHintActiveText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11,
+    color: '#6D28D9',
+  },
 });

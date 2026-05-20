@@ -25,6 +25,7 @@ interface PrefsState {
   prefs: UserPrefs;
   update: (patch: Partial<UserPrefs>) => Promise<void>;
   fetchPrefs: (userId: string) => Promise<void>;
+  reset: () => void;
 }
 
 export const usePrefsStore = create<PrefsState>()(
@@ -45,6 +46,8 @@ export const usePrefsStore = create<PrefsState>()(
         const { data } = await supabase.from('user_prefs').select('*').eq('user_id', userId).single();
         if (data) set({ prefs: data as UserPrefs });
       },
+
+      reset: () => set({ prefs: DEFAULT_PREFS }),
     }),
     { name: 'lectorapp-prefs', storage: createJSONStorage(() => AsyncStorage) },
   ),
