@@ -21,11 +21,25 @@ export default function LoginScreen() {
   const [error,    setError]    = useState('');
 
   const handleLogin = async () => {
+    if (!email.trim()) { setError('Ingresa tu correo'); return; }
+    if (!password.trim()) { setError('Ingresa tu contraseña'); return; }
     setLoading(true);
     setError('');
     const { error: err } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (err) { setError(err.message); return; }
+    if (err) {
+      const msg = err.message.toLowerCase();
+      if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+        setError('Correo o contraseña incorrectos');
+      } else if (msg.includes('email not confirmed')) {
+        setError('Tu email aún no está confirmado. Revisa tu bandeja de entrada.');
+      } else if (msg.includes('disabled')) {
+        setError('El inicio de sesión por email está deshabilitado. Usa Google.');
+      } else {
+        setError(err.message);
+      }
+      return;
+    }
     router.replace('/(tabs)/ruta');
   };
 
