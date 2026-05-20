@@ -5,12 +5,13 @@ import {
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Animated, {
   useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
 import { COLORS, darken } from '../../constants/colors';
@@ -140,6 +141,164 @@ function buildTrail(nodes: ZoneNode[]): string {
   return d;
 }
 
+// ─── ANIMATED FOREST BACKDROP (ZONE 1) ──────────────────────────────────────
+function ForestBackdrop() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <FloatingLeaf left={30} top={80} />
+      <FloatingLeaf left={W - 80} top={140} />
+      <FloatingLeaf left={50} top={260} />
+      <FloatingLeaf left={W - 90} top={380} />
+      <FloatingLeaf left={120} top={480} />
+      <FloatingLeaf left={W - 60} top={620} />
+    </View>
+  );
+}
+
+function FloatingLeaf({ left, top }: { left: number; top: number }) {
+  const floatY = useSharedValue(0);
+  const rot = useSharedValue(0);
+
+  React.useEffect(() => {
+    floatY.value = withRepeat(
+      withSequence(
+        withTiming(16, { duration: 2500 }),
+        withTiming(-16, { duration: 2500 })
+      ),
+      -1,
+      true
+    );
+    rot.value = withRepeat(
+      withTiming(360, { duration: 14000 }),
+      -1,
+      false
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left,
+    top,
+    transform: [
+      { translateY: floatY.value },
+      { rotate: `${rot.value}deg` }
+    ],
+    opacity: 0.16,
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M2 22C2 22 6 18 12 18C18 18 22 22 22 22C22 22 18 14 12 14C6 14 2 22 2 22Z"
+          fill="#10B981"
+        />
+        <Path
+          d="M12 2C12 2 8 8 8 14C8 20 12 22 12 22C12 22 16 20 16 14C16 8 12 2 12 2Z"
+          fill="#34D399"
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// ─── ANIMATED COSMOS BACKDROP (ZONE 2) ──────────────────────────────────────
+function CosmosBackdrop() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <TwinklingStar left={40} top={60} />
+      <TwinklingStar left={W - 80} top={120} />
+      <TwinklingStar left={60} top={280} />
+      <TwinklingStar left={W - 100} top={400} />
+      <TwinklingStar left={140} top={520} />
+      <TwinklingStar left={W - 60} top={640} />
+    </View>
+  );
+}
+
+function TwinklingStar({ left, top }: { left: number; top: number }) {
+  const scale = useSharedValue(0.5);
+  const opacity = useSharedValue(0.2);
+
+  React.useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.3, { duration: 1600 }),
+        withTiming(0.5, { duration: 1600 })
+      ),
+      -1,
+      true
+    );
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.8, { duration: 1600 }),
+        withTiming(0.2, { duration: 1600 })
+      ),
+      -1,
+      true
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left,
+    top,
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+        <Path
+          d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9Z"
+          fill="#A855F7"
+        />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// ─── ANIMATED CYBER BACKDROP (ZONE 3) ───────────────────────────────────────
+function CyberBackdrop() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <SpeedLine left={40} />
+      <SpeedLine left={130} />
+      <SpeedLine left={W - 120} />
+      <SpeedLine left={W - 50} />
+    </View>
+  );
+}
+
+function SpeedLine({ left }: { left: number }) {
+  const floatY = useSharedValue(-200);
+
+  React.useEffect(() => {
+    floatY.value = withRepeat(
+      withTiming(800, { duration: 3000 }),
+      -1,
+      false
+    );
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    left,
+    top: floatY.value,
+    opacity: 0.12,
+  }));
+
+  return (
+    <Animated.View style={animStyle}>
+      <Svg width={40} height={180} viewBox="0 0 40 180" fill="none">
+        <Line x1="10" y1="0" x2="30" y2="180" stroke="#38BDF8" strokeWidth={2} strokeDasharray="8 12" />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// ─── MAIN ROUTE SCREEN ───────────────────────────────────────────────────────
 export default function RutaScreen() {
   const profile   = useProfileStore(s => s.profile);
   const addXP     = useProfileStore(s => s.addXP);
@@ -224,17 +383,31 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
       })
     : -1;
 
+  // Rich Scenic Gradients
+  const bgColors: readonly [string, string, ...string[]] =
+    zone.title === 'Zona 1' ? ['#022C22', '#064E3B'] :
+    zone.title === 'Zona 2' ? ['#0A0E1A', '#1E1B4B'] :
+    ['#020617', '#0F172A'];
+
+  const renderBackdrop = () => {
+    if (zone.title === 'Zona 1') return <ForestBackdrop />;
+    if (zone.title === 'Zona 2') return <CosmosBackdrop />;
+    return <CyberBackdrop />;
+  };
+
   return (
-    <View style={styles.zoneSection}>
-      {/* Zone header */}
-      <View style={[styles.zoneBanner, { backgroundColor: zoneColor + '18', borderColor: zoneColor + '40' }]}>
+    <LinearGradient colors={bgColors} style={styles.zoneCard}>
+      {renderBackdrop()}
+
+      {/* Zone header banner */}
+      <View style={[styles.zoneBanner, { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.12)' }]}>
         <View style={styles.zoneBannerLeft}>
-          <Text style={[styles.zoneTitle, { color: zoneColor }]}>{zone.title}</Text>
+          <Text style={[styles.zoneTitle, { color: '#fff' }]}>{zone.title}</Text>
           <View style={styles.zoneSubRow}>
             {!zoneForceUnlocked && (
-              <Ionicons name="lock-closed" size={13} color={zoneColor} style={{ marginRight: 4 }} />
+              <Ionicons name="lock-closed" size={13} color="rgba(255, 255, 255, 0.5)" style={{ marginRight: 4 }} />
             )}
-            <Text style={[styles.zoneSub, { color: zoneColor }]}>{zone.subtitle}</Text>
+            <Text style={[styles.zoneSub, { color: 'rgba(255, 255, 255, 0.8)' }]}>{zone.subtitle}</Text>
           </View>
         </View>
         <View style={styles.zoneMascotWrap}>
@@ -250,8 +423,8 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
       {/* SVG trail + nodes */}
       <View style={[styles.trailContainer, { height: svgH }]}>
         <Svg width={W} height={svgH} style={{ position: 'absolute', top: 0, left: 0 }}>
-          <Path d={trailPath} stroke={zone.color + '30'} strokeWidth={6} fill="none" strokeDasharray="8 6" />
-          <Path d={trailPath} stroke={zone.color} strokeWidth={6} fill="none"
+          <Path d={trailPath} stroke="rgba(255,255,255,0.12)" strokeWidth={6} fill="none" strokeDasharray="8 6" />
+          <Path d={trailPath} stroke={zoneForceUnlocked ? zone.color : 'rgba(255,255,255,0.15)'} strokeWidth={6} fill="none"
             strokeDasharray="60 100" strokeLinecap="round" />
         </Svg>
 
@@ -271,7 +444,7 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
           );
         })}
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -283,12 +456,12 @@ function NodeButton({
 }) {
   const scale = useSharedValue(1);
   const haloScale   = useSharedValue(1);
-  const haloOpacity = useSharedValue(0.18);
+  const haloOpacity = useSharedValue(0.24);
 
   React.useEffect(() => {
     if (!current) return;
-    haloScale.value   = withRepeat(withSequence(withTiming(1.18, { duration: 900 }), withTiming(1, { duration: 900 })), -1, false);
-    haloOpacity.value = withRepeat(withSequence(withTiming(0.05, { duration: 900 }), withTiming(0.18, { duration: 900 })), -1, false);
+    haloScale.value   = withRepeat(withSequence(withTiming(1.22, { duration: 900 }), withTiming(1, { duration: 900 })), -1, false);
+    haloOpacity.value = withRepeat(withSequence(withTiming(0.08, { duration: 900 }), withTiming(0.24, { duration: 900 })), -1, false);
   }, [current]);
 
   const haloStyle = useAnimatedStyle(() => ({
@@ -316,7 +489,7 @@ function NodeButton({
 
   const nodeInner = () => {
     if (node.locked) {
-      return <Ionicons name="lock-closed" size={iconSize} color={COLORS.subtle} />;
+      return <Ionicons name="lock-closed" size={iconSize} color="rgba(255,255,255,0.3)" />;
     }
     if (isCompleted) {
       return <Ionicons name="checkmark" size={iconSize + 2} color="#fff" />;
@@ -336,6 +509,18 @@ function NodeButton({
     return <Ionicons name="flash" size={iconSize} color="#fff" />;
   };
 
+  const nodeBg = node.locked
+    ? 'rgba(255,255,255,0.06)'
+    : isCompleted
+      ? darken(node.color, 0.08)
+      : node.color;
+
+  const nodeBorder = isCompleted
+    ? '#22C55E'
+    : node.locked
+      ? 'rgba(255,255,255,0.12)'
+      : darken(node.color, 0.15);
+
   return (
     <Pressable
       style={{ position: 'absolute', left: x - RADIUS, top: y - RADIUS }}
@@ -354,20 +539,20 @@ function NodeButton({
       )}
       <Animated.View style={[{
         width: RADIUS * 2, height: RADIUS * 2, borderRadius: RADIUS,
-        backgroundColor: node.locked ? COLORS.surface : isCompleted ? darken(node.color, 0.08) : node.color,
-        borderWidth: isCompleted ? 3 : 3,
-        borderColor: isCompleted ? '#22C55E' : node.locked ? COLORS.border : darken(node.color, 0.15),
+        backgroundColor: nodeBg,
+        borderWidth: 3,
+        borderColor: nodeBorder,
         alignItems: 'center', justifyContent: 'center',
         overflow: 'hidden',
         shadowColor: node.color,
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: node.locked ? 0 : 0.3,
+        shadowOpacity: node.locked ? 0 : 0.4,
         shadowRadius: 8,
-        elevation: node.locked ? 0 : 4,
+        elevation: node.locked ? 0 : 5,
       }, nodeStyle]}>
         {nodeInner()}
       </Animated.View>
-      <Text style={[styles.nodeLabel, { color: node.locked ? COLORS.subtle : node.color, width: RADIUS * 2, textAlign: 'center' }]}
+      <Text style={[styles.nodeLabel, { color: node.locked ? 'rgba(255,255,255,0.36)' : '#fff', width: RADIUS * 2, textAlign: 'center' }]}
         numberOfLines={2}>
         {node.label}
       </Text>
@@ -504,14 +689,14 @@ const styles = StyleSheet.create({
   xpBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   xpText:         { fontFamily: FONTS.heading, fontSize: 13, color: '#78350F' },
   scroll:         { paddingTop: 8, alignItems: 'center' },
-  zoneSection:    { marginBottom: 28, width: W },
+  zoneCard:       { width: W, borderRadius: 24, padding: 16, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.08)', marginBottom: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8 },
   zoneBanner:     { borderWidth: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
   zoneBannerLeft: { flex: 1, justifyContent: 'center' },
   zoneSubRow:     { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   zoneTitle:      { fontFamily: FONTS.heading, fontSize: 16 },
   zoneSub:        { fontFamily: FONTS.body, fontSize: 13 },
-  zoneMascotWrap: { marginRight: -6, marginVertical: -6, opacity: 0.9 },
-  trailContainer: { width: W, position: 'relative' },
+  zoneMascotWrap: { marginRight: -6, marginVertical: -6, opacity: 0.95 },
+  trailContainer: { width: W - 32, position: 'relative', alignSelf: 'center' },
   nodeLabel:      { fontFamily: FONTS.headingSemi, fontSize: 10, marginTop: 4, letterSpacing: 0.2 },
 
   // Chest Modal styles

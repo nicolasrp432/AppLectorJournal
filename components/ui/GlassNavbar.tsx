@@ -2,14 +2,14 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withSpring,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming,
 } from 'react-native-reanimated';
 import Svg, { Path, Rect, Circle, Line } from 'react-native-svg';
 import { FONTS } from '../../constants/typography';
 import { COLORS } from '../../constants/colors';
 import * as haptics from '../../lib/haptics';
 
-function TabIcon({ name, color, size = 22 }: { name: string; color: string; size?: number }) {
+function TabIcon({ name, color, size = 28 }: { name: string; color: string; size?: number }) {
   const sw = 1.9;
   switch (name) {
     case 'ruta':
@@ -81,8 +81,60 @@ interface TabBarProps {
 }
 
 export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: TabBarProps) {
+  const [layouts, setLayouts] = React.useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
+
+  const handleTabLayout = (tabName: string, x: number, y: number, width: number, height: number) => {
+    setLayouts(prev => {
+      const current = prev[tabName];
+      if (current && current.x === x && current.width === width && current.height === height) {
+        return prev;
+      }
+      return { ...prev, [tabName]: { x, y, width, height } };
+    });
+  };
+
+  const activeTabName = TABS[state.index];
+  const indicatorX = useSharedValue(0);
+  const indicatorY = useSharedValue(0);
+  const indicatorW = useSharedValue(0);
+  const indicatorH = useSharedValue(0);
+
+  React.useEffect(() => {
+    const layout = layouts[activeTabName];
+    if (layout) {
+      indicatorX.value = withSpring(layout.x, { damping: 15, stiffness: 120 });
+      indicatorY.value = withSpring(layout.y, { damping: 15, stiffness: 120 });
+      indicatorW.value = withSpring(layout.width, { damping: 15, stiffness: 120 });
+      indicatorH.value = withSpring(layout.height, { damping: 15, stiffness: 120 });
+    }
+  }, [activeTabName, layouts]);
+
+  const indicatorStyle = useAnimatedStyle(() => {
+    if (indicatorW.value === 0) {
+      return { opacity: 0 };
+    }
+    return {
+      position: 'absolute',
+      left: indicatorX.value,
+      top: indicatorY.value,
+      width: indicatorW.value,
+      height: indicatorH.value,
+      borderRadius: 20,
+      backgroundColor: accentColor,
+      opacity: 1,
+      shadowColor: accentColor,
+      shadowOffset: { width: 0, height: 6 },
+      shadowOpacity: 0.35,
+      shadowRadius: 10,
+      elevation: 5,
+    };
+  });
+
   const Inner = (
     <View style={styles.inner}>
+      {/* Sliding Glassmorphic/Solid background pill */}
+      <Animated.View style={indicatorStyle} />
+
       {TABS.map((tabName, i) => {
         const active = state.index === i;
         return (
@@ -90,7 +142,7 @@ export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: T
             key={tabName}
             id={tabName}
             active={active}
-            accentColor={accentColor}
+            onLayout={(x, y, w, h) => handleTabLayout(tabName, x, y, w, h)}
             onPress={() => {
               haptics.tap();
               navigation.navigate(tabName);
@@ -119,13 +171,13 @@ export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: T
 function NavTab({
   id,
   active,
-  accentColor,
   onPress,
+  onLayout,
 }: {
   id: string;
   active: boolean;
-  accentColor: string;
   onPress: () => void;
+  onLayout: (x: number, y: number, width: number, height: number) => void;
 }) {
   const scale = useSharedValue(1);
 
@@ -134,33 +186,35 @@ function NavTab({
   }));
 
   const pillStyle: ViewStyle = {
-    backgroundColor: active ? accentColor : 'transparent',
+    backgroundColor: 'transparent',
     borderRadius: 20,
     paddingVertical: 9,
     paddingHorizontal: active ? 16 : 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    shadowColor: active ? accentColor : 'transparent',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: active ? 0.5 : 0,
-    shadowRadius: 12,
-    elevation: active ? 6 : 0,
   };
 
   return (
-    <Pressable
-      onPressIn={() => { scale.value = withTiming(0.9, { duration: 80 }); }}
-      onPressOut={() => { scale.value = withSpring(1, { damping: 8, stiffness: 300 }); }}
-      onPress={onPress}
+    <View
+      onLayout={e => {
+        const { x, y, width, height } = e.nativeEvent.layout;
+        onLayout(x, y, width, height);
+      }}
     >
-      <Animated.View style={[pillStyle, animStyle]}>
-        <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={24} />
-        {active && (
-          <Text style={styles.label}>{TAB_LABELS[id]}</Text>
-        )}
-      </Animated.View>
-    </Pressable>
+      <Pressable
+        onPressIn={() => { scale.value = withTiming(0.9, { duration: 80 }); }}
+        onPressOut={() => { scale.value = withSpring(1, { damping: 8, stiffness: 300 }); }}
+        onPress={onPress}
+      >
+        <Animated.View style={[pillStyle, animStyle]}>
+          <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={28} />
+          {active && (
+            <Text style={styles.label}>{TAB_LABELS[id]}</Text>
+          )}
+        </Animated.View>
+      </Pressable>
+    </View>
   );
 }
 

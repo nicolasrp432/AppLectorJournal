@@ -31,7 +31,7 @@ export function BossExercise({ onFinish, onQuit }: Props) {
   const hpStyle = useAnimatedStyle(() => ({ width: `${hp.value}%` as any }));
 
   const handleRoundFinish = (score: number) => {
-    const damage = Math.floor(score * 33);
+    const damage = Math.floor(score * 35);
     const newHP = Math.max(0, bossHP - damage);
     setBossHP(newHP);
     hp.value = withTiming(newHP, { duration: 700 });

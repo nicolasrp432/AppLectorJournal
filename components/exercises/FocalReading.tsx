@@ -112,7 +112,7 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
               <Text style={[styles.wpmValue, { color: accent }]}>{wpm} <Text style={styles.wpmUnit}>WPM</Text></Text>
             </View>
             <View style={styles.wpmControls}>
-              {[150, 200, 280, 350, 500].map(v => (
+              {[200, 300, 400, 500, 600, 700].map(v => (
                 <Pressable key={v} onPress={() => setWpm(v)} style={[styles.wpmPill, wpm === v && { backgroundColor: accent }]}>
                   <Text style={[styles.wpmPillText, wpm === v && { color: '#fff' }]}>{v}</Text>
                 </Pressable>
@@ -167,17 +167,7 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
             {mode === 'chunk' && <ChunkDisplay words={words} idx={idx} chunkSize={chunkSize} accent={accent} />}
           </View>
           <View style={styles.controls}>
-            {/* 1. Visual Progress Bar */}
-            <View style={styles.progressRow}>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBarFill, { width: `${(idx / (words.length - 1)) * 100}%`, backgroundColor: accent }]} />
-              </View>
-              <Text style={styles.progressText}>
-                Palabra {Math.min(words.length, idx + 1)} de {words.length}
-              </Text>
-            </View>
-
-            {/* 2. Primary Playback Control Row */}
+            {/* 1. Primary Playback Control Row */}
             <View style={styles.playbackRow}>
               <Pressable
                 onPress={() => setIdx(i => Math.max(0, i - 5))}
@@ -205,7 +195,7 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
               </Pressable>
             </View>
 
-            {/* 3. WPM Controller Row */}
+            {/* 2. WPM Controller Row */}
             <View style={styles.wpmStepperRow}>
               <Pressable
                 onPress={() => setWpm(w => Math.max(150, w - 10))}
@@ -227,6 +217,16 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
               >
                 <Ionicons name="add" size={18} color={COLORS.muted} />
               </Pressable>
+            </View>
+
+            {/* 3. Visual Progress Bar */}
+            <View style={styles.progressRow}>
+              <View style={styles.progressBarContainer}>
+                <View style={[styles.progressBarFill, { width: `${(idx / (words.length - 1)) * 100}%`, backgroundColor: accent }]} />
+              </View>
+              <Text style={styles.progressText}>
+                Palabra {Math.min(words.length, idx + 1)} de {words.length}
+              </Text>
             </View>
           </View>
         </View>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 
@@ -12,6 +13,7 @@ interface Props {
 }
 
 export function ExerciseTopBar({ title, progress, accent, onQuit }: Props) {
+  const insets = useSafeAreaInsets();
   const trackW = useSharedValue(0);
   const fillW  = useSharedValue(0);
 
@@ -23,7 +25,7 @@ export function ExerciseTopBar({ title, progress, accent, onQuit }: Props) {
   const barStyle = useAnimatedStyle(() => ({ width: fillW.value }));
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: Math.max(14, insets.top) }]}>
       <Pressable onPress={onQuit} style={styles.quitBtn} hitSlop={8}>
         <Text style={styles.quitIcon}>✕</Text>
       </Pressable>

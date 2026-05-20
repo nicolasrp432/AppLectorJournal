@@ -25,6 +25,21 @@ export default function LoginScreen() {
     router.replace('/(tabs)/ruta');
   };
 
+  const handleGoogle = async () => {
+    setLoading(true);
+    setError('');
+    const { error: err } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: Platform.OS === 'web' 
+          ? window.location.origin 
+          : 'lectorapp://google-auth',
+      },
+    });
+    setLoading(false);
+    if (err) setError(err.message);
+  };
+
   const handleGuest = () => router.replace('/(tabs)/ruta');
 
   return (
@@ -69,7 +84,7 @@ export default function LoginScreen() {
           </View>
 
           <View style={styles.socialRow}>
-            <OutlineButton borderColor={COLORS.border} textColor={COLORS.inkLight} onPress={handleGuest} full={false}>
+            <OutlineButton borderColor={COLORS.border} textColor={COLORS.inkLight} onPress={handleGoogle} full={false}>
               <Text style={{ fontFamily: FONTS.heading, fontSize: 14, color: COLORS.inkLight }}>  G  Google</Text>
             </OutlineButton>
             <OutlineButton borderColor={COLORS.border} textColor={COLORS.inkLight} onPress={handleGuest} full={false}>

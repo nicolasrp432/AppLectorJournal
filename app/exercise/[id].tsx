@@ -8,7 +8,7 @@ import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming,
+  useSharedValue, useAnimatedStyle, withTiming, withSpring,
 } from 'react-native-reanimated';
 import { MascotChar } from '../../components/ui/MascotChar';
 
@@ -75,6 +75,15 @@ export default function ExerciseScreen() {
   const [phase, setPhase]                  = useState<Phase>('intro');
   const [result, setResult]                = useState<BuiltResult | null>(null);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
+
+  // Customizable parametric states for exercises
+  const [schulteSize, setSchulteSize] = useState<number>(5);
+  const [wordSpanCount, setWordSpanCount] = useState<number>(6);
+  const [wordSpanInterval, setWordSpanInterval] = useState<number>(1100);
+  const [lociCount, setLociCount] = useState<number>(5);
+  const [lociStudyTime, setLociStudyTime] = useState<number>(4000);
+  const [readingWpm, setReadingWpm] = useState<number>(280);
+  const [readingMode, setReadingMode] = useState<'rsvp' | 'guide' | 'chunk'>('rsvp');
 
   if (!exercise) {
     router.back();
@@ -156,6 +165,20 @@ export default function ExerciseScreen() {
         exercise={exercise}
         onStart={() => setPhase('playing')}
         onBack={() => router.back()}
+        schulteSize={schulteSize}
+        setSchulteSize={setSchulteSize}
+        wordSpanCount={wordSpanCount}
+        setWordSpanCount={setWordSpanCount}
+        wordSpanInterval={wordSpanInterval}
+        setWordSpanInterval={setWordSpanInterval}
+        lociCount={lociCount}
+        setLociCount={setLociCount}
+        lociStudyTime={lociStudyTime}
+        setLociStudyTime={setLociStudyTime}
+        readingWpm={readingWpm}
+        setReadingWpm={setReadingWpm}
+        readingMode={readingMode}
+        setReadingMode={setReadingMode}
       />
     );
   }
@@ -178,13 +201,13 @@ export default function ExerciseScreen() {
 
   switch (exerciseId) {
     case 'schulte':
-      return <SchulteGrid size={config.size} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+      return <SchulteGrid size={schulteSize} accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'reading':
-      return <FocalReadingExercise initialWpm={config.wpm} initialMode={config.mode} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+      return <FocalReadingExercise initialWpm={readingWpm} initialMode={readingMode} accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'wordspan':
-      return <WordSpanExercise level={config.level} showMs={config.showMs} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+      return <WordSpanExercise level={wordSpanCount} showMs={wordSpanInterval} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'loci':
-      return <LociExercise count={config.count} studyMs={config.studyMs} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+      return <LociExercise count={lociCount} studyMs={lociStudyTime} accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'comprehension':
       return <ComprehensionExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'boss':
@@ -198,16 +221,273 @@ export default function ExerciseScreen() {
 
 // ─── Intro screen ─────────────────────────────────────────────────────────────
 
-function ExerciseIntro({ exercise, onStart, onBack }: {
+function SelectPill({ label, selected, onPress, color }: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+  color: string;
+}) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.92, { damping: 10, stiffness: 200 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 10, stiffness: 200 });
+    onPress();
+  };
+
+  return (
+    <Pressable
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={{ margin: 2 }}
+    >
+      <Animated.View
+        style={[
+          introStyles.pill,
+          selected
+            ? { backgroundColor: color, borderColor: color }
+            : { backgroundColor: COLORS.white, borderColor: COLORS.border },
+          animatedStyle,
+        ]}
+      >
+        <Text
+          style={[
+            introStyles.pillText,
+            selected ? { color: '#fff', fontWeight: 'bold' } : { color: COLORS.ink },
+          ]}
+        >
+          {label}
+        </Text>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+function ExerciseIntro({
+  exercise,
+  onStart,
+  onBack,
+  schulteSize,
+  setSchulteSize,
+  wordSpanCount,
+  setWordSpanCount,
+  wordSpanInterval,
+  setWordSpanInterval,
+  lociCount,
+  setLociCount,
+  lociStudyTime,
+  setLociStudyTime,
+  readingWpm,
+  setReadingWpm,
+  readingMode,
+  setReadingMode,
+}: {
   exercise: typeof EXERCISES[string];
   onStart: () => void;
   onBack: () => void;
+  schulteSize: number;
+  setSchulteSize: (val: number) => void;
+  wordSpanCount: number;
+  setWordSpanCount: (val: number) => void;
+  wordSpanInterval: number;
+  setWordSpanInterval: (val: number) => void;
+  lociCount: number;
+  setLociCount: (val: number) => void;
+  lociStudyTime: number;
+  setLociStudyTime: (val: number) => void;
+  readingWpm: number;
+  setReadingWpm: (val: number) => void;
+  readingMode: 'rsvp' | 'guide' | 'chunk';
+  setReadingMode: (val: 'rsvp' | 'guide' | 'chunk') => void;
 }) {
   const c = exercise.color;
   const startBtnShadow = (color: string) => Platform.select({
     web: { boxShadow: `0 8px 20px ${color}66` } as any,
     default: { shadowColor: color, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 6 },
   }) ?? {};
+
+  const showSettings = ['schulte', 'wordspan', 'loci', 'reading'].includes(exercise.id);
+
+  const renderSettingsPanel = () => {
+    if (!showSettings) return null;
+
+    return (
+      <View style={[introStyles.settingsCard, { borderColor: COLORS.border }]}>
+        <View style={introStyles.settingsHeader}>
+          <MaterialCommunityIcons name="tune-variant" size={20} color={c} />
+          <Text style={[introStyles.settingsTitle, { color: c }]}>Personaliza tu Sesión</Text>
+        </View>
+
+        {exercise.id === 'schulte' && (
+          <View style={introStyles.settingSection}>
+            <View style={introStyles.settingTextRow}>
+              <Text style={introStyles.settingLabel}>Tamaño de la Cuadrícula</Text>
+              <Text style={[introStyles.settingValue, { color: c }]}>{schulteSize} × {schulteSize}</Text>
+            </View>
+            <View style={introStyles.pillRow}>
+              {[3, 4, 5, 6].map((size) => (
+                <SelectPill
+                  key={size}
+                  label={`${size}×${size}`}
+                  selected={schulteSize === size}
+                  onPress={() => setSchulteSize(size)}
+                  color={c}
+                />
+              ))}
+            </View>
+            <Text style={introStyles.settingDesc}>
+              {schulteSize === 3 && "Ideal para entrenar la visión periférica inicial."}
+              {schulteSize === 4 && "Intermedio. Aumenta la velocidad ocular."}
+              {schulteSize === 5 && "Grilla estándar. Requiere alta concentración."}
+              {schulteSize === 6 && "Desafío supremo de visión y agilidad mental."}
+            </Text>
+          </View>
+        )}
+
+        {exercise.id === 'wordspan' && (
+          <View style={introStyles.settingSection}>
+            <View style={introStyles.settingTextRow}>
+              <Text style={introStyles.settingLabel}>Cantidad de Palabras</Text>
+              <Text style={[introStyles.settingValue, { color: c }]}>{wordSpanCount} palabras</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={introStyles.pillScrollRow}>
+              {[3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                <SelectPill
+                  key={num}
+                  label={String(num)}
+                  selected={wordSpanCount === num}
+                  onPress={() => setWordSpanCount(num)}
+                  color={c}
+                />
+              ))}
+            </ScrollView>
+
+            <View style={[introStyles.settingTextRow, { marginTop: 14 }]}>
+              <Text style={introStyles.settingLabel}>Intervalo de Visualización</Text>
+              <Text style={[introStyles.settingValue, { color: c }]}>{(wordSpanInterval / 1000).toFixed(1)}s</Text>
+            </View>
+            <View style={introStyles.pillRow}>
+              {[
+                { val: 500, label: '0.5s' },
+                { val: 800, label: '0.8s' },
+                { val: 1100, label: '1.1s' },
+                { val: 1500, label: '1.5s' },
+                { val: 2000, label: '2.0s' },
+              ].map((item) => (
+                <SelectPill
+                  key={item.val}
+                  label={item.label}
+                  selected={wordSpanInterval === item.val}
+                  onPress={() => setWordSpanInterval(item.val)}
+                  color={c}
+                />
+              ))}
+            </View>
+            <Text style={introStyles.settingDesc}>
+              A menor intervalo, mayor velocidad de procesamiento cognitivo requerida.
+            </Text>
+          </View>
+        )}
+
+        {exercise.id === 'loci' && (
+          <View style={introStyles.settingSection}>
+            <View style={introStyles.settingTextRow}>
+              <Text style={introStyles.settingLabel}>Elementos de Asociación</Text>
+              <Text style={[introStyles.settingValue, { color: c }]}>{lociCount} objetos</Text>
+            </View>
+            <View style={introStyles.pillRow}>
+              {[3, 4, 5, 6, 7, 8].map((num) => (
+                <SelectPill
+                  key={num}
+                  label={String(num)}
+                  selected={lociCount === num}
+                  onPress={() => setLociCount(num)}
+                  color={c}
+                />
+              ))}
+            </View>
+
+            <View style={[introStyles.settingTextRow, { marginTop: 14 }]}>
+              <Text style={introStyles.settingLabel}>Tiempo de Estudio por Objeto</Text>
+              <Text style={[introStyles.settingValue, { color: c }]}>{(lociStudyTime / 1000).toFixed(0)}s</Text>
+            </View>
+            <View style={introStyles.pillRow}>
+              {[
+                { val: 2000, label: '2s' },
+                { val: 3000, label: '3s' },
+                { val: 4000, label: '4s' },
+                { val: 5000, label: '5s' },
+              ].map((item) => (
+                <SelectPill
+                  key={item.val}
+                  label={item.label}
+                  selected={lociStudyTime === item.val}
+                  onPress={() => setLociStudyTime(item.val)}
+                  color={c}
+                />
+              ))}
+            </View>
+            <Text style={introStyles.settingDesc}>
+              El Palacio Mental es más efectivo cuando te tomas el tiempo de visualizar vívidamente la asociación.
+            </Text>
+          </View>
+        )}
+
+        {exercise.id === 'reading' && (
+          <View style={introStyles.settingSection}>
+            <View style={introStyles.settingTextRow}>
+              <Text style={introStyles.settingLabel}>Modo de Lectura</Text>
+              <Text style={[introStyles.settingValue, { color: c, textTransform: 'uppercase' }]}>{readingMode}</Text>
+            </View>
+            <View style={introStyles.pillRow}>
+              {[
+                { val: 'rsvp' as const, label: 'RSVP' },
+                { val: 'guide' as const, label: 'Guía' },
+                { val: 'chunk' as const, label: 'Chunks' },
+              ].map((item) => (
+                <SelectPill
+                  key={item.val}
+                  label={item.label}
+                  selected={readingMode === item.val}
+                  onPress={() => setReadingMode(item.val)}
+                  color={c}
+                />
+              ))}
+            </View>
+
+            <View style={[introStyles.settingTextRow, { marginTop: 14 }]}>
+              <Text style={introStyles.settingLabel}>Velocidad de Lectura Inicial</Text>
+              <Text style={[introStyles.settingValue, { color: c }]}>{readingWpm} WPM</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={introStyles.pillScrollRow}>
+              {[200, 300, 400, 500, 600, 700].map((speed) => (
+                <SelectPill
+                  key={speed}
+                  label={`${speed} WPM`}
+                  selected={readingWpm === speed}
+                  onPress={() => setReadingWpm(speed)}
+                  color={c}
+                />
+              ))}
+            </ScrollView>
+            <Text style={introStyles.settingDesc}>
+              Ajusta la velocidad base. Podrás modificarla en tiempo real durante la lectura.
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[introStyles.safe, { backgroundColor: COLORS.canvas }]}>
       <View style={introStyles.header}>
@@ -235,6 +515,8 @@ function ExerciseIntro({ exercise, onStart, onBack }: {
           <MetaChip label="Dificultad" value={exercise.difficulty} color="#F97316" />
           <MetaChip label="Mejora"     value={exercise.improves}   color="#8B5CF6" />
         </View>
+
+        {renderSettingsPanel()}
 
         <View style={[introStyles.whyCard, { borderColor: COLORS.border }]}>
           <View style={[introStyles.whyIcon, { backgroundColor: c + '15' }]}>
@@ -557,6 +839,18 @@ const introStyles = StyleSheet.create({
   footer:     { padding: 16, paddingBottom: 28, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.surface },
   startBtn:   { borderRadius: 16, paddingVertical: 15, alignItems: 'center' },
   startBtnText:{ fontFamily: FONTS.heading, fontSize: 15, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },
+  settingsCard: { backgroundColor: COLORS.white, borderRadius: 18, padding: 16, borderWidth: 1, marginBottom: 20, borderColor: COLORS.border },
+  settingsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  settingsTitle: { fontFamily: FONTS.heading, fontSize: 15, textTransform: 'uppercase', letterSpacing: 0.8 },
+  settingSection: { marginBottom: 12 },
+  settingTextRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  settingLabel: { fontFamily: FONTS.headingSemi, fontSize: 12, color: COLORS.ink },
+  settingValue: { fontFamily: FONTS.heading, fontSize: 13 },
+  settingDesc: { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: 6, lineHeight: 15 },
+  pillRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginTop: 4 },
+  pillScrollRow: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
+  pill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', minWidth: 50 },
+  pillText: { fontFamily: FONTS.headingSemi, fontSize: 11 },
 });
 
 const metaStyles = StyleSheet.create({

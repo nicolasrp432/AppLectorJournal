@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, Platform, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { router } from 'expo-router';
 // Victory Native uses Skia (CanvasKit/WASM) — only load on native platforms
 const VictoryNative = Platform.OS !== 'web'
   ? require('victory-native')
@@ -284,7 +285,15 @@ export default function ProgresoScreen() {
           const prog = all[exId];
           if (!meta || !prog) return null;
           return (
-            <View key={exId} style={[styles.exerciseCard, { borderColor: meta.color + '30' }]}>
+            <Pressable
+              key={exId}
+              onPress={() => router.push(`/exercise/${exId}`)}
+              style={({ pressed }) => [
+                styles.exerciseCard,
+                { borderColor: meta.color + '30' },
+                pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+              ]}
+            >
               <View style={styles.exRow}>
                 <View style={[styles.exDot, { backgroundColor: meta.color }]} />
                 <Text style={styles.exTitle}>{meta.title}</Text>
@@ -296,7 +305,7 @@ export default function ProgresoScreen() {
                 <Text style={styles.exStat}>Mejor: {Math.round(prog.best_score * 100)}%</Text>
                 <Text style={styles.exStat}>Última: {Math.round(prog.last_score * 100)}%</Text>
               </View>
-            </View>
+            </Pressable>
           );
         })}
 
