@@ -17,6 +17,7 @@ import { useNodeStore } from '../../store/useNodeStore';
 import { COLORS, darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { MascotChar, MascotKey } from '../../components/ui/MascotChar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const W    = Math.min(Dimensions.get('window').width, 520) - 40;
 const ROW  = 120;
@@ -116,6 +117,10 @@ function resolveNodeLocked(
 ): boolean {
   if (!zoneUnlocked) return true;
   const node = nodes[idx];
+  
+  // A completed node is never locked
+  if (completed.includes(node.id)) return false;
+
   const deps = NODE_DEPENDENCIES[node.id];
   if (!deps || deps.length === 0) return false;
 
@@ -306,9 +311,33 @@ export default function RutaScreen() {
   const completeNode = useNodeStore(s => s.completeNode);
 
   const [activeChestNode, setActiveChestNode] = React.useState<ZoneNode | null>(null);
+  const [showWelcome, setShowWelcome] = React.useState(false);
 
   const zone1BossCompleted = completed.includes('z1_boss');
   const zone2BossCompleted = completed.includes('z2_boss');
+
+  React.useEffect(() => {
+    const checkWelcome = async () => {
+      try {
+        const value = await AsyncStorage.getItem('lectorapp_has_seen_welcome');
+        if (!value) {
+          setShowWelcome(true);
+        }
+      } catch (err) {
+        console.warn('Error reading AsyncStorage welcome key:', err);
+      }
+    };
+    checkWelcome();
+  }, []);
+
+  const handleCloseWelcome = async () => {
+    setShowWelcome(false);
+    try {
+      await AsyncStorage.setItem('lectorapp_has_seen_welcome', 'true');
+    } catch (err) {
+      console.warn('Error saving AsyncStorage welcome key:', err);
+    }
+  };
 
   const handlePressChest = (node: ZoneNode) => {
     setActiveChestNode(node);
@@ -361,6 +390,9 @@ export default function RutaScreen() {
         onClaim={handleClaimChest}
         completed={completed}
       />
+
+      {/* Welcome Modal for New Users */}
+      <WelcomeModal visible={showWelcome} onClose={handleCloseWelcome} />
     </SafeAreaView>
   );
 }
@@ -682,6 +714,102 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   );
 }
 
+// ─── WELCOME MODAL COMPONENT (FOR NEW USERS) ──────────────────────────────────
+function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const scale = useSharedValue(0.9);
+  const opacity = useSharedValue(0);
+  const mascotBounce = useSharedValue(0);
+
+  React.useEffect(() => {
+    if (visible) {
+      scale.value = 0.9;
+      opacity.value = 0;
+      scale.value = withSpring(1, { damping: 14, stiffness: 100 });
+      opacity.value = withTiming(1, { duration: 400 });
+      
+      mascotBounce.value = withRepeat(
+        withSequence(
+          withTiming(-12, { duration: 800 }),
+          withTiming(0, { duration: 800 })
+        ),
+        -1,
+        true
+      );
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  const cardStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  const mascotStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: mascotBounce.value }],
+  }));
+
+  const handleDismiss = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    onClose();
+  };
+
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={handleDismiss}>
+      <View style={styles.modalOverlay}>
+        <BlurView intensity={60} style={StyleSheet.absoluteFill} tint="dark" />
+        <Animated.View style={[styles.welcomeCard, cardStyle]}>
+          {/* Top Decorative Spark */}
+          <View style={styles.welcomeBannerDecor}>
+            <LinearGradient
+              colors={['#10B981', '#3B82F6']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+
+          {/* Animated Mascot wrapper */}
+          <Animated.View style={[styles.welcomeMascotWrap, mascotStyle]}>
+            <MascotChar which="focus" size={110} expression="happy" />
+          </Animated.View>
+
+          <Text style={styles.welcomeHeader}>¡HOLA, NEURO-VIAJERO!</Text>
+          <Text style={styles.welcomeTitle}>Te damos la bienvenida a LectorApp</Text>
+
+          <View style={styles.welcomeDivider} />
+
+          <Text style={styles.welcomeBody}>
+            Estamos listos para expandir tus límites cognitivos. A través de este viaje gamificado entrenarás tu visión periférica, reprogramarás tu memoria y potenciarás tu velocidad de lectura.
+          </Text>
+
+          <View style={styles.welcomeHighlights}>
+            <View style={styles.welcomeHighlightRow}>
+              <Ionicons name="sparkles" size={18} color="#10B981" />
+              <Text style={styles.welcomeHighlightText}>Ejercicios visuales y de memoria interactivos</Text>
+            </View>
+            <View style={styles.welcomeHighlightRow}>
+              <Ionicons name="stats-chart" size={18} color="#3B82F6" />
+              <Text style={styles.welcomeHighlightText}>Gráficos de velocidad de lectura (WPM)</Text>
+            </View>
+          </View>
+
+          <Pressable style={styles.welcomeBtn} onPress={handleDismiss}>
+            <LinearGradient
+              colors={['#10B981', '#059669']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            <Text style={styles.welcomeBtnText}>¡Comenzar mi Entrenamiento!</Text>
+            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 8 }} />
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 const styles = StyleSheet.create({
   safe:           { flex: 1, backgroundColor: COLORS.canvas },
   header:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
@@ -817,5 +945,104 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
     fontSize: 14,
     color: '#fff',
+  },
+
+  // Welcome Modal styles
+  welcomeCard: {
+    backgroundColor: '#fff',
+    borderRadius: 32,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 24,
+    width: '100%',
+    maxWidth: 360,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 12,
+    overflow: 'hidden',
+  },
+  welcomeBannerDecor: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    height: 12,
+  },
+  welcomeMascotWrap: {
+    marginTop: 16,
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  welcomeHeader: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 12,
+    color: '#10B981',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  welcomeTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 22,
+    color: '#0F172A',
+    textAlign: 'center',
+    marginTop: 4,
+  },
+  welcomeDivider: {
+    width: 48,
+    height: 3,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 99,
+    marginVertical: 16,
+  },
+  welcomeBody: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: '#475569',
+    textAlign: 'center',
+    lineHeight: 18.5,
+    marginBottom: 20,
+  },
+  welcomeHighlights: {
+    width: '100%',
+    gap: 12,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 24,
+  },
+  welcomeHighlightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  welcomeHighlightText: {
+    fontFamily: FONTS.bodyMedium,
+    fontSize: 12,
+    color: '#334155',
+    flex: 1,
+  },
+  welcomeBtn: {
+    height: 54,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    position: 'relative',
+    overflow: 'hidden',
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  welcomeBtnText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 15,
+    color: '#fff',
+    zIndex: 1,
   },
 });
