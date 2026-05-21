@@ -29,15 +29,19 @@ export function ExerciseTopBar({ title, progress, accent, onQuit }: Props) {
       <Pressable onPress={onQuit} style={styles.quitBtn} hitSlop={8}>
         <Text style={styles.quitIcon}>✕</Text>
       </Pressable>
-      <View
-        style={styles.progressTrack}
-        onLayout={e => {
-          trackW.value = e.nativeEvent.layout.width;
-          fillW.value  = Math.min(1, Math.max(0, progress)) * e.nativeEvent.layout.width;
-        }}
-      >
-        <Animated.View style={[styles.progressFill, { backgroundColor: accent }, barStyle]} />
-      </View>
+      {progress >= 0 ? (
+        <View
+          style={styles.progressTrack}
+          onLayout={e => {
+            trackW.value = e.nativeEvent.layout.width;
+            fillW.value  = Math.min(1, Math.max(0, progress)) * e.nativeEvent.layout.width;
+          }}
+        >
+          <Animated.View style={[styles.progressFill, { backgroundColor: accent }, barStyle]} />
+        </View>
+      ) : (
+        <View style={{ flex: 1 }} />
+      )}
       {title ? <Text style={styles.titleText}>{title}</Text> : null}
     </View>
   );

@@ -1,13 +1,19 @@
 import React, { useMemo } from 'react';
-import { View, Text, ScrollView, StyleSheet, Dimensions, Platform, Pressable } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, Dimensions, Platform, Pressable, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+import { selectWarmupExercises } from '../../lib/dailyWarmup';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useProgressStore } from '../../store/useProgressStore';
 import { useSessionStore } from '../../store/useSessionStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
+import { useNodeStore } from '../../store/useNodeStore';
+import { MascotChar } from '../../components/ui/MascotChar';
 import { ProgressBar } from '../../components/ui/ProgressBar';
+import { RadarChart } from '../../components/ui/RadarChart';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
@@ -207,6 +213,38 @@ export default function ProgresoScreen() {
   const list    = useSessionStore(s => s.list);
   const themeColor = usePrefsStore(s => s.prefs.theme_color) || COLORS.focus;
 
+  const completed = useNodeStore(s => s.completed);
+  const sessions = useSessionStore(s => s.sessions);
+  const hasSessions = sessions.length > 0;
+
+  // Real progress per zone calculations
+  const zoneProgress = useMemo(() => {
+    const z1Completed = completed.filter(id => id.startsWith('z1_')).length;
+    const z2Completed = completed.filter(id => id.startsWith('z2_')).length;
+    const z3Completed = completed.filter(id => id.startsWith('z3_')).length;
+
+    const z1Total = 7;
+    const z2Total = 6;
+    const z3Total = 5;
+
+    return [
+      { id: 'z1', label: 'Zona 1: Enfoque', progress: z1Completed / z1Total, completed: z1Completed, total: z1Total, color: COLORS.focus },
+      { id: 'z2', label: 'Zona 2: Memoria', progress: z2Completed / z2Total, completed: z2Completed, total: z2Total, color: COLORS.calm },
+      { id: 'z3', label: 'Zona 3: Velocidad', progress: z3Completed / z3Total, completed: z3Completed, total: z3Total, color: COLORS.swift },
+    ];
+  }, [completed]);
+
+  const radarSkills = useMemo(() => {
+    return [
+      { key: 'schulte',       label: 'Enfoque',      value: all.schulte?.mastery ?? 0.1,       color: EXERCISES.schulte?.color ?? COLORS.focus },
+      { key: 'reading',       label: 'Velocidad',    value: all.reading?.mastery ?? 0.1,       color: EXERCISES.reading?.color ?? COLORS.swift },
+      { key: 'wordspan',      label: 'Retención',    value: all.wordspan?.mastery ?? 0.1,      color: EXERCISES.wordspan?.color ?? COLORS.calm },
+      { key: 'loci',          label: 'Asociación',   value: all.loci?.mastery ?? 0.1,          color: EXERCISES.loci?.color ?? COLORS.joy },
+      { key: 'comprehension', label: 'Comprensión', value: all.comprehension?.mastery ?? 0.1, color: EXERCISES.comprehension?.color ?? COLORS.focus },
+      { key: 'boss',          label: 'Maestría',     value: all.boss?.mastery ?? 0.1,          color: EXERCISES.boss?.color ?? COLORS.swift },
+    ];
+  }, [all]);
+
   const MONTH_NAMES = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
   function hexToRgba(hex: string, opacity: number) {
@@ -318,6 +356,53 @@ export default function ProgresoScreen() {
           </View>
         </View>
 
+        {/* Avance en la Ruta Principal */}
+        <View style={styles.routeProgressCard}>
+          <Text style={[styles.sectionTitle, { marginBottom: 12 }]}>Avance en la Ruta Principal</Text>
+          <View style={{ gap: 14 }}>
+            {zoneProgress.map(zone => (
+              <View key={zone.id} style={styles.zoneProgressRow}>
+                <View style={styles.zoneProgressHeader}>
+                  <Text style={styles.zoneProgressLabel}>{zone.label}</Text>
+                  <Text style={[styles.zoneProgressCount, { color: zone.color, fontFamily: FONTS.heading }]}>
+                    {zone.completed}/{zone.total}
+                  </Text>
+                </View>
+                <View style={{ marginTop: 6 }}>
+                  <ProgressBar value={zone.progress} color={zone.color} height={8} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {!hasSessions && (
+          <View style={styles.emptyStateBanner}>
+            <ExpoLinearGradient
+              colors={['#1E3A8A', '#0F172A'] as [string, string]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.emptyStateGradient}
+            >
+              <View style={[styles.emptyStateMascotWrap, { marginRight: 12 }]}>
+                <MascotChar type="focus" size={60} breathe />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.emptyStateTitle}>🚀 ¡Comienza tu Neuro-Viaje!</Text>
+                <Text style={styles.emptyStateDesc}>
+                  Completa tu primera lección o ejercicio en la Ruta para ver tus estadísticas y métricas cerebrales en tiempo real.
+                </Text>
+              </View>
+            </ExpoLinearGradient>
+          </View>
+        )}
+
+        {/* Habilidades Cognitivas Radar Chart */}
+        <Text style={styles.sectionTitle}>Habilidades Cognitivas</Text>
+        <View style={styles.radarCard}>
+          <RadarChart skills={radarSkills} themeColor={themeColor} size={280} />
+        </View>
+
         {/* KPI grid */}
         <View style={styles.kpiGrid}>
           {[
@@ -333,6 +418,52 @@ export default function ProgresoScreen() {
           ))}
         </View>
 
+        {/* Botón Calentamiento Rápido */}
+        <Pressable
+          onPress={() => {
+            const suggested = selectWarmupExercises(all);
+            if (suggested && suggested.length > 0) {
+              const firstExId = suggested[0];
+              const exMeta = EXERCISES[firstExId];
+              Alert.alert(
+                '⚡ Calentamiento rápido listo',
+                `¡Tu cerebro necesita entrenar la destreza de [${exMeta?.category}] hoy!\n\nIniciando ${exMeta?.title}...`,
+                [
+                  {
+                    text: '¡Vamos!',
+                    onPress: () => router.push({ pathname: `/exercise/${firstExId}` as any, params: { mode: 'free' } })
+                  },
+                  {
+                    text: 'Cancelar',
+                    style: 'cancel'
+                  }
+                ]
+              );
+            } else {
+              Alert.alert('Calentamiento', '¡Tu cerebro está al 100% hoy! No se requieren recomendaciones.');
+            }
+          }}
+          style={({ pressed }) => [
+            styles.warmupBannerCard,
+            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+          ]}
+        >
+          <ExpoLinearGradient
+            colors={['#EF4444', '#F97316'] as [string, string]}
+            style={styles.warmupBannerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.warmupBannerTitle}>⚡ Calentamiento Rápido (5 min)</Text>
+              <Text style={styles.warmupBannerSub}>
+                Entrena tus áreas cognitivas más frías al instante con recomendaciones personalizadas.
+              </Text>
+            </View>
+            <Ionicons name="flash" size={28} color="#FFFFFF" />
+          </ExpoLinearGradient>
+        </Pressable>
+
         {/* WPM Trend chart */}
         <Text style={styles.sectionTitle}>Velocidad lectora (7 días)</Text>
         <View style={styles.chartCard}>
@@ -340,7 +471,9 @@ export default function ProgresoScreen() {
             <UniversalLineChart data={wpmTrend} themeColor={COLORS.calm} />
           ) : (
             <View style={styles.chartEmpty}>
+              <Ionicons name="analytics-outline" size={28} color={COLORS.muted + '40'} style={{ marginBottom: 6 }} />
               <Text style={styles.chartEmptyText}>Sin datos de WPM esta semana</Text>
+              <Text style={styles.chartEmptySub}>Entrena en Lectura RSVP para ver tu progreso</Text>
             </View>
           )}
         </View>
@@ -352,7 +485,9 @@ export default function ProgresoScreen() {
             <UniversalBarChart data={sessionsByDay} themeColor={COLORS.focus} />
           ) : (
             <View style={styles.chartEmpty}>
+              <Ionicons name="bar-chart-outline" size={28} color={COLORS.muted + '40'} style={{ marginBottom: 6 }} />
               <Text style={styles.chartEmptyText}>Completa ejercicios para ver estadísticas</Text>
+              <Text style={styles.chartEmptySub}>Tus sesiones de entrenamiento se verán aquí</Text>
             </View>
           )}
         </View>
@@ -422,36 +557,88 @@ export default function ProgresoScreen() {
           </View>
         </View>
 
-        {/* Exercise cards */}
-        <Text style={styles.sectionTitle}>Ejercicios</Text>
-        {EX_IDS.map(exId => {
-          const meta = EXERCISES[exId];
-          const prog = all[exId];
-          if (!meta || !prog) return null;
-          return (
-            <Pressable
-              key={exId}
-              onPress={() => router.push(`/exercise/${exId}`)}
-              style={({ pressed }) => [
-                styles.exerciseCard,
-                { borderColor: meta.color + '30' },
-                pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
-              ]}
-            >
-              <View style={styles.exRow}>
-                <View style={[styles.exDot, { backgroundColor: meta.color }]} />
-                <Text style={styles.exTitle}>{meta.title}</Text>
-                <Text style={[styles.exLevel, { color: meta.color }]}>Nivel {prog.current_level}</Text>
-              </View>
-              <ProgressBar value={prog.mastery} color={meta.color} height={8} />
-              <View style={styles.exStats}>
-                <Text style={styles.exStat}>Sesiones: {prog.total_sessions}</Text>
-                <Text style={styles.exStat}>Mejor: {Math.round(prog.best_score * 100)}%</Text>
-                <Text style={styles.exStat}>Última: {Math.round(prog.last_score * 100)}%</Text>
-              </View>
-            </Pressable>
-          );
-        })}
+        {/* Flashcards Banner */}
+        <Text style={styles.sectionTitle}>Repetición Espaciada</Text>
+        <Pressable
+          onPress={() => router.push('/flashcards' as any)}
+          style={({ pressed }) => [
+            styles.flashcardBannerCard,
+            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+          ]}
+        >
+          <ExpoLinearGradient
+            colors={['#8B5CF6', '#EC4899'] as [string, string]}
+            style={styles.flashcardBannerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.flashcardBannerTitle}>📚 Flashcards Mnemónicas</Text>
+              <Text style={styles.flashcardBannerSub}>
+                Entrena tu memoria a largo plazo con el algoritmo SM-2 y personalización por IA.
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward-circle" size={28} color="#FFFFFF" />
+          </ExpoLinearGradient>
+        </Pressable>
+
+        {/* Práctica Libre Grid */}
+        <Text style={styles.sectionTitle}>Práctica Libre (Modo Libre)</Text>
+        <Text style={styles.sectionSub}>Entrena de forma ilimitada y ponte a prueba sin alterar tu progreso en la ruta principal.</Text>
+        <View style={styles.freePracticeGrid}>
+          {EX_IDS.map(exId => {
+            const meta = EXERCISES[exId];
+            const prog = all[exId];
+            if (!meta || !prog) return null;
+            return (
+              <Pressable
+                key={exId}
+                onPress={() => router.push({ pathname: `/exercise/${exId}` as any, params: { mode: 'free' } })}
+                style={({ pressed }) => [
+                  styles.freePracticeCard,
+                  { borderColor: meta.color + '30' },
+                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] }
+                ]}
+              >
+                <ExpoLinearGradient
+                  colors={[COLORS.white, hexToRgba(meta.color, 0.05)]}
+                  style={styles.freePracticeGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 0, y: 1 }}
+                >
+                  <View style={[styles.freeIconCircle, { backgroundColor: meta.color + '15' }]}>
+                    <Ionicons 
+                      name={
+                        exId === 'schulte' ? 'grid-outline' :
+                        exId === 'reading' ? 'speedometer-outline' :
+                        exId === 'wordspan' ? 'layers-outline' :
+                        exId === 'loci' ? 'home-outline' :
+                        exId === 'comprehension' ? 'book-outline' :
+                        'skull-outline'
+                      } 
+                      size={20} 
+                      color={meta.color} 
+                    />
+                  </View>
+                  <Text style={styles.freeTitle} numberOfLines={1}>{meta.title}</Text>
+                  <Text style={[styles.freeCategory, { color: meta.color }]}>{meta.category}</Text>
+                  
+                  <View style={styles.freeProgressRow}>
+                    <View style={styles.freeProgressBarTrack}>
+                      <View style={[styles.freeProgressBarFill, { width: `${prog.mastery * 100}%`, backgroundColor: meta.color }]} />
+                    </View>
+                    <Text style={styles.freeProgressText}>{Math.round(prog.mastery * 100)}%</Text>
+                  </View>
+                  
+                  <View style={styles.freeStats}>
+                    <Text style={styles.freeStatText}>Record: {Math.round(prog.best_score * 100)}%</Text>
+                    <Text style={styles.freeStatText}>Nivel: {prog.current_level}</Text>
+                  </View>
+                </ExpoLinearGradient>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <View style={{ height: 110 }} />
       </ScrollView>
@@ -464,6 +651,7 @@ const styles = StyleSheet.create({
   scroll:    { padding: 20 },
   title:     { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink, marginBottom: 16 },
   levelCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: COLORS.focus + '40', marginBottom: 16 },
+  radarCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 16, alignItems: 'center', justifyContent: 'center' },
   levelRow:  { flexDirection: 'row', justifyContent: 'space-between' },
   levelLabel:{ fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink },
   levelXP:   { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
@@ -552,6 +740,201 @@ const styles = StyleSheet.create({
   exLevel:   { fontFamily: FONTS.heading, fontSize: 12 },
   exStats:   { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
   exStat:    { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted },
+  flashcardBannerCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  flashcardBannerGradient: {
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  flashcardBannerTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 16,
+    color: COLORS.white,
+    marginBottom: 4,
+  },
+  flashcardBannerSub: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 16,
+  },
+  sectionSub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.muted,
+    marginBottom: 16,
+    marginTop: -4,
+  },
+  freePracticeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  freePracticeCard: {
+    width: (SCREEN_W - 52) / 2,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  freePracticeGradient: {
+    padding: 16,
+  },
+  freeIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  freeTitle: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 14,
+    color: COLORS.ink,
+    marginBottom: 2,
+  },
+  freeCategory: {
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 12,
+  },
+  freeProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  freeProgressBarTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: COLORS.surface,
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  freeProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  freeProgressText: {
+    fontFamily: FONTS.heading,
+    fontSize: 11,
+    color: COLORS.ink,
+  },
+  freeStats: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+    marginTop: 4,
+  },
+  freeStatText: {
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    color: COLORS.muted,
+  },
+  warmupBannerCard: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 24,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  warmupBannerGradient: {
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  warmupBannerTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 16,
+    color: COLORS.white,
+    marginBottom: 4,
+  },
+  warmupBannerSub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 16,
+  },
+  emptyStateBanner: {
+    borderRadius: 20,
+    overflow: 'hidden',
+    marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+  },
+  emptyStateGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  emptyStateMascotWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  emptyStateTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 17,
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  emptyStateDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.75)',
+    lineHeight: 16,
+  },
+  routeProgressCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    marginBottom: 20,
+  },
+  zoneProgressRow: {
+    width: '100%',
+  },
+  zoneProgressHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  zoneProgressLabel: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 14,
+    color: COLORS.ink,
+  },
+  zoneProgressCount: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+  },
+  chartEmptySub: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: COLORS.muted,
+    textAlign: 'center',
+    marginTop: 2,
+  },
 });
 
 const barStyles = StyleSheet.create({

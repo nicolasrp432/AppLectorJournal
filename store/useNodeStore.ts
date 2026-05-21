@@ -5,7 +5,9 @@ import { supabase } from '../lib/supabase';
 
 interface NodeState {
   completed: string[];
+  newlyCompletedNodeId: string | null;
   completeNode: (nodeId: string) => Promise<void>;
+  clearNewlyCompleted: () => void;
   fetchCompleted: (userId: string) => Promise<void>;
   reset: () => void;
 }
@@ -14,13 +16,16 @@ export const useNodeStore = create<NodeState>()(
   persist(
     (set, get) => ({
       completed: [],
-      reset: () => set({ completed: [] }),
+      newlyCompletedNodeId: null,
+      reset: () => set({ completed: [], newlyCompletedNodeId: null }),
+
+      clearNewlyCompleted: () => set({ newlyCompletedNodeId: null }),
 
       completeNode: async (nodeId: string) => {
         const current = get().completed;
         if (current.includes(nodeId)) return;
         const updated = [...current, nodeId];
-        set({ completed: updated });
+        set({ completed: updated, newlyCompletedNodeId: nodeId });
 
         const { data } = await supabase.auth.getSession();
         if (data.session) {

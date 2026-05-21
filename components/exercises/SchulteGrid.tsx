@@ -7,6 +7,7 @@ import { ExerciseTopBar } from './ExerciseTopBar';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import * as haptics from '../../lib/haptics';
+import { CircularTimer } from './shared/CircularTimer';
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -20,14 +21,23 @@ function shuffle<T>(arr: T[]): T[] {
 interface Props {
   size?: number;
   accent?: string;
+  inverse?: boolean;
+  showQuadrantHint?: boolean;
   onFinish: (result: { time: number; errors: number; size: number }) => void;
   onQuit: () => void;
 }
 
-export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit }: Props) {
+export function SchulteGrid({
+  size = 5,
+  accent = COLORS.focus,
+  inverse = false,
+  showQuadrantHint = false,
+  onFinish,
+  onQuit,
+}: Props) {
   const total = size * size;
   const [numbers] = useState(() => shuffle([...Array(total)].map((_, i) => i + 1)));
-  const [next, setNext] = useState(1);
+  const [next, setNext] = useState(inverse ? total : 1);
   const [elapsed, setElapsed] = useState(0);
   const [errors, setErrors] = useState(0);
   const [shakeId, setShakeId] = useState<number | null>(null);
@@ -37,12 +47,20 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
   const lastCorrectTaps = useRef<number[]>([]);
   const [feverActive, setFeverActive] = useState(false);
 
+  // Perfect Streak Tracking
+  const [correctStreak, setCorrectStreak] = useState(0);
+  const streakToastY = useSharedValue(-100);
+  const streakToastOpacity = useSharedValue(0);
+
   // Reanimated values for general game effects
   const bgAnim = useSharedValue(0);
   const flashOpacity = useSharedValue(0);
   const gridShake = useSharedValue(0);
   const feverScale = useSharedValue(0);
   const feverRotation = useSharedValue(0);
+
+  // Timer benchmark calculation (e.g. 5x5 is 50s)
+  const benchmark = size === 3 ? 15 : size === 4 ? 30 : size === 5 ? 50 : 80;
 
   useEffect(() => {
     const t = setInterval(() => setElapsed((Date.now() - startTime.current) / 1000), 100);
@@ -88,11 +106,30 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
     }
   }, [feverActive]);
 
+  const triggerStreakToast = () => {
+    streakToastY.value = withTiming(20, { duration: 400 });
+    streakToastOpacity.value = withTiming(1, { duration: 400 });
+
+    setTimeout(() => {
+      streakToastY.value = withTiming(-100, { duration: 450 });
+      streakToastOpacity.value = withTiming(0, { duration: 450 });
+    }, 2000);
+  };
+
   const handleTap = (n: number) => {
     if (n === next) {
       const now = Date.now();
       const newTaps = [...lastCorrectTaps.current, now].slice(-3);
       lastCorrectTaps.current = newTaps;
+
+      // Increment Streak
+      setCorrectStreak(prev => {
+        const nextStreak = prev + 1;
+        if (nextStreak === 10) {
+          triggerStreakToast();
+        }
+        return nextStreak;
+      });
 
       // Check if 3 taps made in less than 1.2s
       if (newTaps.length === 3 && now - newTaps[0] <= 1200) {
@@ -102,11 +139,12 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
         setFeverActive(true);
       }
 
-      if (next === total) {
+      const isLast = inverse ? next === 1 : next === total;
+      if (isLast) {
         onFinish({ time: (Date.now() - startTime.current) / 1000, errors, size });
       } else {
         haptics.tap();
-        setNext(next + 1);
+        setNext(prev => prev + (inverse ? -1 : 1));
       }
     } else {
       haptics.error();
@@ -114,6 +152,7 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
       setShakeId(n);
       setFeverActive(false); // Break fever mode
       lastCorrectTaps.current = []; // Clear fever history
+      setCorrectStreak(0); // Reset streak
 
       // Error effects: whole grid shakes + red flash
       gridShake.value = withSequence(
@@ -136,6 +175,7 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
 
   const cellSize = size === 3 ? 96 : size === 4 ? 78 : size === 5 ? 62 : size === 6 ? 52 : 44;
   const fontSize = size === 3 ? 34 : size === 4 ? 28 : size === 5 ? 24 : size === 6 ? 20 : 16;
+  const gridWidth = size * cellSize + (size - 1) * 8 + 28;
 
   // Background styling
   const animatedBgStyle = useAnimatedStyle(() => {
@@ -168,16 +208,44 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
     opacity: feverScale.value,
   }));
 
+  const animatedStreakToastStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: streakToastY.value }],
+    opacity: streakToastOpacity.value,
+  }));
+
+  // Quadrant Hint calculation
+  const nextIndex = numbers.indexOf(next);
+  let activeQuadrant = 0;
+  if (nextIndex !== -1) {
+    const halfSize = size / 2;
+    const nextRow = Math.floor(nextIndex / size);
+    const nextCol = nextIndex % size;
+    
+    if (nextRow < halfSize && nextCol < halfSize) activeQuadrant = 0;
+    else if (nextRow < halfSize && nextCol >= halfSize) activeQuadrant = 1;
+    else if (nextRow >= halfSize && nextCol < halfSize) activeQuadrant = 2;
+    else activeQuadrant = 3;
+  }
+
+  // Unified progress value
+  const progressRatio = inverse ? (total - next) / total : (next - 1) / total;
+  const progressText = inverse ? `${total - next}/${total}` : `${next - 1}/${total}`;
+
   return (
     <Animated.View style={[styles.container, animatedBgStyle]}>
       {/* Red screen flash for incorrect inputs */}
       <Animated.View style={[styles.flashOverlay, animatedFlashStyle]} pointerEvents="none" />
 
-      <ExerciseTopBar progress={(next - 1) / total} accent={accent} onQuit={onQuit} title="Schulte Grid" />
+      {/* Perfect Streak Toast */}
+      <Animated.View style={[styles.streakToast, animatedStreakToastStyle]} pointerEvents="none">
+        <Text style={styles.streakToastText}>🔥 ¡Racha perfecta! (10 seguidos)</Text>
+      </Animated.View>
+
+      <ExerciseTopBar progress={progressRatio} accent={accent} onQuit={onQuit} title="Schulte Grid" />
 
       <View style={styles.statsRow}>
-        <StatPill value={elapsed.toFixed(1) + 's'} label="Tiempo" color="#3B82F6" />
-        <StatPill value={`${next - 1}/${total}`} label="Progreso" color={accent} />
+        <StatPill value={String(correctStreak)} label="Racha 🔥" color="#F59E0B" />
+        <StatPill value={progressText} label="Progreso" color={accent} />
         <StatPill value={String(errors)} label="Errores" color="#EF4444" />
       </View>
 
@@ -192,25 +260,40 @@ export function SchulteGrid({ size = 5, accent = COLORS.focus, onFinish, onQuit 
       </View>
 
       <View style={styles.gridWrapper}>
-        <Animated.View style={[styles.gridCard, { gap: 8 }, animatedGridStyle]}>
-          {Array.from({ length: size }, (_, row) => (
-            <View key={row} style={{ flexDirection: 'row', gap: 8 }}>
-              {numbers.slice(row * size, (row + 1) * size).map((n) => (
-                <GridCell
-                  key={n}
-                  n={n}
-                  done={n < next}
-                  shaking={shakeId === n}
-                  size={cellSize}
-                  fontSize={fontSize}
-                  accent={accent}
-                  onPress={() => handleTap(n)}
-                  feverActive={feverActive}
-                />
-              ))}
-            </View>
-          ))}
-        </Animated.View>
+        <CircularTimer elapsed={elapsed} benchmark={benchmark} size={gridWidth + 24} strokeWidth={6}>
+          <Animated.View style={[styles.gridCard, { gap: 8 }, animatedGridStyle]}>
+            {Array.from({ length: size }, (_, row) => (
+              <View key={row} style={{ flexDirection: 'row', gap: 8 }}>
+                {numbers.slice(row * size, (row + 1) * size).map((n) => (
+                  <GridCell
+                    key={n}
+                    n={n}
+                    done={inverse ? n > next : n < next}
+                    shaking={shakeId === n}
+                    size={cellSize}
+                    fontSize={fontSize}
+                    accent={accent}
+                    onPress={() => handleTap(n)}
+                    feverActive={feverActive}
+                  />
+                ))}
+              </View>
+            ))}
+
+            {showQuadrantHint && (
+              <View style={[StyleSheet.absoluteFill, { padding: 14, pointerEvents: 'none' }]}>
+                <View style={{ flex: 1, flexDirection: 'row' }}>
+                  <QuadrantGlow active={activeQuadrant === 0} accent={accent} />
+                  <QuadrantGlow active={activeQuadrant === 1} accent={accent} />
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row' }}>
+                  <QuadrantGlow active={activeQuadrant === 2} accent={accent} />
+                  <QuadrantGlow active={activeQuadrant === 3} accent={accent} />
+                </View>
+              </View>
+            )}
+          </Animated.View>
+        </CircularTimer>
       </View>
     </Animated.View>
   );
@@ -239,10 +322,12 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
   useEffect(() => {
     if (shaking) {
       tx.value = withSequence(
-        withTiming(-6, { duration: 75 }),
-        withTiming(6, { duration: 75 }),
-        withTiming(-4, { duration: 75 }),
-        withTiming(0, { duration: 75 }),
+        withTiming(-12, { duration: 50 }),
+        withTiming(12, { duration: 50 }),
+        withTiming(-8, { duration: 50 }),
+        withTiming(8, { duration: 50 }),
+        withTiming(-4, { duration: 50 }),
+        withTiming(0, { duration: 50 }),
       );
     }
   }, [shaking]);
@@ -260,10 +345,10 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
   }, [feverActive]);
 
   const triggerTapEffects = () => {
-    // Elastic scale bounce
+    // Elastic scale bounce to 0
     scale.value = withSequence(
-      withSpring(0.85, { damping: 9, stiffness: 350 }),
-      withSpring(1, { damping: 7, stiffness: 220 })
+      withSpring(0.8, { damping: 10, stiffness: 300 }),
+      withTiming(0, { duration: 200 })
     );
 
     // Shockwave ripple
@@ -295,6 +380,8 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
   useEffect(() => {
     if (done) {
       triggerTapEffects();
+    } else {
+      scale.value = withTiming(1, { duration: 150 });
     }
   }, [done]);
 
@@ -358,7 +445,11 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
             width: size,
             height: size,
             borderRadius: 12,
-            backgroundColor: done ? `${accent}15` : COLORS.white,
+            backgroundColor: shaking 
+              ? '#FEE2E2' 
+              : done 
+                ? 'transparent' 
+                : COLORS.white,
           },
         ]}
       >
@@ -368,7 +459,7 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
             {
               fontSize,
               color: done 
-                ? `${accent}60` 
+                ? 'transparent' // Completely vanished
                 : feverActive 
                   ? '#4B5563' 
                   : COLORS.ink,
@@ -379,6 +470,32 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
         </Text>
       </Pressable>
     </Animated.View>
+  );
+}
+
+function QuadrantGlow({ active, accent }: { active: boolean; accent: string }) {
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    opacity.value = withTiming(active ? 0.12 : 0, { duration: 300 });
+  }, [active]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          flex: 1,
+          backgroundColor: accent,
+          borderRadius: 12,
+          margin: 4,
+        },
+        animStyle,
+      ]}
+    />
   );
 }
 
@@ -394,6 +511,32 @@ function StatPill({ value, label, color }: { value: string; label: string; color
 const styles = StyleSheet.create({
   container:   { flex: 1, backgroundColor: COLORS.canvas },
   flashOverlay:{ ...StyleSheet.absoluteFillObject, backgroundColor: '#EF4444', zIndex: 9999 },
+  streakToast: {
+    position: 'absolute',
+    top: 50,
+    left: '10%',
+    right: '10%',
+    backgroundColor: 'rgba(251, 146, 60, 0.95)',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9999,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  streakToastText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 15,
+    color: '#FFF',
+    textAlign: 'center',
+  },
   statsRow:    { flexDirection: 'row', gap: 8, padding: 14 },
   pill:        { flex: 1, backgroundColor: COLORS.white, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: COLORS.surface, alignItems: 'center' },
   pillValue:   { fontFamily: FONTS.heading, fontSize: 16, lineHeight: 20 },

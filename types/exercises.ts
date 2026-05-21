@@ -34,7 +34,7 @@ export interface ResultStat {
 }
 
 // Difficulty configs per exercise
-export interface SchulteLevel { level: number; label: string; size: number; target_time: number }
+export interface SchulteLevel { level: number; label: string; size: number; target_time: number; inverse?: boolean; showQuadrantHint?: boolean }
 export interface WordSpanLevel { level: number; label: string; count: number; show_ms: number }
 export interface LociLevel    { level: number; label: string; count: number }
 export interface ComprehensionLevel { level: number; label: string; length: 'short'|'medium'|'long'; q_count: number }

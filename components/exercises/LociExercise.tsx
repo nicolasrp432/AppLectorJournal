@@ -1,25 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Dimensions, Platform, ActivityIndicator, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence,
 } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { LOCI_OBJECTS } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
+import { usePrefsStore } from '../../store/usePrefsStore';
+import { supabase } from '../../lib/supabase';
 
-const ALL_ROOMS = [
-  { id: 'entrance', label: 'Entrada',   x: 18, y: 72, icon: 'log-in-outline' },
-  { id: 'kitchen',  label: 'Cocina',    x: 68, y: 72, icon: 'restaurant-outline' },
-  { id: 'living',   label: 'Sala',      x: 42, y: 46, icon: 'tv-outline' },
-  { id: 'bedroom',  label: 'Dormitorio',x: 18, y: 22, icon: 'bed-outline' },
-  { id: 'office',   label: 'Oficina',   x: 68, y: 22, icon: 'desktop-outline' },
-  { id: 'bath',     label: 'Baño',      x: 82, y: 46, icon: 'water-outline' },
-  { id: 'garden',   label: 'Jardín',    x: 18, y: 46, icon: 'leaf-outline' },
-  { id: 'attic',    label: 'Ático',     x: 50, y:  8, icon: 'home-outline' },
-];
+const ROOM_THEMES = {
+  casa: [
+    { id: 'entrance', label: 'Entrada',   x: 18, y: 72, icon: 'log-in-outline' },
+    { id: 'kitchen',  label: 'Cocina',    x: 68, y: 72, icon: 'restaurant-outline' },
+    { id: 'living',   label: 'Sala',      x: 42, y: 46, icon: 'tv-outline' },
+    { id: 'bedroom',  label: 'Dormitorio',x: 18, y: 22, icon: 'bed-outline' },
+    { id: 'office',   label: 'Oficina',   x: 68, y: 22, icon: 'desktop-outline' },
+    { id: 'bath',     label: 'Baño',      x: 82, y: 46, icon: 'water-outline' },
+    { id: 'garden',   label: 'Jardín',    x: 18, y: 46, icon: 'leaf-outline' },
+    { id: 'attic',    label: 'Ático',     x: 50, y:  8, icon: 'home-outline' },
+  ],
+  oficina: [
+    { id: 'entrance', label: 'Recepción', x: 18, y: 72, icon: 'briefcase-outline' },
+    { id: 'kitchen',  label: 'Cafetería', x: 68, y: 72, icon: 'cafe-outline' },
+    { id: 'living',   label: 'Reuniones', x: 42, y: 46, icon: 'people-outline' },
+    { id: 'bedroom',  label: 'Relax',     x: 18, y: 22, icon: 'happy-outline' },
+    { id: 'office',   label: 'Escritorio',x: 68, y: 22, icon: 'desktop-outline' },
+    { id: 'bath',     label: 'Sanitario', x: 82, y: 46, icon: 'water-outline' },
+    { id: 'garden',   label: 'Terraza',   x: 18, y: 46, icon: 'trail-sign-outline' },
+    { id: 'attic',    label: 'Archivo',   x: 50, y:  8, icon: 'archive-outline' },
+  ],
+  naturaleza: [
+    { id: 'entrance', label: 'Sendero',   x: 18, y: 72, icon: 'walk-outline' },
+    { id: 'kitchen',  label: 'Campamento',x: 68, y: 72, icon: 'bonfire-outline' },
+    { id: 'living',   label: 'El Claro',  x: 42, y: 46, icon: 'sunny-outline' },
+    { id: 'bedroom',  label: 'Cabaña',    x: 18, y: 22, icon: 'home-outline' },
+    { id: 'office',   label: 'Mirador',   x: 68, y: 22, icon: 'compass-outline' },
+    { id: 'bath',     label: 'Cascada',   x: 82, y: 46, icon: 'water-outline' },
+    { id: 'garden',   label: 'El Lago',   x: 18, y: 46, icon: 'boat-outline' },
+    { id: 'attic',    label: 'La Cueva',  x: 50, y:  8, icon: 'prism-outline' },
+  ],
+};
+
+const ROOM_ASPECTS: Record<string, { emoji: string; colors: [string, string]; border: string; textColor: string }> = {
+  entrance: { emoji: '🚪', colors: ['#ECFDF5', '#D1FAE5'], border: '#A7F3D0', textColor: '#065F46' },
+  kitchen:  { emoji: '🍳', colors: ['#FFF7ED', '#FFEDD5'], border: '#FED7AA', textColor: '#9A3412' },
+  living:   { emoji: '🛋️', colors: ['#FEF2F2', '#FEE2E2'], border: '#FECACA', textColor: '#991B1B' },
+  bedroom:  { emoji: '🛏️', colors: ['#EFF6FF', '#DBEAFE'], border: '#BFDBFE', textColor: '#1E40AF' },
+  office:   { emoji: '💻', colors: ['#F5F3FF', '#EDE9FE'], border: '#DDD6FE', textColor: '#5B21B6' },
+  bath:     { emoji: '🛁', colors: ['#F0FDFA', '#CCFBF1'], border: '#99F6E4', textColor: '#0F766E' },
+  garden:   { emoji: '🏡', colors: ['#F0FDF4', '#DCFCE7'], border: '#BBF7D0', textColor: '#166534' },
+  attic:    { emoji: '📦', colors: ['#FAFAF9', '#F5F5F4'], border: '#E7E5E4', textColor: '#44403C' },
+};
 
 interface Props {
   count?: number;
@@ -45,10 +81,16 @@ function getSurrealLociAssociation(roomLabel: string, objectWord: string): strin
 }
 
 export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', onFinish, onQuit }: Props) {
+  const palaceTheme = usePrefsStore(state => state.prefs.loci_palace) || 'casa';
+  const ALL_ROOMS = ROOM_THEMES[palaceTheme as keyof typeof ROOM_THEMES] || ROOM_THEMES.casa;
+
   const wantCount = Math.min(8, Math.max(3, count));
   const rooms = ALL_ROOMS.slice(0, wantCount);
   const words = LOCI_OBJECTS.slice(0, wantCount);
   const [assoc] = useState(() => rooms.map((r, i) => ({ ...r, word: words[i] })));
+  const [aiStories, setAiStories] = useState<Record<string, string>>({});
+  const [aiImages, setAiImages] = useState<Record<string, string>>({});
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
 
   const [phase, setPhase] = useState<'learn' | 'recall'>('learn');
   const [learnIdx, setLearnIdx] = useState(0);
@@ -56,6 +98,60 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [feedback, setFeedback] = useState<{ room: string; correct: boolean } | null>(null);
   const startTime = React.useRef(Date.now());
+
+  useEffect(() => {
+    let active = true;
+    async function fetchAIStories() {
+      setIsLoadingAI(true);
+      try {
+        const promises = assoc.map(async (item) => {
+          const defaultStory = getSurrealLociAssociation(item.label, item.word);
+          try {
+            const { data, error } = await supabase.functions.invoke('ai-loci-images', {
+              body: {
+                room: item.label,
+                items: [item.word],
+                hook: defaultStory
+              }
+            });
+            if (error) throw error;
+            if (data) {
+              return {
+                id: item.id,
+                story: data.description || defaultStory,
+                imageUri: data.imageBase64
+                  ? `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`
+                  : undefined,
+              };
+            }
+          } catch (err) {
+            console.warn('Loci story/image fetch failed for room:', item.label, err);
+          }
+          return { id: item.id, story: defaultStory, imageUri: undefined };
+        });
+        
+        const results = await Promise.all(promises);
+        if (active) {
+          const storyMapping: Record<string, string> = {};
+          const imageMapping: Record<string, string> = {};
+          results.forEach(res => {
+            storyMapping[res.id] = res.story;
+            if (res.imageUri) {
+              imageMapping[res.id] = res.imageUri;
+            }
+          });
+          setAiStories(storyMapping);
+          setAiImages(imageMapping);
+        }
+      } catch (err) {
+        console.warn('Failed to load AI stories & images:', err);
+      } finally {
+        if (active) setIsLoadingAI(false);
+      }
+    }
+    fetchAIStories();
+    return () => { active = false; };
+  }, [assoc]);
 
   // Loci Hint state
   const { owned, consume } = useRewardsStore();
@@ -95,7 +191,8 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   const current = phase === 'learn' ? assoc[learnIdx] : assoc[recallIdx];
   
   // Get dynamic surreal mnemonic text
-  const bizarreText = getSurrealLociAssociation(current.label, current.word);
+  const bizarreText = aiStories[current.id] || getSurrealLociAssociation(current.label, current.word);
+  const isStoryLoading = isLoadingAI && !aiStories[current.id];
 
   return (
     <View style={styles.container}>
@@ -122,7 +219,7 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
             </View>
 
             {/* AI Bizarre Association Card */}
-            <LociStoryCard text={bizarreText} key={learnIdx} />
+            <LociStoryCard text={bizarreText} roomId={current.id} isLoading={isStoryLoading} key={learnIdx} />
           </View>
         ) : (
           <View style={styles.recallHeader}>
@@ -270,9 +367,14 @@ function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHint
     // Pulsating border and background glows
     const shadowOpacity = isHighlight ? 0.35 + glow.value * 0.15 : 0.05;
     const shadowRadius = isHighlight ? 12 + glow.value * 6 : 4;
+    const rotateXValue = isHighlight ? withTiming('12deg', { duration: 300 }) : withTiming('0deg', { duration: 200 });
     
     return {
-      transform: [{ scale: scale.value }],
+      transform: [
+        { perspective: 800 },
+        { scale: scale.value },
+        { rotateX: rotateXValue }
+      ],
       shadowOpacity,
       shadowRadius,
     };
@@ -353,9 +455,11 @@ function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHint
 }
 
 // Bizarre Loci Association Card with scale pop
-function LociStoryCard({ text }: { text: string }) {
+function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; roomId: string; imageUri?: string; isLoading?: boolean }) {
+  const aspect = ROOM_ASPECTS[roomId] || ROOM_ASPECTS.entrance;
   const scale = useSharedValue(0.5);
   const opacity = useSharedValue(0);
+  const [imageLoading, setImageLoading] = useState(true);
 
   useEffect(() => {
     scale.value = withSpring(1, { damping: 8, stiffness: 120 });
@@ -368,13 +472,52 @@ function LociStoryCard({ text }: { text: string }) {
   }));
 
   return (
-    <Animated.View style={[animatedStyle, styles.storyCard]}>
-      <View style={styles.storyCardHeader}>
-        <Ionicons name="sparkles" size={15} color="#8B5CF6" />
-        <Text style={styles.storyCardTitle}>ASOCIACIÓN IMAGINARIA (IA)</Text>
-      </View>
-      <Text style={styles.storyCardText}>{text}</Text>
-      <Text style={styles.storyCardCaption}>Consolida esta absurda escena en tu mente antes de que termine el tiempo.</Text>
+    <Animated.View style={[animatedStyle, styles.storyCard, { borderColor: aspect.border }]}>
+      <LinearGradient
+        colors={aspect.colors}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.storyCardGradient}
+      >
+        <View style={styles.storyCardHeader}>
+          <Ionicons name="sparkles" size={15} color={aspect.textColor} />
+          <Text style={[styles.storyCardTitle, { color: aspect.textColor }]}>ASOCIACIÓN IMAGINARIA (IA)</Text>
+        </View>
+
+        {isLoading ? (
+          <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 24, gap: 10 }}>
+            <ActivityIndicator size="small" color={aspect.textColor} />
+            <Text style={[styles.storyCardText, { color: aspect.textColor, fontSize: 12 }]}>Diseñando escena memorable con Gemini...</Text>
+          </View>
+        ) : (
+          <View style={styles.storyCardContent}>
+            {imageUri && (
+              <View style={styles.imageContainer}>
+                <Image
+                  source={{ uri: imageUri }}
+                  style={styles.storyCardImage}
+                  resizeMode="cover"
+                  onLoadStart={() => setImageLoading(true)}
+                  onLoadEnd={() => setImageLoading(false)}
+                />
+                {imageLoading && (
+                  <View style={[StyleSheet.absoluteFillObject, styles.imageLoaderContainer]}>
+                    <ActivityIndicator size="small" color={aspect.textColor} />
+                  </View>
+                )}
+              </View>
+            )}
+
+            <View style={styles.storyCardContentRow}>
+              {!imageUri && <Text style={styles.storyCardEmoji}>{aspect.emoji}</Text>}
+              <View style={styles.storyCardTextCol}>
+                <Text style={[styles.storyCardText, { color: aspect.textColor }]}>{text}</Text>
+                <Text style={styles.storyCardCaption}>Consolida esta absurda escena en tu mente antes de que termine el tiempo.</Text>
+              </View>
+            </View>
+          </View>
+        )}
+      </LinearGradient>
     </Animated.View>
   );
 }
@@ -400,9 +543,7 @@ const styles = StyleSheet.create({
   roomBubble:   { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 14, borderWidth: 2, backgroundColor: COLORS.white },
   roomBubbleText:{ fontFamily: FONTS.heading, fontSize: 14 },
   storyCard:  {
-    backgroundColor: '#FAF5FF',
     borderRadius: 20,
-    padding: 16,
     borderWidth: 1.5,
     borderColor: '#E9D5FF',
     width: '100%',
@@ -412,11 +553,50 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 2,
     marginTop: 6,
+    overflow: 'hidden',
   },
-  storyCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
-  storyCardTitle: { fontFamily: FONTS.headingSemi, fontSize: 10, color: '#8B5CF6', letterSpacing: 1.5 },
-  storyCardText: { fontFamily: FONTS.headingSemi, fontSize: 13, lineHeight: 18, color: '#5B21B6' },
-  storyCardCaption: { fontFamily: FONTS.body, fontSize: 9.5, color: COLORS.muted, marginTop: 6 },
+  storyCardGradient: {
+    padding: 16,
+  },
+  storyCardContent: {
+    marginTop: 8,
+    gap: 10,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 180,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.6)',
+    position: 'relative',
+  },
+  storyCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  imageLoaderContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  storyCardContentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  storyCardEmoji: {
+    fontSize: 42,
+  },
+  storyCardTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  storyCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  storyCardTitle: { fontFamily: FONTS.headingSemi, fontSize: 10, letterSpacing: 1.5 },
+  storyCardText: { fontFamily: FONTS.headingSemi, fontSize: 13, lineHeight: 18 },
+  storyCardCaption: { fontFamily: FONTS.body, fontSize: 9.5, color: COLORS.muted, marginTop: 4 },
   
   // Layered 2.5D pseudo-isometric house container
   houseContainer:{

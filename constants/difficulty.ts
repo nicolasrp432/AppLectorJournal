@@ -7,9 +7,9 @@ export const DIFFICULTY = {
   schulte: [
     { level: 1, label: '3×3 Fácil',     size: 3, target_time: 12  },
     { level: 2, label: '4×4 Medio',     size: 4, target_time: 25  },
-    { level: 3, label: '5×5 Estándar',  size: 5, target_time: 50  },
-    { level: 4, label: '6×6 Difícil',   size: 6, target_time: 80  },
-    { level: 5, label: '7×7 Experto',   size: 7, target_time: 130 },
+    { level: 3, label: '5×5 Estándar',  size: 5, target_time: 50, showQuadrantHint: true },
+    { level: 4, label: '6×6 Difícil',   size: 6, target_time: 80, showQuadrantHint: true },
+    { level: 5, label: '7×7 Experto',   size: 7, target_time: 130, showQuadrantHint: true, inverse: true },
   ] as SchulteLevel[],
 
   wordspan: [

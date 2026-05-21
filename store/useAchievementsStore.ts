@@ -27,6 +27,7 @@ const CONDITIONS: Record<string, (ctx: AchievementContext) => boolean> = {
     Object.values(progress).reduce((sum, p) => sum + (p?.total_sessions ?? 0), 0) >= 50,
   schulte7:   ({ progress }) => (progress.schulte?.current_level ?? 0) >= 5,
   wpm500:     ({ sessions }) => sessions.some(s => (s.wpm ?? 0) >= 500),
+  flashmaster:({ sessions }) => sessions.filter(s => s.exercise_id === 'flashcards').reduce((sum, s) => sum + s.score, 0) >= 100,
 };
 
 export const ACHIEVEMENT_IDS = Object.keys(CONDITIONS);

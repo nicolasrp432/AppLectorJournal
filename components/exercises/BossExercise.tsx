@@ -8,6 +8,7 @@ import Animated, {
   withSequence,
   withDelay,
   withRepeat,
+  runOnJS,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -96,7 +97,7 @@ function FloatingDamageLabel({ text, color, x, y, onComplete }: DamageLabelProps
 
   const animatedStyle = useAnimatedStyle(() => {
     const t = progress.value;
-    const translateY = -130 * t + 30 * t * t; // RPG parabolic arc
+    const translateY = -180 * t + 80 * t * t; // Wider RPG parabolic arc
     const translateX = 40 * t * (x > 150 ? 1 : -0.5); // float outwards
     const scale = t < 0.15 ? withSpring(1.5, { damping: 6 }) : withTiming(1 - t, { duration: 800 });
     const opacity = 1 - t;
@@ -135,6 +136,7 @@ export function BossExercise({ onFinish, onQuit }: Props) {
   const slashOpacity = useSharedValue(0);
   const shieldScale = useSharedValue(0);
   const shieldOpacity = useSharedValue(0);
+  const screenFlash = useSharedValue(0);
 
   const [damages, setDamages] = useState<{ id: number; text: string; color: string; x: number; y: number }[]>([]);
 
@@ -166,21 +168,28 @@ export function BossExercise({ onFinish, onQuit }: Props) {
       slashScale.value = withSequence(withTiming(1.1, { duration: 150 }), withTiming(1.3, { duration: 100 }));
       slashOpacity.value = withSequence(withTiming(0.9, { duration: 150 }), withTiming(0, { duration: 100 }));
 
-      // 4. Boss shake & Flash red
+      // 4. Boss rapid shake & Flash red
       bossShake.value = withSequence(
-        withTiming(-14, { duration: 50 }),
-        withTiming(12, { duration: 50 }),
-        withTiming(-8, { duration: 50 }),
-        withTiming(0, { duration: 50 })
+        withTiming(-18, { duration: 40 }),
+        withTiming(16, { duration: 40 }),
+        withTiming(-12, { duration: 40 }),
+        withTiming(8, { duration: 40 }),
+        withTiming(-4, { duration: 40 }),
+        withTiming(0, { duration: 40 })
       );
       bossFlashRed.value = withSequence(
         withTiming(1, { duration: 80 }),
         withTiming(0, { duration: 250 })
       );
 
-      // 5. Floating text
-      const crit = val >= 30;
+      // 5. Floating text & Screen Flash for Critical hits (>= 8 damage)
+      const crit = val >= 8;
       triggerDamage(crit ? `¡CRÍTICO! -${val} HP` : `-${val} HP`, crit ? '#F59E0B' : '#EF4444');
+
+      if (crit) {
+        screenFlash.value = 0.8;
+        screenFlash.value = withTiming(0, { duration: 400 });
+      }
     } else {
       // Mistake! Boss counterattacks
       shieldScale.value = 0.6;
@@ -242,6 +251,10 @@ export function BossExercise({ onFinish, onQuit }: Props) {
     opacity: shieldOpacity.value,
   }));
 
+  const flashStyle = useAnimatedStyle(() => ({
+    opacity: screenFlash.value,
+  }));
+
   const CombatArena = () => {
     return (
       <View style={styles.arenaContainer}>
@@ -252,6 +265,16 @@ export function BossExercise({ onFinish, onQuit }: Props) {
         <FireSpark size={5} delay={900} left={150} />
         <FireSpark size={10} delay={1500} left={220} />
         <FireSpark size={7} delay={2000} left={290} />
+
+        {/* Flash White screen overlay when critical damage */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor: '#FFFFFF', zIndex: 999 },
+            flashStyle,
+          ]}
+        />
 
         {/* Boss top-bar header HUD */}
         <View style={styles.arenaHUD}>
@@ -410,32 +433,81 @@ function BossSpeedRound({
 }) {
   const words = ['rápido', 'leer', 'foco', 'mente', 'atento', 'claro', 'ágil', 'despierto'];
   const [idx, setIdx] = useState(0);
+  const [pos, setPos] = useState({ x: 50, y: 50 });
+  const timerProgress = useSharedValue(1);
+  
   const start = useRef(Date.now());
+  const wordStart = useRef(Date.now());
 
-  const handleTap = () => {
-    onAction(true, 4); // deal 4 dmg per word
-    setIdx(i => i + 1);
-  };
+  const containerW = 280;
+  const containerH = 180;
+  const targetW = 100;
+  const targetH = 45;
 
-  useEffect(() => {
-    if (idx >= words.length) {
+  const nextWord = () => {
+    if (idx >= words.length - 1) {
       const time = (Date.now() - start.current) / 1000;
       const score = Math.max(0, Math.min(1, 1 - (time - 6) / 10));
       onFinish(score);
+    } else {
+      setIdx(i => i + 1);
     }
+  };
+
+  const handleTimeout = () => {
+    onAction(false); // Missed! Shield blocks
+    nextWord();
+  };
+
+  useEffect(() => {
+    const newX = Math.random() * (containerW - targetW - 20) + 10;
+    const newY = Math.random() * (containerH - targetH - 20) + 10;
+    setPos({ x: newX, y: newY });
+    wordStart.current = Date.now();
+
+    timerProgress.value = 1;
+    timerProgress.value = withTiming(0, { duration: 1500 }, (finished) => {
+      if (finished) {
+        runOnJS(handleTimeout)();
+      }
+    });
   }, [idx]);
+
+  const handleTap = () => {
+    timerProgress.value = 0;
+    const duration = (Date.now() - wordStart.current) / 1000;
+    const isCrit = duration < 0.75;
+    const damage = isCrit ? 8 : 5; // Crit Deals 8 dmg (taps < 0.75s), normal 5
+    onAction(true, damage);
+    nextWord();
+  };
+
+  const timerStyle = useAnimatedStyle(() => ({
+    width: `${timerProgress.value * 100}%` as any,
+  }));
 
   if (idx >= words.length) return null;
 
   return (
     <View style={[bossStyles.roundContainer, { backgroundColor: '#0B0F19' }]}>
-      <Text style={bossStyles.roundHint}>Toca tan rápido como leas · {idx}/{words.length}</Text>
-      <View style={[bossStyles.wordCard, { backgroundColor: BOSS_ACCENT }]}>
-        <Text style={bossStyles.wordText}>{words[idx]}</Text>
+      <Text style={bossStyles.roundHint}>REACTION TAP: TOCA EL TARGET ANTES DE 1.5S · {idx + 1}/{words.length}</Text>
+      <View style={[bossStyles.arenaBox, { width: containerW, height: containerH }]}>
+        <Pressable
+          onPress={handleTap}
+          style={[
+            bossStyles.targetBtn,
+            {
+              left: pos.x,
+              top: pos.y,
+              width: targetW,
+              height: targetH,
+            }
+          ]}
+        >
+          <Text style={bossStyles.targetText}>{words[idx]}</Text>
+          <Animated.View style={[bossStyles.targetTimerBar, timerStyle]} />
+        </Pressable>
       </View>
-      <Pressable onPress={handleTap} style={bossStyles.nextBtn}>
-        <Text style={bossStyles.nextBtnText}>Siguiente ↓</Text>
-      </Pressable>
     </View>
   );
 }
@@ -451,6 +523,7 @@ function BossMemoryRound({
   const [digits] = useState(() => Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)));
   const [phase, setPhase] = useState<'show' | 'input'>('show');
   const [input, setInput] = useState<number[]>([]);
+  const [streak, setStreak] = useState(0);
 
   useEffect(() => {
     if (phase === 'show') {
@@ -463,7 +536,19 @@ function BossMemoryRound({
     const nextIdx = input.length;
     const isCorrect = n === digits[nextIdx];
 
-    onAction(isCorrect, isCorrect ? 6 : undefined); // Correct deals 6 dmg, wrong triggers shield blocks
+    let damage = 6;
+    let nextStreak = 0;
+    if (isCorrect) {
+      nextStreak = streak + 1;
+      setStreak(nextStreak);
+      if (nextStreak >= 3) {
+        damage = 10; // Critical Hit!
+      }
+    } else {
+      setStreak(0);
+    }
+
+    onAction(isCorrect, isCorrect ? damage : undefined);
 
     const newIn = [...input, n];
     setInput(newIn);
@@ -490,7 +575,7 @@ function BossMemoryRound({
 
   return (
     <View style={[bossStyles.roundContainer, { backgroundColor: '#0B0F19', justifyContent: 'flex-start', paddingTop: 20 }]}>
-      <Text style={bossStyles.roundHint}>Escribe los números en orden</Text>
+      <Text style={bossStyles.roundHint}>Escribe los números en orden {streak >= 3 ? '🔥 Streak x' + streak : ''}</Text>
       <View style={bossStyles.inputRow}>
         {digits.map((_, i) => (
           <View key={i} style={[bossStyles.inputSlot, input[i] != null && { borderColor: BOSS_ACCENT, backgroundColor: `${BOSS_ACCENT}30` }]}>
@@ -534,7 +619,7 @@ function BossComprehensionRound({
     if (picked !== null) return;
     setPicked(i);
     const isCorrect = i === q.correct;
-    onAction(isCorrect, isCorrect ? 36 : undefined); // Deal 36 crit damage!
+    onAction(isCorrect, isCorrect ? 54 : undefined); // Deal 54 mega critical damage!
 
     setTimeout(() => onFinish(isCorrect ? 1 : 0), 1200);
   };
@@ -844,6 +929,48 @@ const bossStyles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
     textAlign: 'center',
+  },
+  arenaBox: {
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 16,
+    position: 'relative',
+    overflow: 'hidden',
+    marginTop: 10,
+  },
+  targetBtn: {
+    position: 'absolute',
+    borderRadius: 10,
+    backgroundColor: '#DC2626',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    ...Platform.select({
+      web: { boxShadow: '0 4px 15px rgba(220,38,38,0.5)' } as any,
+      default: {
+        shadowColor: '#DC2626',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 15,
+        elevation: 5,
+      },
+    }),
+  },
+  targetText: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+    color: '#fff',
+    textTransform: 'uppercase',
+  },
+  targetTimerBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    height: 4,
+    backgroundColor: '#F59E0B',
   },
   wordCard: {
     paddingVertical: 24,

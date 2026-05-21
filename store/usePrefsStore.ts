@@ -19,6 +19,7 @@ const DEFAULT_PREFS: UserPrefs = {
   notifications_enabled: true,
   notifications_time:   '20:00',
   updated_at:           '',
+  loci_palace:          'casa',
 };
 
 interface PrefsState {

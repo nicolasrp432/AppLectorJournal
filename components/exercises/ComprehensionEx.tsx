@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -13,6 +13,7 @@ import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
+import { supabase } from '../../lib/supabase';
 
 type Phase = 'read' | 'quiz';
 
@@ -23,12 +24,39 @@ interface Props {
 }
 
 export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: Props) {
-  const passage = React.useMemo(() => pickPassage('medium'), []);
+  const basePassage = React.useMemo(() => pickPassage('medium'), []);
+  const [passage, setPassage] = useState(basePassage);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
   const [phase, setPhase] = useState<Phase>('read');
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [picked, setPicked] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function loadAIQuestions() {
+      setIsLoadingAI(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('ai-questions', {
+          body: { text: basePassage.text, count: 3 }
+        });
+        if (error) throw error;
+        if (active && data && data.questions && data.questions.length > 0) {
+          setPassage({
+            ...basePassage,
+            questions: data.questions
+          });
+        }
+      } catch (err) {
+        console.warn('Could not load dynamic AI questions, using pre-defined:', err);
+      } finally {
+        if (active) setIsLoadingAI(false);
+      }
+    }
+    loadAIQuestions();
+    return () => { active = false; };
+  }, [basePassage]);
   
   const startTime = useRef(Date.now());
   const readStart = useRef(Date.now());
@@ -144,6 +172,17 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
               <View style={styles.header}>
                 <Text style={styles.eyebrow}>Lectura con comprensión</Text>
                 <Text style={styles.passageTitle}>{passage.title}</Text>
+                {isLoadingAI ? (
+                  <View style={styles.aiBadgeLoading}>
+                    <ActivityIndicator size="small" color={accent} style={{ marginRight: 6 }} />
+                    <Text style={styles.aiBadgeText}>Generando preguntas con IA...</Text>
+                  </View>
+                ) : (
+                  <View style={styles.aiBadge}>
+                    <Ionicons name="sparkles" size={10} color="#8B5CF6" style={{ marginRight: 4 }} />
+                    <Text style={[styles.aiBadgeText, { color: '#8B5CF6' }]}>Preguntas Dinámicas con Gemini Flash</Text>
+                  </View>
+                )}
               </View>
 
               {/* Informative tips helper */}
@@ -432,5 +471,30 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.headingSemi,
     fontSize: 13,
     color: '#EA580C',
+  },
+  aiBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F3FF',
+    borderColor: '#E9E3FF',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 6,
+  },
+  aiBadgeLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    marginTop: 6,
+  },
+  aiBadgeText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 10,
+    color: '#6B7280',
   },
 });

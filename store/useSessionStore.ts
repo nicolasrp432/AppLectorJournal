@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import type { Session, ExerciseId } from '../types/db';
+import { useDailyMissionStore } from './useDailyMissionStore';
 
 interface SessionFilter {
   exercise_id?: ExerciseId;
@@ -41,6 +42,24 @@ export const useSessionStore = create<SessionState>()(
           if (next.length > 200) next.length = 200;
           return { sessions: next };
         });
+
+        // Track progress for daily mission
+        try {
+          const missionStore = useDailyMissionStore.getState();
+          missionStore.incrementProgress('sessions_count');
+          if (sess.exercise_id === 'loci') {
+            missionStore.incrementProgress('loci_session', { exerciseId: 'loci' });
+          }
+          if (sess.exercise_id === 'flashcards') {
+            missionStore.incrementProgress('flashcards_review', { exerciseId: 'flashcards' });
+          }
+          if (sess.comprehension !== null && sess.comprehension !== undefined) {
+            missionStore.incrementProgress('comprehension_80', { comprehension: sess.comprehension });
+          }
+        } catch (err) {
+          console.warn('Failed to update daily mission progress inside session insert:', err);
+        }
+
         const { data: authSession } = await supabase.auth.getSession();
         if (authSession.session) {
           await supabase.from('sessions').insert({ ...row, user_id: authSession.session.user.id });

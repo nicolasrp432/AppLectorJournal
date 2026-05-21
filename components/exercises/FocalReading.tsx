@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
@@ -13,6 +13,7 @@ import { ExerciseTopBar } from './ExerciseTopBar';
 import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+import { supabase } from '../../lib/supabase';
 
 type Mode = 'rsvp' | 'guide' | 'chunk';
 type Phase = 'config' | 'reading' | 'quiz';
@@ -26,18 +27,24 @@ interface FocalReadingResult {
   total: number;
 }
 
-function FadeInWrapper({ children }: { children: React.ReactNode }) {
+function PageFlipWrapper({ children }: { children: React.ReactNode }) {
   const opacity = useSharedValue(0);
-  const scale = useSharedValue(0.95);
+  const translateY = useSharedValue(600);
+  const rotateX = useSharedValue(-25);
 
   useEffect(() => {
-    opacity.value = withTiming(1, { duration: 400 });
-    scale.value = withSpring(1, { damping: 12 });
+    opacity.value = withTiming(1, { duration: 500 });
+    translateY.value = withSpring(0, { damping: 15, stiffness: 75 });
+    rotateX.value = withSpring(0, { damping: 15, stiffness: 75 });
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
-    transform: [{ scale: scale.value }],
+    transform: [
+      { perspective: 1200 },
+      { translateY: translateY.value },
+      { rotateX: `${rotateX.value}deg` },
+    ],
     flex: 1,
   }));
 
@@ -67,6 +74,50 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
   const [picked, setPicked] = useState<Record<number, number>>({});
   const [qIdx, setQIdx] = useState(0);
   const [feedback, setFeedback] = useState<{ qi: number; oi: number; correct: boolean } | null>(null);
+
+  const [aiAnalysis, setAiAnalysis] = useState<{ difficulty: string; explanation: string; suggestedWpm: number } | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function analyzeText() {
+      setIsLoadingAI(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('ai-analyze-reading', {
+          body: { text: passage.text }
+        });
+        if (error) throw error;
+        if (data && active) {
+          setAiAnalysis(data);
+          if (data.suggestedWpm) {
+            setWpm(data.suggestedWpm);
+          }
+        }
+      } catch (err) {
+        console.warn('AI reading analysis failed, using defaults:', err);
+        if (active) {
+          setAiAnalysis({ difficulty: 'medio', explanation: 'Análisis no disponible.', suggestedWpm: 280 });
+        }
+      } finally {
+        if (active) setIsLoadingAI(false);
+      }
+    }
+    analyzeText();
+    return () => {
+      active = false;
+    };
+  }, [passage]);
+
+  const progressVal = useSharedValue(0);
+  useEffect(() => {
+    if (words.length > 1) {
+      progressVal.value = withTiming(idx / (words.length - 1), { duration: 150 });
+    }
+  }, [idx, words.length]);
+
+  const animatedProgressStyle = useAnimatedStyle(() => ({
+    width: `${progressVal.value * 100}%`,
+  }));
 
   const msPerWord = (60 / wpm) * 1000 * (mode === 'chunk' ? chunkSize : 1);
 
@@ -164,6 +215,29 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
             </View>
           )}
 
+          {isLoadingAI && (
+            <View style={styles.aiAnalysisLoading}>
+              <ActivityIndicator size="small" color={accent} style={{ marginRight: 8 }} />
+              <Text style={styles.aiAnalysisLoadingText}>Analizando complejidad del texto con IA...</Text>
+            </View>
+          )}
+
+          {!isLoadingAI && aiAnalysis && (
+            <View style={styles.aiAnalysisBox}>
+              <View style={styles.aiAnalysisHeader}>
+                <Ionicons name="sparkles" size={16} color={accent} />
+                <Text style={styles.aiAnalysisTitle}>Análisis de Complejidad IA</Text>
+              </View>
+              <Text style={styles.aiAnalysisText}>
+                Dificultad estimada: <Text style={{ fontFamily: FONTS.headingSemi, color: aiAnalysis.difficulty === 'dificil' ? '#EF4444' : aiAnalysis.difficulty === 'medio' ? '#F59E0B' : '#10B981', textTransform: 'uppercase' }}>{aiAnalysis.difficulty}</Text>
+              </Text>
+              <Text style={styles.aiAnalysisExplanation}>{aiAnalysis.explanation}</Text>
+              <Text style={[styles.aiAnalysisWpmSuggest, { color: accent }]}>
+                Velocidad sugerida: {aiAnalysis.suggestedWpm} WPM
+              </Text>
+            </View>
+          )}
+
           <View style={[styles.tipBox, { backgroundColor: accent + '10', borderColor: accent + '25' }]}>
             <Text style={[styles.tipText, { color: '#374151' }]}>
               <Text style={{ color: accent, fontFamily: FONTS.headingSemi }}>Tip: </Text>
@@ -185,10 +259,12 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
   if (phase === 'reading') {
     return (
       <View style={styles.container}>
-        <ExerciseTopBar progress={idx / words.length} accent={accent} onQuit={onQuit} title={`${wpm} WPM`} />
+        <ExerciseTopBar progress={-1} accent={accent} onQuit={onQuit} title={`${wpm} WPM`} />
         <View style={{ flex: 1, minHeight: 0 }}>
           <View style={styles.displayArea}>
-            {mode === 'rsvp'  && <RSVPDisplay word={words[idx]} accent={accent} />}
+            {mode === 'rsvp'  && (
+              <RSVPDisplay word={words[idx]} accent={accent} />
+            )}
             {mode === 'guide' && <GuideDisplay words={words} idx={idx} accent={accent} />}
             {mode === 'chunk' && <ChunkDisplay words={words} idx={idx} chunkSize={chunkSize} accent={accent} />}
           </View>
@@ -248,7 +324,7 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
             {/* 3. Visual Progress Bar */}
             <View style={styles.progressRow}>
               <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBarFill, { width: `${(idx / (words.length - 1)) * 100}%`, backgroundColor: accent }]} />
+                <Animated.View style={[styles.progressBarFill, { backgroundColor: accent }, animatedProgressStyle]} />
               </View>
               <Text style={styles.progressText}>
                 Palabra {Math.min(words.length, idx + 1)} de {words.length}
@@ -263,7 +339,7 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
   // Quiz phase
   const q = passage.questions[qIdx];
   return (
-    <FadeInWrapper>
+    <PageFlipWrapper>
       <View style={[styles.container, { flex: 1 }]}>
         <ExerciseTopBar progress={qIdx / passage.questions.length} accent={accent} onQuit={onQuit} title={`Pregunta ${qIdx + 1}/${passage.questions.length}`} />
         <ScrollView contentContainerStyle={styles.scroll}>
@@ -298,67 +374,28 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
           </View>
         </ScrollView>
       </View>
-    </FadeInWrapper>
+    </PageFlipWrapper>
   );
 }
 
 function RSVPDisplay({ word, accent }: { word: string; accent: string }) {
   if (!word) return <View />;
   const orpIdx = Math.max(0, Math.min(word.length - 1, Math.floor(word.length * 0.35)));
-
   const prefix = word.slice(0, orpIdx);
   const orpLetter = word[orpIdx];
   const suffix = word.slice(orpIdx + 1);
 
-  // Subtle breathing animation for the laser focus
-  const pulse = useSharedValue(0.85);
-  useEffect(() => {
-    pulse.value = withRepeat(
-      withSequence(
-        withTiming(1.05, { duration: 600 }),
-        withTiming(0.85, { duration: 600 }),
-      ),
-      -1,
-      true
-    );
-  }, [word]); // restart on word change for visual consistency
-
-  const pulseStyle = useAnimatedStyle(() => ({
-    opacity: pulse.value,
-    transform: [{ scale: pulse.value }],
-  }));
-
   return (
     <View style={rsvpStyles.container}>
-      {/* Top Laser Vertical Guide Line */}
-      <View style={[rsvpStyles.laserLineTop, { backgroundColor: accent }]} />
-      {/* Glowing Laser Dot Top */}
-      <Animated.View style={[rsvpStyles.laserDotTop, { backgroundColor: accent }, pulseStyle]} />
-
-      {/* Main Word Row with exact centering on ORP */}
       <View style={rsvpStyles.wordContainer}>
-        {/* Left Prefix */}
         <View style={rsvpStyles.prefixAlign}>
           <Text style={rsvpStyles.wordTextSide}>{prefix}</Text>
         </View>
-
-        {/* Center ORP Letter with Focal Lens */}
-        <View style={rsvpStyles.orpCenterContainer}>
-          {/* Glassmorphic glowing circular Focal Lens */}
-          <Animated.View style={[rsvpStyles.focalLens, { borderColor: accent, shadowColor: accent }, pulseStyle]} />
-          <Text style={[rsvpStyles.wordTextORP, { color: accent }]}>{orpLetter}</Text>
-        </View>
-
-        {/* Right Suffix */}
+        <Text style={[rsvpStyles.wordTextORP, { color: accent }]}>{orpLetter}</Text>
         <View style={rsvpStyles.suffixAlign}>
           <Text style={rsvpStyles.wordTextSide}>{suffix}</Text>
         </View>
       </View>
-
-      {/* Bottom Laser Vertical Guide Line */}
-      <View style={[rsvpStyles.laserLineBottom, { backgroundColor: accent }]} />
-      {/* Glowing Laser Dot Bottom */}
-      <Animated.View style={[rsvpStyles.laserDotBottom, { backgroundColor: accent }, pulseStyle]} />
     </View>
   );
 }
@@ -409,13 +446,7 @@ const rsvpStyles = StyleSheet.create({
     justifyContent: 'center',
     flex: 1,
     width: '100%',
-    height: 180,
-    backgroundColor: 'rgba(15, 23, 42, 0.03)', // subtle slate background
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
-    position: 'relative',
+    minHeight: 120,
   },
   wordContainer: {
     flexDirection: 'row',
@@ -423,21 +454,8 @@ const rsvpStyles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 20,
   },
-  prefixAlign: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  suffixAlign: {
-    flex: 1,
-    alignItems: 'flex-start',
-  },
-  orpCenterContainer: {
-    width: 44,
-    height: 60,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
+  prefixAlign: { flex: 1, alignItems: 'flex-end' },
+  suffixAlign: { flex: 1, alignItems: 'flex-start' },
   wordTextSide: {
     fontFamily: FONTS.body,
     fontSize: 34,
@@ -448,46 +466,7 @@ const rsvpStyles = StyleSheet.create({
     fontFamily: FONTS.heading,
     fontSize: 36,
     fontWeight: '900',
-  },
-  focalLens: {
-    position: 'absolute',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  laserLineTop: {
-    position: 'absolute',
-    top: 0,
-    width: 2,
-    height: 48,
-    opacity: 0.7,
-  },
-  laserDotTop: {
-    position: 'absolute',
-    top: 44,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  laserLineBottom: {
-    position: 'absolute',
-    bottom: 0,
-    width: 2,
-    height: 48,
-    opacity: 0.7,
-  },
-  laserDotBottom: {
-    position: 'absolute',
-    bottom: 44,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    marginHorizontal: 2,
   },
 });
 
@@ -556,15 +535,15 @@ const styles = StyleSheet.create({
   },
   progressBarContainer: {
     width: '100%',
-    height: 6,
-    backgroundColor: COLORS.surface,
-    borderRadius: 3,
+    height: 2,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 1,
     overflow: 'hidden',
     marginBottom: 6,
   },
   progressBarFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 1,
   },
   progressText: {
     fontFamily: FONTS.body,
@@ -639,4 +618,57 @@ const styles = StyleSheet.create({
   optionBadge:   { width: 24, height: 24, borderRadius: 12, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
   optionBadgeText:{ fontFamily: FONTS.heading, fontSize: 11, color: COLORS.muted },
   optionText:    { fontFamily: FONTS.body, fontSize: 14, color: COLORS.ink, flex: 1 },
+  aiAnalysisBox: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+    gap: 8,
+  },
+  aiAnalysisHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  aiAnalysisTitle: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 12,
+    color: '#0F172A',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  aiAnalysisText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: '#334155',
+  },
+  aiAnalysisExplanation: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: '#64748B',
+    lineHeight: 18,
+  },
+  aiAnalysisWpmSuggest: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  aiAnalysisLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+  aiAnalysisLoadingText: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: '#64748B',
+  },
 });

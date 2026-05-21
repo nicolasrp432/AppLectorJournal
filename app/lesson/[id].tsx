@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Dimensions, Platform, ScrollView
+  View, Text, Pressable, StyleSheet, Dimensions, Platform, ScrollView, Image, ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -14,6 +14,7 @@ import { COLORS, darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
+import { supabase } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const W = Math.min(SCREEN_WIDTH, 520);
@@ -320,7 +321,7 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
 
   if (isConfiguring) {
     return (
-      <View style={styles.configContainer}>
+      <ScrollView contentContainerStyle={styles.configContainer}>
         <Ionicons name="eye-outline" size={54} color={accent} style={{ marginBottom: 12, marginTop: 24 }} />
         <Text style={styles.configTitle}>Entrenamiento Periférico</Text>
         <Text style={styles.configSubtitle}>
@@ -372,7 +373,7 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
           <Text style={styles.startBtnText}>Iniciar práctica</Text>
           <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
         </Pressable>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -441,6 +442,7 @@ interface LociRoom {
   hook: string;
   x: number;
   y: number;
+  imageUri?: string;
 }
 const LOCI_ROOMS: LociRoom[] = [
   {
@@ -485,6 +487,8 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
   const [activeRoom, setActiveRoom] = useState<LociRoom | null>(null);
   const [quizActive, setQuizActive] = useState(false);
   const [quizAnswered, setQuizAnswered] = useState<string | null>(null);
+  const [roomImages, setRoomImages] = useState<Record<string, string>>({});
+  const [loadingImages, setLoadingImages] = useState<Record<string, boolean>>({});
 
   const cardScale = useSharedValue(0.9);
   const cardOpacity = useSharedValue(0);
@@ -498,10 +502,34 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
     }
   }, [activeRoom, quizActive]);
 
-  const selectRoom = (room: LociRoom) => {
+  const selectRoom = async (room: LociRoom) => {
     setActiveRoom(room);
     if (!visited.includes(room.id)) {
       setVisited([...visited, room.id]);
+    }
+
+    if (!roomImages[room.id] && !loadingImages[room.id]) {
+      setLoadingImages(prev => ({ ...prev, [room.id]: true }));
+      try {
+        const { data, error } = await supabase.functions.invoke('ai-loci-images', {
+          body: {
+            room: room.name,
+            hook: room.hook
+          }
+        });
+        if (!error && data) {
+          const imageUri = data.imageBase64
+            ? `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`
+            : undefined;
+          if (imageUri) {
+            setRoomImages(prev => ({ ...prev, [room.id]: imageUri }));
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to prefetch Loci illustration:', room.name, err);
+      } finally {
+        setLoadingImages(prev => ({ ...prev, [room.id]: false }));
+      }
     }
   };
 
@@ -573,6 +601,20 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
             </Pressable>
           </View>
           <Text style={styles.lociDetailRule}>{activeRoom.rule}</Text>
+          
+          {loadingImages[activeRoom.id] ? (
+            <View style={styles.lociDetailImagePlaceholder}>
+              <ActivityIndicator size="small" color={COLORS.loci} />
+              <Text style={styles.lociDetailImagePlaceholderText}>Diseñando escena con Imagen 3...</Text>
+            </View>
+          ) : roomImages[activeRoom.id] ? (
+            <Image
+              source={{ uri: roomImages[activeRoom.id] }}
+              style={styles.lociDetailImage}
+              resizeMode="cover"
+            />
+          ) : null}
+
           <View style={styles.lociHookBox}>
             <Text style={styles.lociHookText}>{activeRoom.hook}</Text>
           </View>
@@ -1092,14 +1134,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
     alignItems: 'center',
+    maxWidth: 500,
+    alignSelf: 'center',
+    width: '100%',
   },
   configContainer: {
-    flex: 1,
     width: '100%',
     maxWidth: 400,
-    paddingHorizontal: 10,
+    paddingHorizontal: 20,
+    paddingVertical: 30,
     alignItems: 'center',
-    justifyContent: 'center',
+    alignSelf: 'center',
+    flexGrow: 1,
   },
   configTitle: {
     fontFamily: FONTS.heading,
@@ -1244,9 +1290,10 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   playboard: {
-    width: 290,
-    height: 290,
-    borderRadius: 145,
+    width: '100%',
+    maxWidth: 290,
+    aspectRatio: 1,
+    borderRadius: 999,
     backgroundColor: '#fff',
     borderWidth: 1.5,
     borderColor: COLORS.border,
@@ -1410,6 +1457,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#5B21B6',
     lineHeight: 18,
+  },
+  lociDetailImage: {
+    width: '100%',
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  lociDetailImagePlaceholder: {
+    width: '100%',
+    height: 160,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    marginBottom: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1.2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    gap: 8,
+  },
+  lociDetailImagePlaceholderText: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.muted,
   },
   quizTriggerBtn: {
     height: 52,

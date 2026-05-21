@@ -26,6 +26,7 @@ import { useNodeStore } from '../../store/useNodeStore';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useAchievementsStore } from '../../store/useAchievementsStore';
 import { useRewardsStore } from '../../store/useRewardsStore';
+import { usePrefsStore } from '../../store/usePrefsStore';
 import { supabase } from '../../lib/supabase';
 import { AchievementToast } from '../../components/ui/AchievementToast';
 
@@ -273,8 +274,19 @@ export default function ExerciseScreen() {
   const accent = exercise.color;
 
   switch (exerciseId) {
-    case 'schulte':
-      return <SchulteGrid size={schulteSize} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+    case 'schulte': {
+      const currentLevel = getProgress('schulte').current_level;
+      return (
+        <SchulteGrid
+          size={schulteSize}
+          accent={accent}
+          inverse={currentLevel >= 5}
+          showQuadrantHint={currentLevel >= 3}
+          onFinish={handleFinish}
+          onQuit={quit}
+        />
+      );
+    }
     case 'reading':
       return <FocalReadingExercise initialWpm={readingWpm} initialMode={readingMode} accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'wordspan':
@@ -383,6 +395,8 @@ function ExerciseIntro({
   setReadingMode: (val: 'rsvp' | 'guide' | 'chunk') => void;
 }) {
   const c = exercise.color;
+  const lociPalace = usePrefsStore(s => s.prefs.loci_palace) || 'casa';
+  const { update: updatePrefs } = usePrefsStore();
   const startBtnShadow = (color: string) => Platform.select({
     web: { boxShadow: `0 8px 20px ${color}66` } as any,
     default: { shadowColor: color, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 20, elevation: 6 },
@@ -474,6 +488,26 @@ function ExerciseIntro({
         {exercise.id === 'loci' && (
           <View style={introStyles.settingSection}>
             <View style={introStyles.settingTextRow}>
+              <Text style={introStyles.settingLabel}>Tema del Palacio</Text>
+              <Text style={[introStyles.settingValue, { color: c, textTransform: 'capitalize' }]}>{lociPalace}</Text>
+            </View>
+            <View style={introStyles.pillRow}>
+              {[
+                { val: 'casa', label: '🏠 Casa' },
+                { val: 'oficina', label: '💻 Oficina' },
+                { val: 'naturaleza', label: '🌲 Naturaleza' },
+              ].map((item) => (
+                <SelectPill
+                  key={item.val}
+                  label={item.label}
+                  selected={lociPalace === item.val}
+                  onPress={() => updatePrefs({ loci_palace: item.val as any })}
+                  color={c}
+                />
+              ))}
+            </View>
+
+            <View style={[introStyles.settingTextRow, { marginTop: 14 }]}>
               <Text style={introStyles.settingLabel}>Elementos de Asociación</Text>
               <Text style={[introStyles.settingValue, { color: c }]}>{lociCount} objetos</Text>
             </View>
@@ -786,6 +820,56 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
   );
 }
 
+function CountingText({ value, delay }: { value: string | number; delay: number }) {
+  const [displayValue, setDisplayValue] = React.useState('0');
+
+  React.useEffect(() => {
+    const stringVal = String(value);
+    const numericVal = parseFloat(stringVal);
+    if (isNaN(numericVal)) {
+      setDisplayValue(stringVal);
+      return;
+    }
+
+    const isDecimal = stringVal.includes('.');
+    const decimalPlaces = isDecimal ? stringVal.split('.')[1].length : 0;
+    
+    let startTimestamp: number | null = null;
+    const duration = 800; // Animation duration in ms
+
+    let animationFrameId: number;
+    const step = (timestamp: number) => {
+      if (!startTimestamp) startTimestamp = timestamp;
+      const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+      
+      // Quadratic ease-out: f(t) = t * (2 - t)
+      const easeProgress = progress * (2 - progress);
+      const current = easeProgress * numericVal;
+      
+      setDisplayValue(current.toFixed(decimalPlaces));
+
+      if (progress < 1) {
+        animationFrameId = requestAnimationFrame(step);
+      } else {
+        setDisplayValue(stringVal);
+      }
+    };
+
+    const timeout = setTimeout(() => {
+      animationFrameId = requestAnimationFrame(step);
+    }, delay);
+
+    return () => {
+      clearTimeout(timeout);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
+    };
+  }, [value, delay]);
+
+  return <>{displayValue}</>;
+}
+
 function StatCard({ stat, delay }: { stat: BuiltResult['stats'][0]; delay: number }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(15);
@@ -806,7 +890,7 @@ function StatCard({ stat, delay }: { stat: BuiltResult['stats'][0]; delay: numbe
   return (
     <Animated.View style={[resultStyles.statCard, style]}>
       <Text style={[resultStyles.statValue, { color: stat.color }]}>
-        {stat.value}<Text style={resultStyles.statUnit}> {stat.unit}</Text>
+        <CountingText value={stat.value} delay={delay} /><Text style={resultStyles.statUnit}> {stat.unit}</Text>
       </Text>
       <Text style={resultStyles.statLabel}>{stat.label}</Text>
     </Animated.View>

@@ -49,6 +49,19 @@ function generateSurrealStory(words: string[]): string {
     .replace('{W5}', `«${(words[5] || 'secreto').toUpperCase()}»`);
 }
 
+const POSITION_COLORS = [
+  '#3B82F6', // Blue (Position 1)
+  '#10B981', // Green (Position 2)
+  '#F59E0B', // Amber (Position 3)
+  '#EF4444', // Red (Position 4)
+  '#8B5CF6', // Purple (Position 5)
+  '#EC4899', // Pink (Position 6)
+  '#06B6D4', // Cyan (Position 7)
+  '#F97316', // Orange (Position 8)
+  '#84CC16', // Lime (Position 9)
+  '#64748B', // Slate (Position 10)
+];
+
 export function WordSpanExercise({ level = 6, showMs = 1100, distractorCount = 4, accent = '#3B82F6', onFinish, onQuit }: Props) {
   const allWords = pickWords(level + distractorCount + 4, false);
   const [sequence] = useState(() => allWords.slice(0, level));
@@ -102,7 +115,7 @@ export function WordSpanExercise({ level = 6, showMs = 1100, distractorCount = 4
           
           <View style={styles.bubbleArea}>
             {current ? (
-              <WordBubble key={shownIdx} word={current} accent={accent} />
+              <WordBubble key={shownIdx} word={current} accent={POSITION_COLORS[shownIdx % POSITION_COLORS.length]} />
             ) : (
               <View style={styles.waitBox}>
                 <Text style={styles.waitText}>Prepárate…</Text>
@@ -171,10 +184,12 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(0);
   const rotation = useSharedValue(0);
+  const rotateY = useSharedValue(180);
 
   useEffect(() => {
     scale.value = withSpring(1, { damping: 7, stiffness: 150 });
     opacity.value = withTiming(1, { duration: 250 });
+    rotateY.value = withSpring(0, { damping: 12, stiffness: 90 });
     
     // Float loop
     translateY.value = withRepeat(
@@ -195,11 +210,13 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
       -1,
       true
     );
-  }, []);
+  }, [word]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
+      { perspective: 800 },
       { scale: scale.value },
+      { rotateY: `${rotateY.value}deg` },
       { translateY: translateY.value },
       { rotate: `${rotation.value}deg` }
     ],
@@ -216,23 +233,30 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
 // Elastic springs on word recall slots
 function RecallSlot({ word, index, accent }: { word: string; index: number; accent: string }) {
   const scale = useSharedValue(1);
+  const translateY = useSharedValue(0);
+  const slotColor = POSITION_COLORS[index % POSITION_COLORS.length];
 
   useEffect(() => {
     if (word) {
+      translateY.value = 30;
+      translateY.value = withSpring(0, { damping: 10, stiffness: 150 });
       scale.value = withSequence(
-        withSpring(1.15, { damping: 6, stiffness: 220 }),
+        withSpring(1.2, { damping: 5, stiffness: 220 }),
         withSpring(1, { damping: 8, stiffness: 160 })
       );
     }
   }, [word]);
 
   const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [
+      { scale: scale.value },
+      { translateY: translateY.value }
+    ],
   }));
 
   return (
-    <Animated.View style={[style, styles.slot, word ? { borderColor: accent, backgroundColor: accent + '12' } : {}]}>
-      <Text style={[styles.slotText, word ? { color: accent } : { color: COLORS.border }]}>
+    <Animated.View style={[style, styles.slot, word ? { borderColor: slotColor, backgroundColor: slotColor + '12' } : {}]}>
+      <Text style={[styles.slotText, word ? { color: slotColor } : { color: COLORS.border }]}>
         {word || (index + 1)}
       </Text>
     </Animated.View>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Dimensions, Modal,
+  View, Text, Pressable, StyleSheet, Dimensions, Modal, BackHandler, Alert,
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -9,18 +9,29 @@ import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming,
+  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming, withDelay, useAnimatedRef, useScrollViewOffset, SharedValue, useAnimatedProps,
 } from 'react-native-reanimated';
+
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 import { LinearGradient } from 'expo-linear-gradient';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
 import { useRewardsStore } from '../../store/useRewardsStore';
+import { useDailyMissionStore } from '../../store/useDailyMissionStore';
+import { useProgressStore } from '../../store/useProgressStore';
+import { useNotificationStore } from '../../store/useNotificationStore';
+import { NotificationCenter } from '../../components/ui/NotificationCenter';
+import { ConfettiOverlay } from '../../components/ui/ConfettiOverlay';
 import { COLORS, darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { MascotChar, MascotKey } from '../../components/ui/MascotChar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { ExerciseId } from '../../types/db';
+import { selectWarmupExercises } from '../../lib/dailyWarmup';
+import { EXERCISES } from '../../constants/exercises';
 
-const W    = Math.min(Dimensions.get('window').width, 520) - 40;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const W    = Math.min(SCREEN_WIDTH, 520) - 40;
 const ROW  = 120;
 const HALF = W / 2;
 
@@ -34,12 +45,12 @@ interface ZoneNode {
   kind:    NodeKind;
   side:    NodeSide;
   label:   string;
-  exId?:   string;
+  exId?:   ExerciseId;
   color:   string;
   locked?: boolean;
 }
 
-const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey; locked?: boolean; nodes: ZoneNode[] }[] = [
+const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey; nodes: ZoneNode[] }[] = [
   {
     title: 'Zona 1', subtitle: 'Enfoque',
     color: COLORS.focus, mascot: 'focus',
@@ -87,6 +98,39 @@ const EX_MASCOT: Record<string, MascotKey> = {
   boss: 'boss',
 };
 
+const EX_METRICS: Record<string, { title: string; desc: string; skills: string[] }> = {
+  schulte: {
+    title: 'Tabla de Schulte',
+    desc: 'Entrena tu velocidad de búsqueda visual y amplía tu campo periférico de lectura.',
+    skills: ['Fijación Visual', 'Enfoque Periférico', 'Velocidad de Escaneo'],
+  },
+  reading: {
+    title: 'Lectura RSVP',
+    desc: 'Lee palabra por palabra eliminando la subvocalización interna para duplicar tus WPM.',
+    skills: ['Eliminación de Subvocalización', 'Procesamiento Rápido', 'Ritmo Semántico'],
+  },
+  wordspan: {
+    title: 'Word Span Retentivo',
+    desc: 'Desafía los límites de tu memoria a corto plazo memorizando secuencias de palabras rápidas.',
+    skills: ['Memoria de Trabajo', 'Codificación Serial', 'Retención Temporal'],
+  },
+  loci: {
+    title: 'Palacio de Memoria Loci',
+    desc: 'Asocia conceptos a coordenadas espaciales utilizando el método ancestral del palacio.',
+    skills: ['Anclaje Espacial', 'Pensamiento Creativo', 'Recuperación Memórica'],
+  },
+  comprehension: {
+    title: 'Comprensión Crítica',
+    desc: 'Evalúa tu retención respondiendo preguntas analíticas tras lecturas rápidas.',
+    skills: ['Retención Textual', 'Deducción Semántica', 'Lectura de Comprensión'],
+  },
+  boss: {
+    title: 'Batalla de Jefe',
+    desc: 'Un desafío extremo cronometrado que fusiona todas las habilidades aprendidas en la zona.',
+    skills: ['Reacción Cognitiva', 'Resistencia Mental', 'Dominio Integral'],
+  },
+};
+
 const NODE_DEPENDENCIES: Record<string, string[][]> = {
   z1_lesson: [],
   z1_s1:     [['z1_lesson']],
@@ -119,7 +163,6 @@ function resolveNodeLocked(
   if (!zoneUnlocked) return true;
   const node = nodes[idx];
   
-  // A completed node is never locked
   if (completed.includes(node.id)) return false;
 
   const deps = NODE_DEPENDENCIES[node.id];
@@ -147,17 +190,21 @@ function buildTrail(nodes: ZoneNode[]): string {
   return d;
 }
 
-// ─── ANIMATED FOREST BACKDROP (ZONE 1) ──────────────────────────────────────
-function ForestBackdrop() {
+// ─── ANIMATED PARALLAX FOREST BACKDROP (ZONE 1) ──────────────────────────────────────
+function ForestBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }) {
+  const parallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollOffset.value * 0.16 }],
+  }));
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]} pointerEvents="none">
       <FloatingLeaf left={30} top={80} />
       <FloatingLeaf left={W - 80} top={140} />
       <FloatingLeaf left={50} top={260} />
       <FloatingLeaf left={W - 90} top={380} />
       <FloatingLeaf left={120} top={480} />
       <FloatingLeaf left={W - 60} top={620} />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -165,7 +212,7 @@ function FloatingLeaf({ left, top }: { left: number; top: number }) {
   const floatY = useSharedValue(0);
   const rot = useSharedValue(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     floatY.value = withRepeat(
       withSequence(
         withTiming(16, { duration: 2500 }),
@@ -208,17 +255,21 @@ function FloatingLeaf({ left, top }: { left: number; top: number }) {
   );
 }
 
-// ─── ANIMATED COSMOS BACKDROP (ZONE 2) ──────────────────────────────────────
-function CosmosBackdrop() {
+// ─── ANIMATED PARALLAX COSMOS BACKDROP (ZONE 2) ──────────────────────────────────────
+function CosmosBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }) {
+  const parallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollOffset.value * 0.18 }],
+  }));
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]} pointerEvents="none">
       <TwinklingStar left={40} top={60} />
       <TwinklingStar left={W - 80} top={120} />
       <TwinklingStar left={60} top={280} />
       <TwinklingStar left={W - 100} top={400} />
       <TwinklingStar left={140} top={520} />
       <TwinklingStar left={W - 60} top={640} />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -226,7 +277,7 @@ function TwinklingStar({ left, top }: { left: number; top: number }) {
   const scale = useSharedValue(0.5);
   const opacity = useSharedValue(0.2);
 
-  React.useEffect(() => {
+  useEffect(() => {
     scale.value = withRepeat(
       withSequence(
         withTiming(1.3, { duration: 1600 }),
@@ -265,22 +316,26 @@ function TwinklingStar({ left, top }: { left: number; top: number }) {
   );
 }
 
-// ─── ANIMATED CYBER BACKDROP (ZONE 3) ───────────────────────────────────────
-function CyberBackdrop() {
+// ─── ANIMATED PARALLAX CYBER BACKDROP (ZONE 3) ───────────────────────────────────────
+function CyberBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }) {
+  const parallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollOffset.value * 0.22 }],
+  }));
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]} pointerEvents="none">
       <SpeedLine left={40} />
       <SpeedLine left={130} />
       <SpeedLine left={W - 120} />
       <SpeedLine left={W - 50} />
-    </View>
+    </Animated.View>
   );
 }
 
 function SpeedLine({ left }: { left: number }) {
   const floatY = useSharedValue(-200);
 
-  React.useEffect(() => {
+  useEffect(() => {
     floatY.value = withRepeat(
       withTiming(800, { duration: 3000 }),
       -1,
@@ -304,24 +359,28 @@ function SpeedLine({ left }: { left: number }) {
   );
 }
 
-// ─── ANIMATED CAFE RAIN BACKDROP (bg-cafe) ──────────────────────────────────
-function CafeRainBackdrop() {
+// ─── ANIMATED PARALLAX CAFE RAIN BACKDROP (bg-cafe) ──────────────────────────────────
+function CafeRainBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }) {
+  const parallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollOffset.value * 0.14 }],
+  }));
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]} pointerEvents="none">
       <RainDrop left={40} speed={1500} delay={0} />
       <RainDrop left={110} speed={1800} delay={200} />
       <RainDrop left={W - 120} speed={1600} delay={400} />
       <RainDrop left={W - 40} speed={1400} delay={100} />
       <RainDrop left={70} speed={2000} delay={600} />
       <RainDrop left={W - 80} speed={1700} delay={800} />
-    </View>
+    </Animated.View>
   );
 }
 
 function RainDrop({ left, speed, delay }: { left: number; speed: number; delay: number }) {
   const dropY = useSharedValue(-100);
 
-  React.useEffect(() => {
+  useEffect(() => {
     dropY.value = withTiming(800, { duration: speed });
     
     const interval = setInterval(() => {
@@ -348,17 +407,21 @@ function RainDrop({ left, speed, delay }: { left: number; speed: number; delay: 
   );
 }
 
-// ─── ANIMATED LIBRARY BACKDROP (bg-library) ─────────────────────────────────
-function LibraryBackdrop() {
+// ─── ANIMATED PARALLAX LIBRARY BACKDROP (bg-library) ─────────────────────────────────
+function LibraryBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }) {
+  const parallaxStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: scrollOffset.value * 0.15 }],
+  }));
+
   return (
-    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+    <Animated.View style={[StyleSheet.absoluteFill, parallaxStyle]} pointerEvents="none">
       <FloatingMote left={30} top={80} size={6} />
       <FloatingMote left={W - 70} top={150} size={8} />
       <FloatingMote left={50} top={290} size={5} />
       <FloatingMote left={W - 90} top={410} size={7} />
       <FloatingMote left={110} top={530} size={9} />
       <FloatingMote left={W - 50} top={650} size={6} />
-    </View>
+    </Animated.View>
   );
 }
 
@@ -367,7 +430,7 @@ function FloatingMote({ left, top, size }: { left: number; top: number; size: nu
   const driftX = useSharedValue(0);
   const opacity = useSharedValue(0.1);
 
-  React.useEffect(() => {
+  useEffect(() => {
     floatY.value = withRepeat(
       withSequence(withTiming(15, { duration: 3000 }), withTiming(-15, { duration: 3000 })),
       -1,
@@ -405,24 +468,80 @@ export default function RutaScreen() {
   const addXP     = useProfileStore(s => s.addXP);
   const completed = useNodeStore(s => s.completed);
   const completeNode = useNodeStore(s => s.completeNode);
+  const newlyCompleted = useNodeStore(s => s.newlyCompletedNodeId);
+  const clearNewlyCompleted = useNodeStore(s => s.clearNewlyCompleted);
 
+  // Daily goals
+  const mission = useDailyMissionStore(s => s.mission);
+  const checkOrGenerate = useDailyMissionStore(s => s.checkOrGenerate);
+  const claimReward = useDailyMissionStore(s => s.claimReward);
+  const all = useProgressStore(s => s.all);
+
+  const [showNotifications, setShowNotifications] = React.useState(false);
+  const fetchNotifications = useNotificationStore(s => s.fetchNotifications);
+  const unreadCountFn = useNotificationStore(s => s.unreadCount);
+  const unreadCount = unreadCountFn();
+
+  // States
   const [activeChestNode, setActiveChestNode] = React.useState<ZoneNode | null>(null);
+  const [activeExerciseNode, setActiveExerciseNode] = React.useState<ZoneNode | null>(null);
   const [showWelcome, setShowWelcome] = React.useState(false);
+  const [showConfetti, setShowConfetti] = React.useState(false);
+  const [unlockingZoneTitle, setUnlockingZoneTitle] = React.useState<string | null>(null);
+
+  const scrollRef = useAnimatedRef<Animated.ScrollView>();
+  const scrollOffset = useScrollViewOffset(scrollRef);
 
   const zone1BossCompleted = completed.includes('z1_boss');
   const zone2BossCompleted = completed.includes('z2_boss');
 
-  React.useEffect(() => {
+  // Trigger daily goal generation and fetch notifications
+  useEffect(() => {
+    checkOrGenerate();
+    fetchNotifications();
+  }, []);
+
+  // Detect completed nodes to burst confetti
+  useEffect(() => {
+    if (newlyCompleted) {
+      setShowConfetti(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      clearNewlyCompleted();
+    }
+  }, [newlyCompleted]);
+
+  // Check Zone Unlocks sequence
+  useEffect(() => {
+    const checkZoneUnlocks = async () => {
+      if (zone1BossCompleted) {
+        const seenZ2 = await AsyncStorage.getItem('seen_unlocked_z2');
+        if (!seenZ2) {
+          setUnlockingZoneTitle('Zona 2');
+          await AsyncStorage.setItem('seen_unlocked_z2', 'true');
+          return;
+        }
+      }
+      if (zone2BossCompleted) {
+        const seenZ3 = await AsyncStorage.getItem('seen_unlocked_z3');
+        if (!seenZ3) {
+          setUnlockingZoneTitle('Zona 3');
+          await AsyncStorage.setItem('seen_unlocked_z3', 'true');
+        }
+      }
+    };
+    checkZoneUnlocks();
+  }, [zone1BossCompleted, zone2BossCompleted]);
+
+  // Welcome modal logic
+  useEffect(() => {
     const checkWelcome = async () => {
       try {
         const value = await AsyncStorage.getItem('lectorapp_has_seen_welcome');
-        // Un usuario es nuevo si tiene 0 XP (o no definido) y no ha completado ninguna lección/nodo
         const isNewUser = (!profile || profile.xp === 0) && completed.length === 0;
         
         if (!value && isNewUser) {
           setShowWelcome(true);
         } else if (!value) {
-          // Si el usuario no es nuevo pero no tiene la marca, la guardamos silenciosamente para no molestarle
           await AsyncStorage.setItem('lectorapp_has_seen_welcome', 'true');
         }
       } catch (err) {
@@ -452,38 +571,110 @@ export default function RutaScreen() {
     await completeNode(activeChestNode.id);
   };
 
+  const handleClaimDailyReward = async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    const success = await claimReward();
+    if (success) {
+      setShowConfetti(true);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Ruta de aprendizaje</Text>
-        {profile && (
-          <View style={styles.xpBadge}>
-            <Ionicons name="flash" size={13} color="#78350F" />
-            <Text style={styles.xpText}>{profile.xp} XP</Text>
-          </View>
-        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          {profile && (
+            <View style={styles.xpBadge}>
+              <Ionicons name="flash" size={13} color="#78350F" />
+              <Text style={styles.xpText}>{profile.xp} XP</Text>
+            </View>
+          )}
+          <Pressable onPress={() => setShowNotifications(true)} hitSlop={8} style={{ position: 'relative' }}>
+            <Ionicons name="notifications-outline" size={24} color={COLORS.ink} />
+            {unreadCount > 0 && (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
+          </Pressable>
+        </View>
       </View>
 
-      <ScrollView
+      <Animated.ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
       >
+        {/* Daily Mission Banner has been migrated to NotificationCenter */}
+
+        {/* Botón Calentamiento Rápido */}
+        <Pressable
+          onPress={() => {
+            const suggested = selectWarmupExercises(all);
+            if (suggested && suggested.length > 0) {
+              const firstExId = suggested[0];
+              const exMeta = EXERCISES[firstExId];
+              Alert.alert(
+                '⚡ Calentamiento rápido listo',
+                `¡Tu cerebro necesita entrenar la destreza de [${exMeta?.category}] hoy!\n\nIniciando ${exMeta?.title}...`,
+                [
+                  {
+                    text: '¡Vamos!',
+                    onPress: () => router.push({ pathname: `/exercise/${firstExId}` as any, params: { mode: 'free' } })
+                  },
+                  {
+                    text: 'Cancelar',
+                    style: 'cancel'
+                  }
+                ]
+              );
+            } else {
+              Alert.alert('Calentamiento', '¡Tu cerebro está al 100% hoy! No se requieren recomendaciones.');
+            }
+          }}
+          style={({ pressed }) => [
+            styles.warmupBannerCard,
+            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+          ]}
+        >
+          <LinearGradient
+            colors={['#EF4444', '#F97316']}
+            style={styles.warmupBannerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={{ flex: 1, marginRight: 8 }}>
+              <Text style={styles.warmupBannerTitle}>⚡ Calentamiento Rápido (5 min)</Text>
+              <Text style={styles.warmupBannerSub}>
+                Entrena tus áreas cognitivas más frías al instante con recomendaciones personalizadas.
+              </Text>
+            </View>
+            <Ionicons name="flash" size={28} color="#FFFFFF" />
+          </LinearGradient>
+        </Pressable>
+
         {ZONES.map((zone, zi) => (
           <ZoneSection
             key={zone.title}
             zone={zone}
             completed={completed}
+            scrollOffset={scrollOffset}
             zoneForceUnlocked={
               zi === 0 ? true :
               zi === 1 ? zone1BossCompleted :
               zone2BossCompleted
             }
+            unlockingZoneTitle={unlockingZoneTitle}
+            onAnimationEnd={() => setUnlockingZoneTitle(null)}
             onPressChest={handlePressChest}
+            onPressExercise={(node) => setActiveExerciseNode(node)}
           />
         ))}
         <View style={{ height: 110 }} />
-      </ScrollView>
+      </Animated.ScrollView>
 
       {/* Interactive Chest Reward Modal */}
       <ChestModal
@@ -493,22 +684,41 @@ export default function RutaScreen() {
         completed={completed}
       />
 
+      {/* Exercise Preview Bottom Sheet */}
+      <ExercisePreviewSheet
+        node={activeExerciseNode}
+        onClose={() => setActiveExerciseNode(null)}
+      />
+
       {/* Welcome Modal for New Users */}
       <WelcomeModal visible={showWelcome} onClose={handleCloseWelcome} />
+
+      {/* Notification Center Bottom Sheet */}
+      <NotificationCenter visible={showNotifications} onClose={() => setShowNotifications(false)} />
+
+      {/* Confetti Overlay */}
+      {showConfetti && (
+        <ConfettiOverlay onAnimationEnd={() => setShowConfetti(false)} />
+      )}
     </SafeAreaView>
   );
 }
 
-function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
+// ─── ZONE SECTION WITH GENTLE SHAKE LOCK & LOCK OVERLAY ─────────────────────────
+function ZoneSection({
+  zone, completed, scrollOffset, zoneForceUnlocked, unlockingZoneTitle, onAnimationEnd, onPressChest, onPressExercise,
+}: {
   zone: typeof ZONES[0];
   completed: string[];
+  scrollOffset: SharedValue<number>;
   zoneForceUnlocked: boolean;
+  unlockingZoneTitle: string | null;
+  onAnimationEnd: () => void;
   onPressChest: (node: ZoneNode) => void;
+  onPressExercise: (node: ZoneNode) => void;
 }) {
   const trailPath = buildTrail(zone.nodes);
   const svgH = zone.nodes.length * ROW + 40;
-
-  const zoneColor = zoneForceUnlocked ? zone.color : COLORS.border;
 
   const currentIdx = zoneForceUnlocked
     ? zone.nodes.findIndex((n, i) => {
@@ -519,7 +729,7 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
 
   const equippedBackground = useRewardsStore(s => s.equipped.background);
 
-  // Rich Scenic Gradients
+  // Background choices
   let bgColors: readonly [string, string, ...string[]] =
     zone.title === 'Zona 1' ? ['#022C22', '#064E3B'] :
     zone.title === 'Zona 2' ? ['#0A0E1A', '#1E1B4B'] :
@@ -542,17 +752,101 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
       'bg-cyber'
     );
 
-    if (activeBg === 'bg-forest') return <ForestBackdrop />;
-    if (activeBg === 'bg-space') return <TwinklingStarBackdrop />; // TwinklingStar mapped
-    if (activeBg === 'bg-cafe') return <CafeRainBackdrop />;
-    if (activeBg === 'bg-library') return <LibraryBackdrop />;
-    return <CyberBackdrop />;
+    if (activeBg === 'bg-forest') return <ForestBackdrop scrollOffset={scrollOffset} />;
+    if (activeBg === 'bg-space') return <CosmosBackdrop scrollOffset={scrollOffset} />;
+    if (activeBg === 'bg-cafe') return <CafeRainBackdrop scrollOffset={scrollOffset} />;
+    if (activeBg === 'bg-library') return <LibraryBackdrop scrollOffset={scrollOffset} />;
+    return <CyberBackdrop scrollOffset={scrollOffset} />;
   };
 
-  // Fallback map stars
-  function TwinklingStarBackdrop() {
-    return <CosmosBackdrop />;
-  }
+  // Shared value for active path dashed connector animation
+  const flowOffset = useSharedValue(0);
+
+  useEffect(() => {
+    if (zoneForceUnlocked) {
+      flowOffset.value = withRepeat(
+        withTiming(-14, { duration: 1000, easing: (t) => t }),
+        -1,
+        false
+      );
+    }
+  }, [zoneForceUnlocked]);
+
+  const animatedFlowProps = useAnimatedProps(() => ({
+    strokeDashoffset: flowOffset.value,
+  }));
+
+  // Lock animation states if unlocking now
+  const isUnlockingNow = zone.title === unlockingZoneTitle;
+  const overlayOpacity = useSharedValue(1);
+  const lockScale = useSharedValue(1);
+  const lockOpacity = useSharedValue(1);
+  const lockShakeX = useSharedValue(0);
+  const unlockTextScale = useSharedValue(0);
+  const [animatingUnlock, setAnimatingUnlock] = React.useState(isUnlockingNow);
+
+  // Gentle idle padlock shake for locked zones
+  useEffect(() => {
+    if (!zoneForceUnlocked && !isUnlockingNow) {
+      lockShakeX.value = withRepeat(
+        withSequence(
+          withTiming(-4, { duration: 110 }),
+          withTiming(4, { duration: 110 }),
+          withTiming(0, { duration: 110 }),
+          withDelay(2200, withTiming(0, { duration: 50 }))
+        ),
+        -1,
+        false
+      );
+    }
+  }, [zoneForceUnlocked, isUnlockingNow]);
+
+  // Unlock sequence trigger
+  useEffect(() => {
+    if (isUnlockingNow) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      
+      // Idle delay, shake aggressively, then blow open!
+      lockShakeX.value = withSequence(
+        withTiming(-8, { duration: 100 }),
+        withTiming(8, { duration: 100 }),
+        withTiming(-8, { duration: 100 }),
+        withTiming(0, { duration: 100 })
+      );
+
+      setTimeout(() => {
+        overlayOpacity.value = withTiming(0, { duration: 1000 });
+        lockScale.value = withSpring(2.4, { damping: 9 });
+        lockOpacity.value = withTiming(0, { duration: 700 });
+        unlockTextScale.value = withSequence(
+          withSpring(1.2, { damping: 10, stiffness: 120 }),
+          withTiming(1.0, { duration: 150 }),
+          withDelay(1200, withTiming(0, { duration: 400 }))
+        );
+
+        setTimeout(() => {
+          setAnimatingUnlock(false);
+          onAnimationEnd();
+        }, 2200);
+      }, 500);
+    }
+  }, [isUnlockingNow]);
+
+  const lockOverlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
+  const padlockStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: lockScale.value },
+      { translateX: lockShakeX.value },
+    ],
+    opacity: lockOpacity.value,
+  }));
+
+  const textAlertStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: unlockTextScale.value }],
+  }));
 
   return (
     <LinearGradient colors={bgColors} style={styles.zoneCard}>
@@ -582,9 +876,85 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
       {/* SVG trail + nodes */}
       <View style={[styles.trailContainer, { height: svgH }]}>
         <Svg width={W} height={svgH} style={{ position: 'absolute', top: 0, left: 0 }}>
-          <Path d={trailPath} stroke="rgba(255,255,255,0.12)" strokeWidth={6} fill="none" strokeDasharray="8 6" />
-          <Path d={trailPath} stroke={zoneForceUnlocked ? zone.color : 'rgba(255,255,255,0.15)'} strokeWidth={6} fill="none"
-            strokeDasharray="60 100" strokeLinecap="round" />
+          {/* Subtle baseline locked trail */}
+          <Path d={trailPath} stroke="rgba(255,255,255,0.06)" strokeWidth={4} fill="none" strokeDasharray="6 4" />
+
+          {/* Dynamic segments with custom neon glow and animated dashes */}
+          {zone.nodes.map((node, i) => {
+            if (i === 0) return null;
+            const prevNode = zone.nodes[i - 1];
+            const currNode = zone.nodes[i];
+
+            // Math coordinates for identical curve
+            const x1 = SIDE_X[prevNode.side];
+            const y1 = 26 + (i - 1) * ROW;
+            const x2 = SIDE_X[currNode.side];
+            const y2 = 26 + i * ROW;
+            const cy = (y1 + y2) / 2;
+            const midpointX = (x1 + x2) / 2;
+
+            // Q bezier segment string
+            const segmentD = `M ${x1} ${y1} Q ${x1} ${cy} ${midpointX} ${cy} Q ${x2} ${cy} ${x2} ${y2}`;
+
+            const prevCompleted = completed.includes(prevNode.id);
+            const currCompleted = completed.includes(currNode.id);
+            
+            // Traversed path is completed if destination node is completed
+            const isCompleted = currCompleted;
+
+            // Active path is the segment currently being traveled (prev completed, destination unlocked & not completed)
+            const currLocked = resolveNodeLocked(zone.nodes, i, completed, zoneForceUnlocked);
+            const isActive = prevCompleted && !currCompleted && !currLocked;
+
+            if (isCompleted) {
+              return (
+                <React.Fragment key={`seg_${node.id}`}>
+                  {/* Neon Glow underlay */}
+                  <Path
+                    d={segmentD}
+                    stroke={zone.color}
+                    strokeWidth={8}
+                    strokeLinecap="round"
+                    fill="none"
+                    opacity={0.3}
+                  />
+                  {/* Neon solid core */}
+                  <Path
+                    d={segmentD}
+                    stroke={zone.color}
+                    strokeWidth={3}
+                    strokeLinecap="round"
+                    fill="none"
+                  />
+                </React.Fragment>
+              );
+            } else if (isActive) {
+              return (
+                <React.Fragment key={`seg_${node.id}`}>
+                  {/* Active segment dim glow */}
+                  <Path
+                    d={segmentD}
+                    stroke={zone.color}
+                    strokeWidth={8}
+                    strokeLinecap="round"
+                    fill="none"
+                    opacity={0.12}
+                  />
+                  {/* Flowing animated dashes core */}
+                  <AnimatedPath
+                    d={segmentD}
+                    stroke={zone.color}
+                    strokeWidth={3.5}
+                    strokeLinecap="round"
+                    fill="none"
+                    strokeDasharray="8 6"
+                    animatedProps={animatedFlowProps}
+                  />
+                </React.Fragment>
+              );
+            }
+            return null; // Locked segments only render the background trail
+          })}
         </Svg>
 
         {zone.nodes.map((node, idx) => {
@@ -599,29 +969,61 @@ function ZoneSection({ zone, completed, zoneForceUnlocked, onPressChest }: {
               current={idx === currentIdx}
               isCompleted={isCompleted}
               onPressChest={onPressChest}
+              onPressExercise={onPressExercise}
             />
           );
         })}
       </View>
+
+      {/* Absolute Shaking Lock Overlay */}
+      {(!zoneForceUnlocked || animatingUnlock) && (
+        <Animated.View style={[StyleSheet.absoluteFill, styles.lockOverlay, lockOverlayStyle]}>
+          <BlurView intensity={16} style={StyleSheet.absoluteFill} tint="dark" />
+          <Animated.View style={[styles.lockCenterCircle, padlockStyle]}>
+            <Ionicons name="lock-closed" size={32} color="#FBBF24" />
+          </Animated.View>
+          <Text style={styles.lockOverlayText}>Zona Bloqueada</Text>
+          <Text style={styles.lockOverlaySub}>Completa la zona anterior para desbloquear</Text>
+
+          {animatingUnlock && (
+            <Animated.View style={[styles.unlockAlertBox, textAlertStyle]}>
+              <Text style={styles.unlockAlertText}>¡NUEVA ZONA DESBLOQUEADA!</Text>
+            </Animated.View>
+          )}
+        </Animated.View>
+      )}
     </LinearGradient>
   );
 }
 
+// ─── NODE BUTTON WITH SPRING SCALE ON COMPLETE ──────────────────────────────────
 function NodeButton({
-  node, x, y, current, isCompleted, onPressChest,
+  node, x, y, current, isCompleted, onPressChest, onPressExercise,
 }: {
   node: ZoneNode; x: number; y: number; current: boolean; isCompleted: boolean;
   onPressChest: (node: ZoneNode) => void;
+  onPressExercise: (node: ZoneNode) => void;
 }) {
   const scale = useSharedValue(1);
   const haloScale   = useSharedValue(1);
   const haloOpacity = useSharedValue(0.24);
 
-  React.useEffect(() => {
+  // Elastic Spring for complete checkmark scaling
+  const checkScale = useSharedValue(isCompleted ? 1 : 0);
+
+  useEffect(() => {
     if (!current) return;
     haloScale.value   = withRepeat(withSequence(withTiming(1.22, { duration: 900 }), withTiming(1, { duration: 900 })), -1, false);
     haloOpacity.value = withRepeat(withSequence(withTiming(0.08, { duration: 900 }), withTiming(0.24, { duration: 900 })), -1, false);
   }, [current]);
+
+  useEffect(() => {
+    if (isCompleted) {
+      checkScale.value = withSpring(1.0, { damping: 7, stiffness: 120 });
+    } else {
+      checkScale.value = 0;
+    }
+  }, [isCompleted]);
 
   const haloStyle = useAnimatedStyle(() => ({
     transform:  [{ scale: haloScale.value }],
@@ -632,14 +1034,22 @@ function NodeButton({
     transform: [{ scale: scale.value }],
   }));
 
+  const checkAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: checkScale.value }],
+  }));
+
   const onPress = () => {
-    if (node.locked) return;
+    if (node.locked) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      return;
+    }
     if (node.kind === 'lesson') {
       router.push(`/lesson/${node.id}` as Parameters<typeof router.push>[0]);
     } else if (node.kind === 'chest') {
       onPressChest(node);
     } else if (node.exId) {
-      router.push(`/exercise/${node.exId}?nodeId=${node.id}` as Parameters<typeof router.push>[0]);
+      // Tap active exercise triggers bottom sheet preview instead of immediate route
+      onPressExercise(node);
     }
   };
 
@@ -651,7 +1061,11 @@ function NodeButton({
       return <Ionicons name="lock-closed" size={iconSize} color="rgba(255,255,255,0.3)" />;
     }
     if (isCompleted) {
-      return <Ionicons name="checkmark" size={iconSize + 2} color="#fff" />;
+      return (
+        <Animated.View style={checkAnimatedStyle}>
+          <Ionicons name="checkmark" size={iconSize + 2} color="#fff" />
+        </Animated.View>
+      );
     }
     if (node.kind === 'boss') {
       return <MascotChar which="boss" size={36} breathing={false} blinking={false} />;
@@ -671,11 +1085,11 @@ function NodeButton({
   const nodeBg = node.locked
     ? 'rgba(255,255,255,0.06)'
     : isCompleted
-      ? darken(node.color, 0.08)
+      ? '#10B981' // Solid complete green
       : node.color;
 
   const nodeBorder = isCompleted
-    ? '#22C55E'
+    ? '#059669'
     : node.locked
       ? 'rgba(255,255,255,0.12)'
       : darken(node.color, 0.15);
@@ -733,7 +1147,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
 
   const isAlreadyCompleted = node ? completed.includes(node.id) : false;
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (node) {
       const alreadyClaimed = completed.includes(node.id);
       setChestState(alreadyClaimed ? 'opened' : 'closed');
@@ -841,13 +1255,130 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   );
 }
 
+// ─── INTERACTIVE PREVIEW BOTTOM SHEET ──────────────────────────────────────────
+function ExercisePreviewSheet({
+  node, onClose,
+}: {
+  node: ZoneNode | null;
+  onClose: () => void;
+}) {
+  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
+
+  useEffect(() => {
+    if (node) {
+      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
+      
+      const backAction = () => {
+        onClose();
+        return true;
+      };
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+      return () => backHandler.remove();
+    } else {
+      sheetTranslateY.value = SCREEN_HEIGHT;
+    }
+  }, [node]);
+
+  if (!node || !node.exId) return null;
+
+  const data = EX_METRICS[node.exId];
+  if (!data) return null;
+
+  // Retrieve best records from Zustand store
+  const bestRecord = useProgressStore.getState().get(node.exId);
+
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
+  }));
+
+  const handleStart = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    onClose();
+    router.push(`/exercise/${node.exId}?nodeId=${node.id}` as Parameters<typeof router.push>[0]);
+  };
+
+  const getRecordLabel = () => {
+    if (node.exId === 'schulte') {
+      return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 100).toFixed(0)}% Acierto` : 'Ninguno';
+    }
+    if (node.exId === 'reading') {
+      return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 500).toFixed(0)} WPM` : 'Ninguno';
+    }
+    if (node.exId === 'wordspan') {
+      return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 10).toFixed(0)} Palabras` : 'Ninguno';
+    }
+    if (node.exId === 'loci') {
+      return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 100).toFixed(0)}% Precisión` : 'Ninguno';
+    }
+    return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 100).toFixed(0)}%` : 'Ninguno';
+  };
+
+  return (
+    <Modal transparent visible={!!node} animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+
+        <Animated.View style={[styles.bottomSheet, { backgroundColor: COLORS.canvas }, sheetAnimatedStyle]}>
+          <View style={styles.bottomSheetHandle} />
+          
+          <View style={styles.previewHeader}>
+            <View style={[styles.previewIconCircle, { backgroundColor: node.color }]}>
+              <MascotChar which={EX_MASCOT[node.exId] || 'focus'} size={48} breathing={false} blinking={false} />
+            </View>
+            <View style={styles.previewTitleBox}>
+              <Text style={styles.previewExType}>EJERCICIO COGNITIVO</Text>
+              <Text style={styles.previewTitle}>{data.title}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.previewDesc}>{data.desc}</Text>
+
+          <View style={styles.previewStatsGrid}>
+            <View style={styles.previewStatCard}>
+              <Ionicons name="trophy-outline" size={18} color="#D97706" />
+              <Text style={styles.previewStatLabel}>Récord Personal</Text>
+              <Text style={styles.previewStatVal}>{getRecordLabel()}</Text>
+            </View>
+            <View style={styles.previewStatCard}>
+              <Ionicons name="trending-up-outline" size={18} color="#10B981" />
+              <Text style={styles.previewStatLabel}>Dominio Total</Text>
+              <Text style={styles.previewStatVal}>{(bestRecord.mastery * 100).toFixed(0)}%</Text>
+            </View>
+            <View style={styles.previewStatCard}>
+              <Ionicons name="barbell-outline" size={18} color="#8B5CF6" />
+              <Text style={styles.previewStatLabel}>Sesiones</Text>
+              <Text style={styles.previewStatVal}>{bestRecord.total_sessions}</Text>
+            </View>
+          </View>
+
+          <Text style={styles.previewSectionTitle}>Habilidades Potenciadas</Text>
+          <View style={styles.previewSkillsWrap}>
+            {data.skills.map((s, idx) => (
+              <View key={idx} style={styles.previewSkillBadge}>
+                <Ionicons name="flash-outline" size={12} color={node.color} />
+                <Text style={styles.previewSkillText}>{s}</Text>
+              </View>
+            ))}
+          </View>
+
+          <Pressable style={[styles.previewStartBtn, { backgroundColor: node.color }]} onPress={handleStart}>
+            <Text style={styles.previewStartText}>Comenzar Entrenamiento</Text>
+            <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 8 }} />
+          </Pressable>
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
 // ─── WELCOME MODAL COMPONENT (FOR NEW USERS) ──────────────────────────────────
 function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const scale = useSharedValue(0.9);
   const opacity = useSharedValue(0);
   const mascotBounce = useSharedValue(0);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (visible) {
       scale.value = 0.9;
       opacity.value = 0;
@@ -886,7 +1417,6 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
       <View style={styles.modalOverlay}>
         <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
         <Animated.View style={[styles.welcomeCard, cardStyle]}>
-          {/* Top Decorative Spark */}
           <View style={styles.welcomeBannerDecor}>
             <LinearGradient
               colors={['#10B981', '#3B82F6']}
@@ -896,7 +1426,6 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
             />
           </View>
 
-          {/* Animated Mascot wrapper */}
           <Animated.View style={[styles.welcomeMascotWrap, mascotStyle]}>
             <MascotChar which="focus" size={100} expression="happy" />
           </Animated.View>
@@ -941,20 +1470,339 @@ const styles = StyleSheet.create({
   safe:           { flex: 1, backgroundColor: COLORS.canvas },
   header:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   headerTitle:    { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
+  notifBadge:     { position: 'absolute', top: -3, right: -3, backgroundColor: '#EF4444', borderRadius: 999, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderWidth: 1.5, borderColor: COLORS.canvas },
+  notifBadgeText: { color: '#FFF', fontSize: 8, fontFamily: FONTS.headingBold, lineHeight: 12 },
   xpBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   xpText:         { fontFamily: FONTS.heading, fontSize: 13, color: '#78350F' },
-  scroll:         { paddingTop: 8, alignItems: 'center' },
-  zoneCard:       { width: W, borderRadius: 24, padding: 16, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.08)', marginBottom: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8 },
-  zoneBanner:     { borderWidth: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden' },
+  scroll:         { paddingTop: 10, alignItems: 'center' },
+  zoneCard:       { width: W, borderRadius: 24, padding: 16, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.08)', marginBottom: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8, position: 'relative' },
+  zoneBanner:     { borderWidth: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden', zIndex: 2 },
   zoneBannerLeft: { flex: 1, justifyContent: 'center' },
   zoneSubRow:     { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
   zoneTitle:      { fontFamily: FONTS.heading, fontSize: 16 },
   zoneSub:        { fontFamily: FONTS.body, fontSize: 13 },
   zoneMascotWrap: { marginRight: -6, marginVertical: -6, opacity: 0.95 },
-  trailContainer: { width: W - 32, position: 'relative', alignSelf: 'center' },
+  trailContainer: { width: W - 32, position: 'relative', alignSelf: 'center', zIndex: 2 },
   nodeLabel:      { fontFamily: FONTS.headingSemi, fontSize: 10, marginTop: 4, letterSpacing: 0.2 },
 
-  // Chest Modal styles
+  // Locked Zone overlay styles
+  lockOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 10,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+  },
+  lockCenterCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(255, 255, 255, 0.07)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 6,
+    marginBottom: 16,
+  },
+  lockOverlayText: {
+    fontFamily: FONTS.heading,
+    fontSize: 18,
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  lockOverlaySub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: 4,
+    textAlign: 'center',
+    paddingHorizontal: 24,
+  },
+  unlockAlertBox: {
+    position: 'absolute',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: COLORS.focus,
+    borderWidth: 1.5,
+    borderColor: '#34D399',
+    bottom: 40,
+    shadowColor: COLORS.focus,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+  },
+  unlockAlertText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
+    color: '#fff',
+    letterSpacing: 1.5,
+  },
+
+  // Daily goal / Mission card styles
+  missionCardOuter: {
+    width: W,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  missionGradient: {
+    padding: 18,
+  },
+  missionHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  missionTitleBox: {
+    flex: 1,
+    paddingRight: 12,
+  },
+  missionPreTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 10,
+    color: '#A78BFA',
+    letterSpacing: 1,
+  },
+  missionTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 15,
+    color: '#fff',
+    marginTop: 4,
+    lineHeight: 20,
+  },
+  missionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: 'rgba(245, 158, 11, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.3)',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  missionBadgeText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 10,
+    color: '#FBBF24',
+  },
+  missionProgressWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    gap: 10,
+  },
+  missionProgressTrack: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 99,
+    overflow: 'hidden',
+  },
+  missionProgressBar: {
+    height: '100%',
+    backgroundColor: '#8B5CF6',
+    borderRadius: 99,
+  },
+  missionProgressText: {
+    fontFamily: FONTS.heading,
+    fontSize: 12,
+    color: '#A78BFA',
+    minWidth: 32,
+    textAlign: 'right',
+  },
+  missionClaimedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.2)',
+  },
+  missionClaimedText: {
+    fontFamily: FONTS.heading,
+    fontSize: 12,
+    color: '#34D399',
+  },
+  missionClaimBtn: {
+    marginTop: 14,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F59E0B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#F59E0B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  missionClaimBtnText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
+    color: '#fff',
+  },
+  missionHintText: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: 'rgba(255, 255, 255, 0.4)',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  // Interactive Bottom Sheet Preview Modal styles
+  bottomSheet: {
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 16,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  bottomSheetHandle: {
+    width: 48,
+    height: 5,
+    backgroundColor: '#CBD5E1',
+    borderRadius: 99,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  previewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  previewIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  previewTitleBox: {
+    flex: 1,
+  },
+  previewExType: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 10,
+    color: '#94A3B8',
+    letterSpacing: 1,
+  },
+  previewTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 20,
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  previewDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20.5,
+    marginTop: 18,
+  },
+  previewStatsGrid: {
+    flexDirection: 'row',
+    marginTop: 20,
+    gap: 10,
+  },
+  previewStatCard: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    borderRadius: 16,
+    padding: 12,
+    alignItems: 'center',
+  },
+  previewStatLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+  },
+  previewStatVal: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
+    color: '#1E293B',
+    marginTop: 2,
+  },
+  previewSectionTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 14,
+    color: '#1E293B',
+    marginTop: 24,
+  },
+  previewSkillsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  previewSkillBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  previewSkillText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11,
+    color: '#475569',
+  },
+  previewStartBtn: {
+    height: 52,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 28,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  previewStartText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 15,
+    color: '#fff',
+  },
+
+  // Modal overlay common
   modalOverlay: {
     flex: 1,
     alignItems: 'center',
@@ -1171,5 +2019,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#fff',
     zIndex: 1,
+  },
+  warmupBannerCard: {
+    width: W,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
+    marginBottom: 20,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  warmupBannerGradient: {
+    padding: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  warmupBannerTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 16,
+    color: COLORS.white,
+    marginBottom: 4,
+  },
+  warmupBannerSub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.85)',
+    lineHeight: 16,
   },
 });

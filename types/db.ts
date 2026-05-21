@@ -73,6 +73,7 @@ export interface UserPrefs {
   notifications_enabled: boolean;
   notifications_time: string;
   updated_at: string;
+  loci_palace?: 'casa' | 'oficina' | 'naturaleza';
 }
 
 export interface OwnedReward {
@@ -82,4 +83,37 @@ export interface OwnedReward {
   acquired_at: string;
 }
 
-export type ExerciseId = 'schulte' | 'reading' | 'wordspan' | 'loci' | 'comprehension' | 'boss' | 'freereading';
+export type ExerciseId = 'schulte' | 'reading' | 'wordspan' | 'loci' | 'comprehension' | 'boss' | 'freereading' | 'flashcards';
+
+export interface Deck {
+  id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  color: string;
+  is_ai_generated: boolean;
+  created_at: string;
+}
+
+export interface Flashcard {
+  id: string;
+  deck_id: string;
+  front: string;
+  back: string;
+  hint: string;
+  interval: number;
+  repetitions: number;
+  ease_factor: number;
+  next_due: string;
+  created_at: string;
+}
+
+export interface FlashcardSession {
+  id: string;
+  user_id: string;
+  deck_id: string;
+  started_at: string | null;
+  finished_at: string;
+  cards_reviewed: number;
+  xp_earned: number;
+}

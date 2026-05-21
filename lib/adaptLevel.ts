@@ -13,7 +13,10 @@ export function adaptLevel(
   currentLevel: number,
   _mastery = 0,
 ): AdaptResult {
-  const max = DIFFICULTY[exId].length;
+  if (exId === 'flashcards' as any) {
+    return { newLevel: 1, masteryDelta: 0, reason: 'hold' };
+  }
+  const max = (DIFFICULTY as any)[exId]?.length || 1;
   if (score >= 0.85 && currentLevel < max) {
     return { newLevel: currentLevel + 1, masteryDelta: +0.15, reason: 'up' };
   }

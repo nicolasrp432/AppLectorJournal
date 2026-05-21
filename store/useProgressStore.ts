@@ -6,14 +6,7 @@ import type { ExerciseProgress, ExerciseId } from '../types/db';
 
 type ProgressMap = Partial<Record<ExerciseId, ExerciseProgress>>;
 
-const DEFAULT_PROGRESS: ProgressMap = {
-  schulte:     { user_id: 'local', exercise_id: 'schulte',     current_level: 3, best_score: 0.92, last_score: 0.85, total_sessions: 18, mastery: 0.78, updated_at: '' },
-  reading:     { user_id: 'local', exercise_id: 'reading',     current_level: 4, best_score: 0.88, last_score: 0.81, total_sessions: 22, mastery: 0.82, updated_at: '' },
-  wordspan:    { user_id: 'local', exercise_id: 'wordspan',    current_level: 2, best_score: 0.80, last_score: 0.66, total_sessions: 12, mastery: 0.55, updated_at: '' },
-  loci:        { user_id: 'local', exercise_id: 'loci',        current_level: 1, best_score: 1.00, last_score: 1.00, total_sessions: 6,  mastery: 0.45, updated_at: '' },
-  comprehension:{ user_id: 'local', exercise_id: 'comprehension', current_level: 3, best_score: 1.00, last_score: 0.66, total_sessions: 14, mastery: 0.70, updated_at: '' },
-  boss:        { user_id: 'local', exercise_id: 'boss',        current_level: 1, best_score: 0.85, last_score: 0.85, total_sessions: 2,  mastery: 0.40, updated_at: '' },
-};
+const DEFAULT_PROGRESS: ProgressMap = {};
 
 interface ProgressState {
   all: ProgressMap;
