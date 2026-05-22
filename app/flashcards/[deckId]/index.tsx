@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -22,11 +23,19 @@ export default function DeckDetail() {
   const { deckId } = useLocalSearchParams<{ deckId: string }>();
   const decks = useFlashcardStore((s) => s.decks);
   const flashcards = useFlashcardStore((s) => s.flashcards);
+  const fetchDecks = useFlashcardStore((s) => s.fetchDecks);
   const fetchCards = useFlashcardStore((s) => s.fetchCards);
   const deleteDeck = useFlashcardStore((s) => s.deleteDeck);
+  const isLoading = useFlashcardStore((s) => s.isLoading);
 
   const deck = decks.find((d) => d.id === deckId);
   const cards = flashcards[deckId] || [];
+
+  useEffect(() => {
+    if (decks.length === 0) {
+      fetchDecks();
+    }
+  }, [decks.length]);
 
   useEffect(() => {
     if (deckId) {
@@ -35,6 +44,15 @@ export default function DeckDetail() {
   }, [deckId]);
 
   if (!deck) {
+    if (isLoading || decks.length === 0) {
+      return (
+        <SafeAreaView style={styles.errorContainer}>
+          <ActivityIndicator size="large" color="#8B5CF6" />
+          <Text style={[styles.errorText, { marginTop: 15 }]}>Cargando mazo...</Text>
+        </SafeAreaView>
+      );
+    }
+
     return (
       <SafeAreaView style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={60} color={COLORS.boss} />

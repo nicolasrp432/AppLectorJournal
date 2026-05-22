@@ -26,11 +26,15 @@ export default function DeckReview() {
   
   const decks = useFlashcardStore((s) => s.decks);
   const flashcards = useFlashcardStore((s) => s.flashcards);
+  const fetchDecks = useFlashcardStore((s) => s.fetchDecks);
+  const fetchCards = useFlashcardStore((s) => s.fetchCards);
   const updateCardReview = useFlashcardStore((s) => s.updateFlashcardReview);
   const finishSession = useFlashcardStore((s) => s.finishSession);
+  const isLoading = useFlashcardStore((s) => s.isLoading);
 
   const deck = decks.find((d) => d.id === deckId);
   const allCards = flashcards[deckId] || [];
+  const deckColor = deck?.color || '#3B82F6';
 
   const [cardsToStudy, setCardsToStudy] = useState<typeof allCards>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -38,6 +42,18 @@ export default function DeckReview() {
   const [isFinished, setIsFinished] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (decks.length === 0) {
+      fetchDecks();
+    }
+  }, [decks.length]);
+
+  useEffect(() => {
+    if (deckId) {
+      fetchCards(deckId);
+    }
+  }, [deckId]);
 
   useEffect(() => {
     if (allCards.length > 0) {
@@ -58,11 +74,100 @@ export default function DeckReview() {
     }
   }, [allCards.length, free]);
 
-  if (!deck || cardsToStudy.length === 0) {
+  if (!deck) {
+    if (isLoading || decks.length === 0) {
+      return (
+        <SafeAreaView style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#8B5CF6" />
+          <Text style={styles.loadingText}>Buscando mazo...</Text>
+        </SafeAreaView>
+      );
+    }
+
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <MascotChar which="memo" size={120} expression="concerned" />
+          <Text style={[styles.loadingText, { fontFamily: FONTS.headingBold, fontSize: FONT_SIZE.lg, marginTop: 20 }]}>
+            Mazo no encontrado
+          </Text>
+          <Text style={{ fontFamily: FONTS.body, color: COLORS.muted, textAlign: 'center', marginTop: 8, paddingHorizontal: 40, lineHeight: 20 }}>
+            El mazo que intentas repasar no existe o fue eliminado.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: '#8B5CF6',
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+              borderRadius: 50,
+              marginTop: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+            onPress={() => router.replace('/flashcards' as any)}
+          >
+            <Ionicons name="arrow-back" size={16} color={COLORS.white} style={{ marginRight: 8 }} />
+            <Text style={{ color: COLORS.white, fontFamily: FONTS.headingBold, fontSize: FONT_SIZE.sm }}>Volver a Flashcards</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const hasFetched = flashcards[deckId] !== undefined;
+
+  if (!hasFetched || (isLoading && allCards.length === 0)) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#8B5CF6" />
         <Text style={styles.loadingText}>Preparando tu sesión de estudio...</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (allCards.length === 0) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <MascotChar which="memo" size={120} expression="concerned" />
+          <Text style={[styles.loadingText, { fontFamily: FONTS.headingBold, fontSize: FONT_SIZE.lg, marginTop: 20 }]}>
+            Este mazo está vacío
+          </Text>
+          <Text style={{ fontFamily: FONTS.body, color: COLORS.muted, textAlign: 'center', marginTop: 8, paddingHorizontal: 40, lineHeight: 20 }}>
+            Necesitas agregar al menos una tarjeta antes de comenzar a estudiar.
+          </Text>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            style={{
+              backgroundColor: deckColor,
+              paddingHorizontal: 24,
+              paddingVertical: 12,
+              borderRadius: 50,
+              marginTop: 24,
+              flexDirection: 'row',
+              alignItems: 'center',
+              shadowColor: deckColor,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.2,
+              shadowRadius: 6,
+              elevation: 4,
+            }}
+            onPress={() => router.replace(`/flashcards/${deck.id}` as any)}
+          >
+            <Ionicons name="arrow-back" size={16} color={COLORS.white} style={{ marginRight: 8 }} />
+            <Text style={{ color: COLORS.white, fontFamily: FONTS.headingBold, fontSize: FONT_SIZE.sm }}>Volver al Mazo</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (cardsToStudy.length === 0) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#8B5CF6" />
+        <Text style={styles.loadingText}>Preparando sesión...</Text>
       </SafeAreaView>
     );
   }
@@ -95,7 +200,6 @@ export default function DeckReview() {
     }, 200);
   };
 
-  const deckColor = deck.color || '#3B82F6';
 
   if (isFinished) {
     return (

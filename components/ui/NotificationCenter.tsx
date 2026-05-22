@@ -19,7 +19,11 @@ interface Props {
 }
 
 export function NotificationCenter({ visible, onClose }: Props) {
-  const { notifications, fetchNotifications, markAsRead, claimReward, isLoading } = useNotificationStore();
+  const notifications = useNotificationStore(s => s.notifications);
+  const fetchNotifications = useNotificationStore(s => s.fetchNotifications);
+  const markAsRead = useNotificationStore(s => s.markAsRead);
+  const claimReward = useNotificationStore(s => s.claimReward);
+  const isLoading = useNotificationStore(s => s.isLoading);
   const dailyMission = useDailyMissionStore(s => s.mission);
 
   // Animation values
@@ -31,17 +35,17 @@ export function NotificationCenter({ visible, onClose }: Props) {
       fetchNotifications();
       backdropOpacity.value = withTiming(0.5, { duration: 300 });
       sheetTranslateY.value = withSpring(0, { damping: 20, stiffness: 90 });
-    } else {
-      backdropOpacity.value = withTiming(0, { duration: 250 });
-      sheetTranslateY.value = withTiming(600, { duration: 250 });
     }
+    // Close animation is handled exclusively by handleClose()
+    // to prevent infinite render loops on web where withTiming is synchronous
   }, [visible]);
 
   const handleClose = () => {
     backdropOpacity.value = withTiming(0, { duration: 250 });
-    sheetTranslateY.value = withTiming(600, { duration: 250 }, () => {
-      runOnJS(onClose)();
-    });
+    sheetTranslateY.value = withTiming(600, { duration: 250 });
+    // Defer onClose to next frame so the closing animation values settle
+    // before the parent unmounts/hides the Modal via visible=false
+    setTimeout(() => onClose(), 280);
   };
 
   const backdropStyle = useAnimatedStyle(() => ({

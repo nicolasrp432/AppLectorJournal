@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, Dimensions } from 'react-native';
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FONTS, FONT_SIZE } from '../../constants/typography';
 import { COLORS, darken } from '../../constants/colors';
@@ -28,64 +28,66 @@ export default function DeckCard({ deck, cards, dueCount }: DeckCardProps) {
   };
 
   return (
-    <Link href={`/flashcards/${deck.id}` as any} asChild>
-      <TouchableOpacity activeOpacity={0.9} style={[styles.cardContainer, shadowStyle]}>
-        <LinearGradient
-          colors={[deckColor, darken(deckColor, 0.25)] as [string, string]}
-          style={styles.gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-        >
-          <View style={styles.cardHeader}>
-            <View style={styles.titleContainer}>
-              <Text style={styles.title} numberOfLines={1}>{deck.name}</Text>
-              {deck.is_ai_generated && (
-                <View style={styles.aiBadge}>
-                  <Text style={styles.aiBadgeText}>🤖 Generado por IA</Text>
-                </View>
-              )}
-            </View>
-            
-            {dueCount > 0 ? (
-              <View style={styles.dueBadge}>
-                <Text style={styles.dueBadgeText}>{dueCount} Pendientes</Text>
-              </View>
-            ) : (
-              <View style={styles.doneBadge}>
-                <Text style={styles.doneBadgeText}>Al día ✓</Text>
+    <TouchableOpacity 
+      activeOpacity={0.9} 
+      style={StyleSheet.flatten([styles.cardContainer, shadowStyle])}
+      onPress={() => router.push(`/flashcards/${deck.id}` as any)}
+    >
+      <LinearGradient
+        colors={[deckColor, darken(deckColor, 0.25)] as [string, string]}
+        style={styles.gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      >
+        <View style={styles.cardHeader}>
+          <View style={styles.titleContainer}>
+            <Text style={styles.title} numberOfLines={1}>{deck.name}</Text>
+            {deck.is_ai_generated && (
+              <View style={styles.aiBadge}>
+                <Text style={styles.aiBadgeText}>🤖 Generado por IA</Text>
               </View>
             )}
           </View>
-
-          <Text style={styles.description} numberOfLines={2}>
-            {deck.description || 'Sin descripción.'}
-          </Text>
-
-          <View style={styles.footer}>
-            <View style={styles.stat}>
-              <Text style={styles.statLabel}>Cartas</Text>
-              <Text style={styles.statValue}>{totalCards}</Text>
+          
+          {dueCount > 0 ? (
+            <View style={styles.dueBadge}>
+              <Text style={styles.dueBadgeText}>{dueCount} Pendientes</Text>
             </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.stat}>
-              <Text style={styles.statLabel}>Dominio</Text>
-              <Text style={styles.statValue}>{masteryPercentage}%</Text>
+          ) : (
+            <View style={styles.doneBadge}>
+              <Text style={styles.doneBadgeText}>Al día ✓</Text>
             </View>
+          )}
+        </View>
 
-            <View style={styles.progressBarBg}>
-              <View 
-                style={[
-                  styles.progressBarFill, 
-                  { width: `${Math.max(5, masteryPercentage)}%` }
-                ]} 
-              />
-            </View>
+        <Text style={styles.description} numberOfLines={2}>
+          {deck.description || 'Sin descripción.'}
+        </Text>
+
+        <View style={styles.footer}>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Cartas</Text>
+            <Text style={styles.statValue}>{totalCards}</Text>
           </View>
-        </LinearGradient>
-      </TouchableOpacity>
-    </Link>
+
+          <View style={styles.divider} />
+
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Dominio</Text>
+            <Text style={styles.statValue}>{masteryPercentage}%</Text>
+          </View>
+
+          <View style={styles.progressBarBg}>
+            <View 
+              style={[
+                styles.progressBarFill, 
+                { width: `${Math.max(5, masteryPercentage)}%` }
+              ]} 
+            />
+          </View>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
   );
 }
 

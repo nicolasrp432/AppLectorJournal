@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, runOnJS
 } from 'react-native-reanimated';
+import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { COLORS, darken } from '../../constants/colors';
@@ -188,7 +189,7 @@ const PERIPHERAL_WORDS = [
 function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; accent: string }) {
   const [isConfiguring, setIsConfiguring] = useState(true);
   const [focusMode, setFocusMode] = useState<'free' | '30s' | '60s' | '120s'>('free');
-  const [pressed, setPressed] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [count, setCount] = useState(0);
   const [flashWord, setFlashWord] = useState('');
   const [flashPos, setFlashPos] = useState<'left' | 'right' | 'top' | 'bottom'>('left');
@@ -217,7 +218,7 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
 
   // Handle countdown timer when pressed
   useEffect(() => {
-    if (isConfiguring || focusMode === 'free' || !pressed) return;
+    if (isConfiguring || focusMode === 'free' || !playing) return;
 
     const interval = setInterval(() => {
       setTimeLeft((prev) => {
@@ -231,11 +232,11 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [isConfiguring, focusMode, pressed]);
+  }, [isConfiguring, focusMode, playing]);
 
   // Center button pulse when active
   useEffect(() => {
-    if (pressed) {
+    if (playing) {
       pulseScale.value = withRepeat(
         withSequence(
           withTiming(1.2, { duration: 600 }),
@@ -249,11 +250,11 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
       flashOpacity.value = withTiming(0, { duration: 150 });
       setFlashWord('');
     }
-  }, [pressed]);
+  }, [playing]);
 
   // Flash peripheral words periodically when pressed
   useEffect(() => {
-    if (isConfiguring || !pressed) return;
+    if (isConfiguring || !playing) return;
 
     let timer: any;
     const flash = () => {
@@ -292,11 +293,11 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
     timer = setTimeout(flash, 600);
 
     return () => clearTimeout(timer);
-  }, [isConfiguring, pressed, count, focusMode]);
+  }, [isConfiguring, playing, count, focusMode]);
 
   const pulseStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pulseScale.value }],
-    shadowOpacity: pressed ? 0.35 : 0.1,
+    shadowOpacity: playing ? 0.35 : 0.1,
   }));
 
   const flashStyle = useAnimatedStyle(() => ({
@@ -407,27 +408,54 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
           </Animated.View>
         )}
 
-        {/* Central target of focus */}
+        {/* Circular timer ring around the eye */}
+        {(() => {
+          const RING_SIZE = 100;
+          const RING_R = 44;
+          const circumference = 2 * Math.PI * RING_R;
+          const timerProgress = focusMode === 'free'
+            ? count / 15
+            : (duration - timeLeft) / duration;
+          return (
+            <View style={styles.timerRingSvg} pointerEvents="none">
+              <Svg width={RING_SIZE} height={RING_SIZE}>
+                <SvgCircle
+                  cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R}
+                  stroke="rgba(255,255,255,0.12)" strokeWidth={4} fill="none"
+                />
+                <SvgCircle
+                  cx={RING_SIZE / 2} cy={RING_SIZE / 2} r={RING_R}
+                  stroke={accent} strokeWidth={4} fill="none"
+                  strokeDasharray={`${circumference}`}
+                  strokeDashoffset={`${circumference * (1 - timerProgress)}`}
+                  strokeLinecap="round"
+                  rotation={-90} origin={`${RING_SIZE / 2}, ${RING_SIZE / 2}`}
+                />
+              </Svg>
+            </View>
+          );
+        })()}
+
+        {/* Central target of focus — tap to toggle */}
         <Pressable
-          onPressIn={() => setPressed(true)}
-          onPressOut={() => setPressed(false)}
+          onPress={() => setPlaying(prev => !prev)}
           style={({ pressed: active }) => [
             styles.focalCenterWrapper,
             { transform: [{ scale: active ? 0.95 : 1 }] }
           ]}
         >
           <Animated.View style={[styles.focalCenter, { backgroundColor: accent, shadowColor: accent }, pulseStyle]}>
-            <Ionicons name={pressed ? 'eye' : 'eye-outline'} size={32} color="#fff" />
+            <Ionicons name={playing ? 'eye' : 'eye-outline'} size={32} color="#fff" />
           </Animated.View>
         </Pressable>
       </View>
 
       <View style={styles.tipsSection}>
-        <Ionicons name={pressed ? 'happy-outline' : 'finger-print'} size={20} color={accent} />
+        <Ionicons name={playing ? 'happy-outline' : 'hand-left-outline'} size={20} color={accent} />
         <Text style={[styles.tipsText, { color: accent }]}>
-          {pressed 
+          {playing 
             ? 'Mira fijamente al ojo central y lee de reojo.' 
-            : 'Mantén presionado el ojo central para reanudar el flujo...'}
+            : 'Toca el ojo central para iniciar / pausar el ejercicio.'}
         </Text>
       </View>
     </View>
@@ -1328,6 +1356,12 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.headingBold,
     fontSize: 13,
     letterSpacing: 1.5,
+  },
+  timerRingSvg: {
+    position: 'absolute',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 9,
   },
   focalCenterWrapper: {
     zIndex: 10,

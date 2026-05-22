@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { useProfileStore } from './useProfileStore';
+import { useDailyMissionStore } from './useDailyMissionStore';
 
 export interface NotificationItem {
   id: string;
@@ -100,6 +101,19 @@ export const useNotificationStore = create<NotificationState>()(
 
         // Add XP to profile
         await useProfileStore.getState().addXP(notification.xp_reward);
+
+        // Sync daily mission store if it's a mission
+        if (notification.category === 'mission') {
+          const mission = useDailyMissionStore.getState().mission;
+          if (mission) {
+            useDailyMissionStore.setState({
+              mission: {
+                ...mission,
+                xpClaimed: true,
+              },
+            });
+          }
+        }
 
         // Update database if logged in
         if (profile.id !== 'local') {

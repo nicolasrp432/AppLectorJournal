@@ -104,8 +104,36 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
     async function fetchAIStories() {
       setIsLoadingAI(true);
       try {
+        // Get the current user ID
+        const { data: { user } } = await supabase.auth.getUser();
+        const userId = user?.id;
+
+        // Fetch cached items in a single request to optimize DB performance
+        let cachedItems: any[] = [];
+        if (userId) {
+          const { data: dbData, error: dbError } = await supabase
+            .from('loci_memories')
+            .select('room, item, story, image_url')
+            .eq('user_id', userId);
+          if (!dbError && dbData) {
+            cachedItems = dbData;
+          }
+        }
+
         const promises = assoc.map(async (item) => {
           const defaultStory = getSurrealLociAssociation(item.label, item.word);
+          
+          // Check if already present in persistent cache
+          const cached = cachedItems.find(c => c.room === item.label && c.item === item.word);
+          if (cached) {
+            return {
+              id: item.id,
+              story: cached.story || defaultStory,
+              imageUri: cached.image_url || undefined,
+            };
+          }
+
+          // Fetch from Supabase Edge Function if not cached
           try {
             const { data, error } = await supabase.functions.invoke('ai-loci-images', {
               body: {
@@ -116,12 +144,26 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
             });
             if (error) throw error;
             if (data) {
+              const storyText = data.description || defaultStory;
+              const imageUri = data.imageBase64
+                ? `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`
+                : undefined;
+
+              // Persist generated story and image to user's memory palace in the cloud
+              if (userId) {
+                await supabase.from('loci_memories').insert({
+                  user_id: userId,
+                  room: item.label,
+                  item: item.word,
+                  story: storyText,
+                  image_url: imageUri
+                });
+              }
+
               return {
                 id: item.id,
-                story: data.description || defaultStory,
-                imageUri: data.imageBase64
-                  ? `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`
-                  : undefined,
+                story: storyText,
+                imageUri: imageUri,
               };
             }
           } catch (err) {
@@ -219,7 +261,13 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
             </View>
 
             {/* AI Bizarre Association Card */}
-            <LociStoryCard text={bizarreText} roomId={current.id} isLoading={isStoryLoading} key={learnIdx} />
+            <LociStoryCard
+              text={bizarreText}
+              roomId={current.id}
+              imageUri={aiImages[current.id]}
+              isLoading={isStoryLoading}
+              key={learnIdx}
+            />
           </View>
         ) : (
           <View style={styles.recallHeader}>

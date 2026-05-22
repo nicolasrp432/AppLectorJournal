@@ -83,6 +83,28 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
     async function analyzeText() {
       setIsLoadingAI(true);
       try {
+        // Try to fetch from persistent cache first
+        const { data: cachedData, error: cacheError } = await supabase
+          .from('reading_analyses')
+          .select('difficulty, explanation, suggested_wpm')
+          .eq('library_item_id', passage.id)
+          .maybeSingle();
+
+        if (!cacheError && cachedData && active) {
+          const formatted = {
+            difficulty: cachedData.difficulty,
+            explanation: cachedData.explanation,
+            suggestedWpm: cachedData.suggested_wpm,
+          };
+          setAiAnalysis(formatted);
+          if (formatted.suggestedWpm) {
+            setWpm(formatted.suggestedWpm);
+          }
+          setIsLoadingAI(false);
+          return;
+        }
+
+        // Invoke Edge Function if not cached
         const { data, error } = await supabase.functions.invoke('ai-analyze-reading', {
           body: { text: passage.text }
         });
@@ -92,6 +114,13 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
           if (data.suggestedWpm) {
             setWpm(data.suggestedWpm);
           }
+          // Persist the result in database for future sessions
+          await supabase.from('reading_analyses').insert({
+            library_item_id: passage.id,
+            difficulty: data.difficulty || 'medio',
+            suggested_wpm: data.suggestedWpm || 280,
+            explanation: data.explanation || 'Análisis de lectura generado por IA.'
+          });
         }
       } catch (err) {
         console.warn('AI reading analysis failed, using defaults:', err);

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Dimensions, Modal, BackHandler, Alert,
+  View, Text, Pressable, StyleSheet, Dimensions, Modal, BackHandler, Alert, ScrollView
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -36,6 +36,7 @@ const ROW  = 120;
 const HALF = W / 2;
 
 const SIDE_X = { left: HALF - 80, center: HALF, right: HALF + 80 };
+const START_Y = 70;
 
 type NodeSide = 'left' | 'center' | 'right';
 type NodeKind = 'lesson' | 'exercise' | 'chest' | 'boss';
@@ -176,7 +177,7 @@ function resolveNodeLocked(
 }
 
 function buildTrail(nodes: ZoneNode[]): string {
-  const pts = nodes.map((n, i) => ({ x: SIDE_X[n.side], y: 26 + i * ROW }));
+  const pts = nodes.map((n, i) => ({ x: SIDE_X[n.side], y: START_Y + i * ROW }));
   let d = '';
   pts.forEach((p, i) => {
     if (i === 0) {
@@ -479,8 +480,7 @@ export default function RutaScreen() {
 
   const [showNotifications, setShowNotifications] = React.useState(false);
   const fetchNotifications = useNotificationStore(s => s.fetchNotifications);
-  const unreadCountFn = useNotificationStore(s => s.unreadCount);
-  const unreadCount = unreadCountFn();
+  const unreadCount = useNotificationStore(s => s.notifications.filter(n => !n.read).length);
 
   // States
   const [activeChestNode, setActiveChestNode] = React.useState<ZoneNode | null>(null);
@@ -694,7 +694,9 @@ export default function RutaScreen() {
       <WelcomeModal visible={showWelcome} onClose={handleCloseWelcome} />
 
       {/* Notification Center Bottom Sheet */}
-      <NotificationCenter visible={showNotifications} onClose={() => setShowNotifications(false)} />
+      {showNotifications && (
+        <NotificationCenter visible={showNotifications} onClose={() => setShowNotifications(false)} />
+      )}
 
       {/* Confetti Overlay */}
       {showConfetti && (
@@ -718,7 +720,7 @@ function ZoneSection({
   onPressExercise: (node: ZoneNode) => void;
 }) {
   const trailPath = buildTrail(zone.nodes);
-  const svgH = zone.nodes.length * ROW + 40;
+  const svgH = zone.nodes.length * ROW + 110;
 
   const currentIdx = zoneForceUnlocked
     ? zone.nodes.findIndex((n, i) => {
@@ -874,106 +876,113 @@ function ZoneSection({
       </View>
 
       {/* SVG trail + nodes */}
-      <View style={[styles.trailContainer, { height: svgH }]}>
-        <Svg width={W} height={svgH} style={{ position: 'absolute', top: 0, left: 0 }}>
-          {/* Subtle baseline locked trail */}
-          <Path d={trailPath} stroke="rgba(255,255,255,0.06)" strokeWidth={4} fill="none" strokeDasharray="6 4" />
+      <ScrollView
+        style={{ height: Math.min(380, svgH), width: '100%' }}
+        contentContainerStyle={{ height: svgH }}
+        nestedScrollEnabled={true}
+        showsVerticalScrollIndicator={true}
+      >
+        <View style={[styles.trailContainer, { height: svgH }]}>
+          <Svg width={W} height={svgH} style={{ position: 'absolute', top: 0, left: 0 }}>
+            {/* Subtle baseline locked trail */}
+            <Path d={trailPath} stroke="rgba(255,255,255,0.06)" strokeWidth={4} fill="none" strokeDasharray="6 4" />
 
-          {/* Dynamic segments with custom neon glow and animated dashes */}
-          {zone.nodes.map((node, i) => {
-            if (i === 0) return null;
-            const prevNode = zone.nodes[i - 1];
-            const currNode = zone.nodes[i];
+            {/* Dynamic segments with custom neon glow and animated dashes */}
+            {zone.nodes.map((node, i) => {
+              if (i === 0) return null;
+              const prevNode = zone.nodes[i - 1];
+              const currNode = zone.nodes[i];
 
-            // Math coordinates for identical curve
-            const x1 = SIDE_X[prevNode.side];
-            const y1 = 26 + (i - 1) * ROW;
-            const x2 = SIDE_X[currNode.side];
-            const y2 = 26 + i * ROW;
-            const cy = (y1 + y2) / 2;
-            const midpointX = (x1 + x2) / 2;
+              // Math coordinates for identical curve
+              const x1 = SIDE_X[prevNode.side];
+              const y1 = START_Y + (i - 1) * ROW;
+              const x2 = SIDE_X[currNode.side];
+              const y2 = START_Y + i * ROW;
+              const cy = (y1 + y2) / 2;
+              const midpointX = (x1 + x2) / 2;
 
-            // Q bezier segment string
-            const segmentD = `M ${x1} ${y1} Q ${x1} ${cy} ${midpointX} ${cy} Q ${x2} ${cy} ${x2} ${y2}`;
+              // Q bezier segment string
+              const segmentD = `M ${x1} ${y1} Q ${x1} ${cy} ${midpointX} ${cy} Q ${x2} ${cy} ${x2} ${y2}`;
 
-            const prevCompleted = completed.includes(prevNode.id);
-            const currCompleted = completed.includes(currNode.id);
-            
-            // Traversed path is completed if destination node is completed
-            const isCompleted = currCompleted;
+              const prevCompleted = completed.includes(prevNode.id);
+              const currCompleted = completed.includes(currNode.id);
+              
+              // Traversed path is completed if destination node is completed
+              const isCompleted = currCompleted;
 
-            // Active path is the segment currently being traveled (prev completed, destination unlocked & not completed)
-            const currLocked = resolveNodeLocked(zone.nodes, i, completed, zoneForceUnlocked);
-            const isActive = prevCompleted && !currCompleted && !currLocked;
+              // Active path is the segment currently being traveled (prev completed, destination unlocked & not completed)
+              const currLocked = resolveNodeLocked(zone.nodes, i, completed, zoneForceUnlocked);
+              const isActive = prevCompleted && !currCompleted && !currLocked;
 
-            if (isCompleted) {
-              return (
-                <React.Fragment key={`seg_${node.id}`}>
-                  {/* Neon Glow underlay */}
-                  <Path
-                    d={segmentD}
-                    stroke={zone.color}
-                    strokeWidth={8}
-                    strokeLinecap="round"
-                    fill="none"
-                    opacity={0.3}
-                  />
-                  {/* Neon solid core */}
-                  <Path
-                    d={segmentD}
-                    stroke={zone.color}
-                    strokeWidth={3}
-                    strokeLinecap="round"
-                    fill="none"
-                  />
-                </React.Fragment>
-              );
-            } else if (isActive) {
-              return (
-                <React.Fragment key={`seg_${node.id}`}>
-                  {/* Active segment dim glow */}
-                  <Path
-                    d={segmentD}
-                    stroke={zone.color}
-                    strokeWidth={8}
-                    strokeLinecap="round"
-                    fill="none"
-                    opacity={0.12}
-                  />
-                  {/* Flowing animated dashes core */}
-                  <AnimatedPath
-                    d={segmentD}
-                    stroke={zone.color}
-                    strokeWidth={3.5}
-                    strokeLinecap="round"
-                    fill="none"
-                    strokeDasharray="8 6"
-                    animatedProps={animatedFlowProps}
-                  />
-                </React.Fragment>
-              );
-            }
-            return null; // Locked segments only render the background trail
+              if (isCompleted) {
+                return (
+                  <React.Fragment key={`seg_${node.id}`}>
+                    {/* Neon Glow underlay */}
+                    <Path
+                      d={segmentD}
+                      stroke={zone.color}
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                      fill="none"
+                      opacity={0.3}
+                    />
+                    {/* Neon solid core */}
+                    <Path
+                      d={segmentD}
+                      stroke={zone.color}
+                      strokeWidth={3}
+                      strokeLinecap="round"
+                      fill="none"
+                    />
+                  </React.Fragment>
+                );
+              } else if (isActive) {
+                return (
+                  <React.Fragment key={`seg_${node.id}`}>
+                    {/* Active segment dim glow */}
+                    <Path
+                      d={segmentD}
+                      stroke={zone.color}
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                      fill="none"
+                      opacity={0.12}
+                    />
+                    {/* Flowing animated dashes core */}
+                    <AnimatedPath
+                      d={segmentD}
+                      stroke={zone.color}
+                      strokeWidth={3.5}
+                      strokeLinecap="round"
+                      fill="none"
+                      strokeDasharray="8 6"
+                      animatedProps={animatedFlowProps}
+                    />
+                  </React.Fragment>
+                );
+              }
+              return null; // Locked segments only render the background trail
+            })}
+          </Svg>
+
+          {zone.nodes.map((node, idx) => {
+            const nodeLocked = resolveNodeLocked(zone.nodes, idx, completed, zoneForceUnlocked);
+            const isCompleted = completed.includes(node.id);
+            return (
+              <NodeButton
+                key={node.id}
+                node={{ ...node, locked: nodeLocked }}
+                x={SIDE_X[node.side]}
+                y={START_Y + idx * ROW}
+                current={idx === currentIdx}
+                isCompleted={isCompleted}
+                onPressChest={onPressChest}
+                onPressExercise={onPressExercise}
+              />
+            );
           })}
-        </Svg>
-
-        {zone.nodes.map((node, idx) => {
-          const nodeLocked = resolveNodeLocked(zone.nodes, idx, completed, zoneForceUnlocked);
-          const isCompleted = completed.includes(node.id);
-          return (
-            <NodeButton
-              key={node.id}
-              node={{ ...node, locked: nodeLocked }}
-              x={SIDE_X[node.side]}
-              y={26 + idx * ROW}
-              current={idx === currentIdx}
-              isCompleted={isCompleted}
-              onPressChest={onPressChest}
-              onPressExercise={onPressExercise}
-            />
-          );
-        })}
-      </View>
+        </View>
+      </ScrollView>
 
       {/* Absolute Shaking Lock Overlay */}
       {(!zoneForceUnlocked || animatingUnlock) && (
@@ -1053,8 +1062,8 @@ function NodeButton({
     }
   };
 
-  const RADIUS = node.kind === 'boss' ? 38 : node.kind === 'chest' ? 32 : 30;
-  const iconSize = node.kind === 'boss' ? 22 : 18;
+  const RADIUS = node.kind === 'boss' ? 42 : node.kind === 'chest' ? 36 : 34;
+  const iconSize = node.kind === 'boss' ? 24 : node.kind === 'chest' ? 22 : 20;
 
   const nodeInner = () => {
     if (node.locked) {
@@ -1068,10 +1077,10 @@ function NodeButton({
       );
     }
     if (node.kind === 'boss') {
-      return <MascotChar which="boss" size={36} breathing={false} blinking={false} />;
+      return <MascotChar which="boss" size={40} breathing={false} blinking={false} />;
     }
     if (node.kind === 'exercise' && node.exId && EX_MASCOT[node.exId]) {
-      return <MascotChar which={EX_MASCOT[node.exId]} size={32} breathing={false} blinking={false} />;
+      return <MascotChar which={EX_MASCOT[node.exId]} size={36} breathing={false} blinking={false} />;
     }
     if (node.kind === 'lesson') {
       return <Ionicons name="book-outline" size={iconSize} color="#fff" />;

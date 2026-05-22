@@ -33,7 +33,7 @@ serve(async (req) => {
 Cada pregunta debe tener 4 opciones (A, B, C, D) y una única respuesta correcta (índice 0-3).
 Responde estrictamente con un JSON válido en el formato requerido.
 
-Texto: "${text}"`
+Texto: ${JSON.stringify(text)}`
             }]
           }],
           systemInstruction: {
@@ -75,8 +75,32 @@ Texto: "${text}"`
       });
     }
 
-    const textResponse = result.candidates[0].content.parts[0].text;
-    const parsed = JSON.parse(textResponse);
+    // Validate Gemini response — handle empty/blocked candidates
+    const candidate = result.candidates?.[0];
+    const fallbackQuestions = {
+      questions: [{
+        q: '¿Cuál es la idea principal del texto?',
+        opts: ['Idea A', 'Idea B', 'Idea C', 'Idea D'],
+        correct: 0
+      }]
+    };
+
+    if (!candidate || candidate.finishReason === 'SAFETY' || !candidate.content?.parts?.[0]?.text) {
+      return new Response(JSON.stringify(fallbackQuestions), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    let parsed;
+    try {
+      const textResponse = candidate.content.parts[0].text;
+      parsed = JSON.parse(textResponse);
+    } catch (parseErr) {
+      // Gemini returned malformed JSON despite responseMimeType
+      return new Response(JSON.stringify(fallbackQuestions), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     return new Response(JSON.stringify(parsed), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -133,61 +133,97 @@ export const useFlashcardStore = create<FlashcardState>()(
         }
 
         set({ isLoading: true });
-        const { data, error } = await supabase
-          .from('decks')
-          .select('*')
-          .order('created_at', { ascending: false });
+        try {
+          const { data, error } = await supabase
+            .from('decks')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-        if (!error && data) {
-          // Merge local starter decks with Supabase decks if desired
-          const remoteDecks = data.map(d => ({
-            id: d.id,
-            user_id: d.user_id,
-            name: d.name,
-            description: d.description,
-            color: d.color,
-            is_ai_generated: d.is_ai_generated,
-            created_at: d.created_at
-          }));
-          
-          set({ decks: [...STARTER_DECKS, ...remoteDecks] });
+          if (!error && data) {
+            // Merge local starter decks with Supabase decks if desired
+            const remoteDecks = data.map(d => ({
+              id: d.id,
+              user_id: d.user_id,
+              name: d.name,
+              description: d.description,
+              color: d.color,
+              is_ai_generated: d.is_ai_generated,
+              created_at: d.created_at
+            }));
+            
+            set({ decks: [...STARTER_DECKS, ...remoteDecks] });
+          }
+        } catch (err) {
+          console.warn('Error fetching decks from Supabase:', err);
+        } finally {
+          set({ isLoading: false });
         }
-        set({ isLoading: false });
       },
 
       fetchCards: async (deckId: string) => {
         // Skip for starter decks
         if (deckId.startsWith('deck-starter-')) return;
 
-        set({ isLoading: true });
-        const { data, error } = await supabase
-          .from('flashcards')
-          .select('*')
-          .eq('deck_id', deckId)
-          .order('created_at', { ascending: true });
-
-        if (!error && data) {
-          const cards = data.map(c => ({
-            id: c.id,
-            deck_id: c.deck_id,
-            front: c.front,
-            back: c.back,
-            hint: c.hint,
-            interval: c.interval,
-            repetitions: c.repetitions,
-            ease_factor: c.ease_factor,
-            next_due: c.next_due,
-            created_at: c.created_at
-          }));
-
+        // If local profile or local deck, avoid Supabase and initialize local array
+        const profile = useProfileStore.getState().profile;
+        if (!profile || profile.id === 'local' || deckId.startsWith('deck-local-')) {
           set(state => ({
             flashcards: {
               ...state.flashcards,
-              [deckId]: cards,
+              [deckId]: state.flashcards[deckId] || [],
             }
           }));
+          return;
         }
-        set({ isLoading: false });
+
+        set({ isLoading: true });
+        try {
+          const { data, error } = await supabase
+            .from('flashcards')
+            .select('*')
+            .eq('deck_id', deckId)
+            .order('created_at', { ascending: true });
+
+          if (!error && data) {
+            const cards = data.map(c => ({
+              id: c.id,
+              deck_id: c.deck_id,
+              front: c.front,
+              back: c.back,
+              hint: c.hint,
+              interval: c.interval,
+              repetitions: c.repetitions,
+              ease_factor: c.ease_factor,
+              next_due: c.next_due,
+              created_at: c.created_at
+            }));
+
+            set(state => ({
+              flashcards: {
+                ...state.flashcards,
+                [deckId]: cards,
+              }
+            }));
+          } else {
+            // Fallback to empty array if error to prevent undefined stuck states
+            set(state => ({
+              flashcards: {
+                ...state.flashcards,
+                [deckId]: state.flashcards[deckId] || [],
+              }
+            }));
+          }
+        } catch (err) {
+          console.warn('Error fetching flashcards from Supabase:', err);
+          set(state => ({
+            flashcards: {
+              ...state.flashcards,
+              [deckId]: state.flashcards[deckId] || [],
+            }
+          }));
+        } finally {
+          set({ isLoading: false });
+        }
       },
 
       createDeck: async (name, description, color, isAIGenerated = false) => {
@@ -337,8 +373,12 @@ export const useFlashcardStore = create<FlashcardState>()(
           }
         }));
 
+        if (deckId.startsWith('deck-starter-') || cardId.startsWith('card-') || cardId.startsWith('card-local-')) {
+          return; // Operación estrictamente local, no invocar Supabase
+        }
+
         const profile = useProfileStore.getState().profile;
-        if (profile && profile.id !== 'local' && !cardId.startsWith('card-local-')) {
+        if (profile && profile.id !== 'local') {
           await supabase.from('flashcards').delete().eq('id', cardId);
         }
       },
@@ -375,9 +415,13 @@ export const useFlashcardStore = create<FlashcardState>()(
           }
         }));
 
+        if (deckId.startsWith('deck-starter-') || cardId.startsWith('card-') || cardId.startsWith('card-local-')) {
+          return; // No llamar a Supabase
+        }
+
         // Persist to Supabase if not a starter card and profile is not local
         const profile = useProfileStore.getState().profile;
-        if (profile && profile.id !== 'local' && !cardId.startsWith('card-') && !deckId.startsWith('deck-starter-')) {
+        if (profile && profile.id !== 'local') {
           await supabase
             .from('flashcards')
             .update({

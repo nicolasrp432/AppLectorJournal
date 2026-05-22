@@ -23,13 +23,13 @@ interface ProfileState {
 
 const DEFAULT_PROFILE: Profile = {
   id: 'local',
-  name: 'Sofía',
+  name: 'Nuevo Lector',
   email: null,
   avatar: 'focus' as MascotKey,
-  bio: 'Aprendiendo a leer mejor cada día',
-  level: 4,
-  xp: 1240,
-  streak: 7,
+  bio: '',
+  level: 1,
+  xp: 0,
+  streak: 0,
   last_active: null,
   created_at: new Date().toISOString(),
   subscription_tier: 'free',
