@@ -150,18 +150,36 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
 
   const msPerWord = (60 / wpm) * 1000 * (mode === 'chunk' ? chunkSize : 1);
 
+  const idxRef = useRef(idx);
+  useEffect(() => {
+    idxRef.current = idx;
+  }, [idx]);
+
   useEffect(() => {
     if (!playing || phase !== 'reading') return;
-    const step = mode === 'chunk' ? chunkSize : 1;
-    if (idx >= words.length) {
-      setPlaying(false);
-      setReadSeconds((Date.now() - startTimeRef.current) / 1000);
-      setPhase('quiz');
-      return;
-    }
-    const t = setTimeout(() => setIdx(i => i + step), msPerWord);
-    return () => clearTimeout(t);
-  }, [idx, playing, msPerWord, mode, chunkSize, words.length, phase]);
+
+    let timerId: any = null;
+
+    const tick = () => {
+      const step = mode === 'chunk' ? chunkSize : 1;
+      const nextIdx = idxRef.current + step;
+
+      if (nextIdx >= words.length) {
+        setPlaying(false);
+        setReadSeconds((Date.now() - startTimeRef.current) / 1000);
+        setPhase('quiz');
+      } else {
+        idxRef.current = nextIdx;
+        setIdx(nextIdx);
+        timerId = setTimeout(tick, msPerWord);
+      }
+    };
+
+    timerId = setTimeout(tick, msPerWord);
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [playing, phase, mode, chunkSize, msPerWord, words.length]);
 
   const start = () => {
     setIdx(0);

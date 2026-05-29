@@ -38,6 +38,8 @@ import { ComprehensionExercise } from '../../components/exercises/ComprehensionE
 import { BossExercise } from '../../components/exercises/BossExercise';
 import { FreeReadingExercise } from '../../components/exercises/FreeReading';
 import { ExerciseDemo } from '../../components/exercises/ExerciseDemo';
+import { ReadingSpeedTest } from '../../components/exercises/ReadingSpeedTest';
+import { FocusCircle } from '../../components/exercises/FocusCircle';
 
 import type { ExerciseId } from '../../types/db';
 
@@ -66,7 +68,7 @@ interface BuiltResult {
 }
 
 export default function ExerciseScreen() {
-  const { id, nodeId } = useLocalSearchParams<{ id: string; nodeId?: string }>();
+  const { id, nodeId, palaceId } = useLocalSearchParams<{ id: string; nodeId?: string; palaceId?: string }>();
   const exerciseId = (id ?? 'schulte') as ExerciseId;
   const exercise = EXERCISES[exerciseId];
 
@@ -119,7 +121,12 @@ export default function ExerciseScreen() {
   const config = defaultConfig[exerciseId] ?? {};
 
   const handleFinish = async (raw: RawResult) => {
-    const prog = getProgress(exerciseId);
+    const dbExerciseId = 
+      exerciseId === 'reading_test' ? 'reading' :
+      exerciseId === 'focus_circle' ? 'schulte' :
+      exerciseId;
+
+    const prog = getProgress(dbExerciseId as ExerciseId);
     const built = buildResult(exerciseId, exercise, raw);
     setResult(built);
     incrementSessionCountLocal();
@@ -127,10 +134,10 @@ export default function ExerciseScreen() {
     const score = built.passed ? (raw.comprehension ?? (raw.correct && raw.total ? raw.correct / raw.total : 0.9)) : 0.4;
     const clampedScore = Math.max(0, Math.min(1, score as number));
 
-    const adapt = adaptLevel(exerciseId, clampedScore, prog.current_level);
+    const adapt = adaptLevel(dbExerciseId, clampedScore, prog.current_level);
 
     await insertSession({
-      exercise_id: exerciseId,
+      exercise_id: dbExerciseId as ExerciseId,
       level: prog.current_level,
       started_at: null,
       finished_at: new Date().toISOString(),
@@ -142,7 +149,7 @@ export default function ExerciseScreen() {
       xp_earned: built.xpEarned,
     });
 
-    await updateProgress(exerciseId, {
+    await updateProgress(dbExerciseId as ExerciseId, {
       current_level: adapt.newLevel,
       best_score: Math.max(prog.best_score, clampedScore),
       last_score: clampedScore,
@@ -274,6 +281,10 @@ export default function ExerciseScreen() {
   const accent = exercise.color;
 
   switch (exerciseId) {
+    case 'reading_test':
+      return <ReadingSpeedTest accent={accent} onFinish={handleFinish} onQuit={quit} />;
+    case 'focus_circle':
+      return <FocusCircle accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'schulte': {
       const currentLevel = getProgress('schulte').current_level;
       return (
@@ -292,7 +303,7 @@ export default function ExerciseScreen() {
     case 'wordspan':
       return <WordSpanExercise level={wordSpanCount} showMs={wordSpanInterval} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'loci':
-      return <LociExercise count={lociCount} studyMs={lociStudyTime} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+      return <LociExercise count={lociCount} studyMs={lociStudyTime} accent={accent} palaceId={palaceId} onFinish={handleFinish} onQuit={quit} />;
     case 'comprehension':
       return <ComprehensionExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
     case 'boss':
@@ -1002,6 +1013,35 @@ function buildResult(exerciseId: ExerciseId, exercise: typeof EXERCISES[string],
         insight: passed
           ? 'Buen ritmo de lectura natural. Practica para superar tus propios WPM.'
           : 'Intenta leer activamente buscando ideas clave antes de responder.',
+      };
+    }
+    case 'reading_test': {
+      const comp = raw.comprehension ?? 0;
+      const passed = comp >= 0.6;
+      return {
+        passed,
+        headline: passed ? `Test Diagnóstico: ${raw.wpm ?? 280} WPM` : 'Comprensión insuficiente',
+        xpEarned: passed ? exercise.xp : Math.floor(exercise.xp / 3),
+        stats: [
+          { icon: 'gauge', value: passed ? (raw.wpm ?? 280) : 280, unit: 'WPM', label: 'Velocidad', color: '#F97316' },
+          { icon: 'brain', value: Math.round(comp * 100), unit: '%', label: 'Comprensión', color: '#8B5CF6' },
+          { icon: 'clock', value: (raw.time ?? 0).toFixed(0), unit: 's', label: 'Tiempo', color: '#3B82F6' },
+        ],
+        insight: passed
+          ? '¡Excelente! Hemos calibrado tus ejercicios a esta velocidad lectora.'
+          : 'Intenta leer con mayor atención la próxima vez para validar tu test.',
+      };
+    }
+    case 'focus_circle': {
+      return {
+        passed: true,
+        headline: 'Enfoque Sostenido',
+        xpEarned: exercise.xp,
+        stats: [
+          { icon: 'clock', value: (raw.time ?? 60).toFixed(0), unit: 's', label: 'Tiempo', color: '#22C55E' },
+          { icon: 'eye', value: '100%', unit: '', label: 'Atención', color: '#8B5CF6' },
+        ],
+        insight: '¡Gran trabajo! Mantener la atención expande el tramo útil de fijación ocular.',
       };
     }
     default:

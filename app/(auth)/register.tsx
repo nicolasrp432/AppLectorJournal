@@ -4,10 +4,15 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../../lib/supabase';
 import { PushButton } from '../../components/ui/PushButton';
+import { OutlineButton } from '../../components/ui/OutlineButton';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function RegisterScreen() {
   const [name,     setName]     = useState('');
@@ -91,6 +96,60 @@ export default function RegisterScreen() {
     }
   };
 
+  const handleGoogle = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      if (Platform.OS === 'web') {
+        const { error: oauthErr } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (oauthErr) throw oauthErr;
+        return;
+      }
+
+      const redirectUrl = Linking.createURL('google-auth');
+      
+      const { data, error: oauthErr } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (oauthErr) throw oauthErr;
+
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+        
+        if (result.type === 'success' && result.url) {
+          const parsedUrl = Linking.parse(result.url);
+          const { access_token, refresh_token } = parsedUrl.queryParams || {};
+          
+          if (access_token && refresh_token) {
+            const { error: sessionErr } = await supabase.auth.setSession({
+              access_token: String(access_token),
+              refresh_token: String(refresh_token),
+            });
+            if (sessionErr) throw sessionErr;
+            router.replace('/(tabs)/ruta');
+          }
+        }
+      }
+    } catch (err: any) {
+      console.warn('Error en Google Sign-in:', err);
+      setError(err.message || 'Error al iniciar sesión con Google.');
+    } finally {
+      if (Platform.OS !== 'web') {
+        setLoading(false);
+      }
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.white }}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
@@ -131,6 +190,18 @@ export default function RegisterScreen() {
             {loading ? 'Creando cuenta…' : 'Crear mi cuenta'}
           </PushButton>
 
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerLabel}>o regístrate con</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <View style={styles.socialRow}>
+            <OutlineButton borderColor={COLORS.border} textColor={COLORS.inkLight} onPress={handleGoogle} full={false}>
+              <Text style={{ fontFamily: FONTS.heading, fontSize: 14, color: COLORS.inkLight }}>  G  Google</Text>
+            </OutlineButton>
+          </View>
+
           <Pressable onPress={() => router.push('/(auth)/login')} style={{ marginTop: 20 }}>
             <Text style={{ fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center' }}>
               ¿Ya tienes cuenta? <Text style={{ color: COLORS.focus, fontFamily: FONTS.headingSemi }}>Inicia sesión</Text>
@@ -150,4 +221,8 @@ const styles = StyleSheet.create({
   fieldLabel: { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginLeft: 4, marginBottom: 6 },
   input:      { fontFamily: FONTS.body, fontSize: 15, borderWidth: 2, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, color: COLORS.ink },
   errorText:  { fontFamily: FONTS.body, fontSize: 13, color: '#DC2626', textAlign: 'center', marginBottom: 12 },
+  dividerRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 24 },
+  dividerLine:{ flex: 1, height: 1, backgroundColor: COLORS.border },
+  dividerLabel:{ fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.subtle, textTransform: 'uppercase', letterSpacing: 1 },
+  socialRow:  { flexDirection: 'row', gap: 12, marginBottom: 12, justifyContent: 'center' },
 });

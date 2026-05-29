@@ -87,7 +87,7 @@ export default function DeckReview() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <View style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <MascotChar which="memo" size={120} expression="concerned" />
+          <MascotChar which="memo" size={120} expression="calm" />
           <Text style={[styles.loadingText, { fontFamily: FONTS.headingBold, fontSize: FONT_SIZE.lg, marginTop: 20 }]}>
             Mazo no encontrado
           </Text>
@@ -130,7 +130,7 @@ export default function DeckReview() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <View style={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-          <MascotChar which="memo" size={120} expression="concerned" />
+          <MascotChar which="memo" size={120} expression="calm" />
           <Text style={[styles.loadingText, { fontFamily: FONTS.headingBold, fontSize: FONT_SIZE.lg, marginTop: 20 }]}>
             Este mazo está vacío
           </Text>

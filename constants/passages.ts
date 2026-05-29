@@ -273,7 +273,80 @@ export const PASSAGES: Passage[] = [
       { q: '¿Qué es la "reserva cognitiva" generada por el bilingüismo?', opts: ['Un área de almacenamiento de vocabulario', 'La fortaleza protectora del cerebro contra el declive cognitivo', 'El combustible que consume la corteza visual', 'Una capacidad de memorizar números telefónicos'], correct: 1 },
     ],
   },
+  {
+    id: 'p_stoicism_adv',
+    title: 'Autodisciplina y Ataraxia estoica',
+    length: 'long',
+    text: 'El estoicismo no es la supresión de las emociones, sino el entendimiento de su origen cognitivo. Epicteto insistía en que no nos perturban las cosas que suceden, sino nuestras opiniones sobre esas cosas. La verdadera libertad estoica radica en entrenar el juicio racional para distinguir de manera instantánea entre lo que está bajo nuestro control absoluto (nuestras intenciones, opiniones y virtudes morales) y lo que no lo está (el cuerpo, la riqueza, la reputación y las acciones ajenas). Al practicar este escrutinio constante, el practicante estoico desarrolla una ataraxia o serenidad inquebrantable que actúa como una armadura mental. Este hábito nos protege de la reactividad emocional y la ansiedad moderna, permitiendo reencauzar toda la energía psíquica en perfeccionar el carácter y actuar con justicia, coraje y sabiduría ante cualquier circunstancia inesperada del destino.',
+    questions: [
+      { q: 'Según Epicteto, ¿cuál es el verdadero origen de nuestra perturbación?', opts: ['Las crisis económicas externas', 'Nuestras opiniones sobre las cosas', 'El comportamiento hostil de los demás', 'La fragilidad de la salud física'], correct: 1 },
+      { q: '¿Qué abarca el control absoluto de un estoico?', opts: ['Nuestras intenciones, opiniones y virtudes', 'La riqueza, la salud y la reputación', 'El comportamiento ético de nuestros seres queridos', 'El éxito profesional a largo plazo'], correct: 0 },
+      { q: '¿Qué es la "ataraxia" en la tradición estoica?', opts: ['Una meta de acumulación de bienes', 'Una serenidad o tranquilidad inquebrantable', 'El miedo constante ante el destino', 'El aislamiento del mundo social'], correct: 1 },
+      { q: '¿Cómo reencauza el estoico su energía psíquica?', opts: ['Luchando por cambiar el clima y la política', 'En perfeccionar su carácter y actuar con justicia', 'Quejándose del desajuste evolutivo', 'Enfocándose en metas materiales gigantes'], correct: 1 }
+    ],
+  },
+  {
+    id: 'p_creativity_paradox',
+    title: 'La Paradoja del Foco Creativo',
+    length: 'long',
+    text: 'Durante mucho tiempo se supuso que la creatividad emergía del desorden y la improvisación pura. Sin embargo, la neurociencia moderna revela una paradoja fascinante: los estados de mayor creatividad son el resultado directo de una oscilación extremadamente coordinada entre dos redes neuronales antagonistas. Por un lado, la Red Neuronal por Defecto (RND) se activa en estados de reposo o pensamiento errante, conectando ideas lejanas y memorias de forma no lineal. Por otro lado, la Red de Control Ejecutivo (RCE) se encarga del filtrado, la lógica y el análisis crítico riguroso. El creador brillante no se pierde en el caos, sino que sabe encender la RND para la lluvia de ideas sin filtros y, de inmediato, reclutar a la RCE para estructurar y editar esas ideas. Sostener la atención en este vaivén es un músculo cognitivo entrenable que diferencia la inspiración caótica de la obra consolidada.',
+    questions: [
+      { q: '¿Cuál es la paradoja de la creatividad descrita en el texto?', opts: ['Que requiere dormir toda la noche', 'Que resulta de una oscilación coordinada entre redes antagonistas', 'Que la lógica inhibe por completo el arte', 'Que la inteligencia artificial es más creativa'], correct: 1 },
+      { q: '¿Cuál es la función principal de la Red Neuronal por Defecto (RND)?', opts: ['El filtrado estricto y la evaluación lógica', 'La conexión no lineal de ideas y el pensamiento errante', 'El control motor de las manos del artista', 'La traducción de sonidos a palabras'], correct: 1 },
+      { q: '¿Qué red se encarga del análisis crítico y la edición de ideas?', opts: ['La Red Auditiva Central', 'La Red Neuronal por Defecto', 'La Red de Control Ejecutivo', 'La Red Límbica Primaria'], correct: 2 },
+      { q: '¿Qué diferencia a la inspiración caótica de la obra consolidada?', opts: ['La suerte del creador', 'La capacidad de alternar estructuradamente entre ideación y edición', 'La ausencia total de reglas lógicas', 'La velocidad de lectura periférica del autor'], correct: 1 }
+    ],
+  },
+  {
+    id: 'p_neuro_mirror',
+    title: 'El Aprendizaje y las Neuronas Espejo',
+    length: 'long',
+    text: 'Descubiertas en primates por Giacomo Rizzolatti, las neuronas espejo representan una revolución en la comprensión del aprendizaje y la empatía social. Estas células motoras especializadas se activan no solo cuando ejecutamos una acción física (como tomar una taza), sino también cuando observamos a otro individuo realizar esa misma acción. El cerebro simula internamente la conducta ajena, creando un reflejo mental inmediato. Este mecanismo biológico es la base del aprendizaje por imitación y la transferencia de habilidades complejas. Al leer y visualizar vívidamente descripciones dinámicas de movimientos u operaciones complejas, nuestras neuronas espejo disparan micro-activaciones motoras equivalentes. Entrenar la mente con visualizaciones estructuradas y precisas consolida las redes neuronales de una nueva habilidad incluso antes de ponerla en práctica en el terreno físico.',
+    questions: [
+      { q: '¿Quién descubrió originalmente las neuronas espejo?', opts: ['Carol Dweck', 'Giacomo Rizzolatti', 'Mihaly Csikszentmihalyi', 'Cal Newport'], correct: 1 },
+      { q: '¿Cuándo se activan las neuronas espejo?', opts: ['Solo al dormir profundamente', 'Al hacer una acción y al observar a otro hacerla', 'Solo al recibir micro-recompensas digitales', 'Al memorizar palabras abstractas'], correct: 1 },
+      { q: '¿Qué capacidad humana fundamental facilitan estas neuronas?', opts: ['El aprendizaje por imitación y la empatía', 'La visión periférica en Schulte Grid', 'El cálculo matemático abstracto', 'La audición lejana'], correct: 0 },
+      { q: '¿Cómo ayuda la visualización a consolidar habilidades físicas?', opts: ['No tiene efecto biológico medible', 'Disparando micro-activaciones motoras equivalentes en el cerebro', 'Aumentando el cortisol de forma masiva', 'Reconfigurando el lóbulo occipital inferior'], correct: 1 }
+    ],
+  },
+  {
+    id: 'p_epigenetics',
+    title: 'Epigenética: Más allá del ADN',
+    length: 'long',
+    text: 'Durante décadas imperó el determinismo genético, asumiendo que nuestro destino biológico estaba escrito de forma inalterable en el ADN recibido al nacer. La epigenética ha desmantelado esta rigidez, revelando que si bien el código genético es fijo, la expresión de esos genes es altamente moldeable. Pequeños marcadores químicos colocados sobre el ADN actúan como interruptores que encienden o apagan genes específicos en respuesta al entorno. Factores como el estrés prolongado, la calidad del sueño, el ejercicio físico regular y la estimulación intelectual constante modifican nuestro perfil epigenético cada día. Estos cambios pueden incluso heredarse a las siguientes generaciones sin alterar una sola letra del genoma básico. La mente y el cuerpo no son meros receptores pasivos, sino activos moduladores de su propia expresión génica en tiempo real.',
+    questions: [
+      { q: '¿Qué sostiene la epigenética en oposición al determinismo genético?', opts: ['Que el ADN se puede modificar físicamente', 'Que la expresión de los genes es moldeable por el entorno', 'Que los genes no influyen en nada', 'Que la demencia es irreversible'], correct: 1 },
+      { q: '¿Cómo funcionan los marcadores químicos sobre el ADN?', opts: ['Como interruptores que encienden o apagan genes', 'Mutando los cromosomas del genoma', 'Destruyendo las células cerebrales débiles', 'Acelerando la velocidad de subvocalización'], correct: 0 },
+      { q: '¿Qué factores de estilo de vida impactan el perfil epigenético?', opts: ['Solo el clima y la geografía de nacimiento', 'Estrés, sueño, ejercicio y estimulación intelectual', 'Exclusivamente el uso de antibióticos', 'Ninguno; la expresión es totalmente fija'], correct: 1 },
+      { q: '¿Qué revela el texto sobre la herencia de los cambios epigenéticos?', opts: ['Que es imposible heredar cambios del entorno', 'Que pueden heredarse sin cambiar la secuencia base del ADN', 'Que solo duran unos pocos minutos en el cuerpo', 'Que causan mutaciones letales inmediatas'], correct: 1 }
+    ],
+  },
+  {
+    id: 'p_cognitive_bias',
+    title: 'Sesgos Cognitivos y el Efecto Anclaje',
+    length: 'long',
+    text: 'El cerebro humano busca siempre optimizar el consumo de energía mental, utilizando atajos lógicos llamados heurísticos para resolver decisiones complejas. Sin embargo, estos atajos fallan de forma sistemática, produciendo sesgos cognitivos. Uno de los más persistentes es el Efecto Anclaje. Ocurre cuando confiamos desproporcionadamente en la primera información recibida al tomar una decisión, usándola como un ancla de comparación. Por ejemplo, al negociar un salario o ver el precio inicial inflado de un producto, nuestro cerebro ajusta todas las valoraciones subsiguientes en torno a esa cifra inicial, incluso si es absurda o arbitraria. Entrenar el pensamiento crítico e intelectual requiere aprender a detectar estos sesgos y cuestionar activamente las referencias iniciales antes de tomar decisiones importantes.',
+    questions: [
+      { q: '¿Qué son los atajos lógicos que usa el cerebro para ahorrar energía?', opts: ['Sinapsis motoras', 'Heurísticos', 'Redes de control ejecutivo', 'Marcadores epigenéticos'], correct: 1 },
+      { q: '¿En qué consiste el Efecto Anclaje?', opts: ['Olvidar las primeras palabras de un texto largo', 'Confiar en exceso en la primera información que recibimos', 'Mantener una postura física rígida al estudiar', 'Regresar la mirada continuamente a la línea superior'], correct: 1 },
+      { q: '¿Cómo afecta el anclaje a las negociaciones o precios?', opts: ['Nos hace rechazar ofertas iniciales de inmediato', 'Usa la cifra inicial como referencia rígida de valoración', 'Aumenta la memoria espacial del comprador', 'Elimina la fatiga de decisión por completo'], correct: 1 },
+      { q: '¿Qué se requiere para mitigar el efecto de los sesgos cognitivos?', opts: ['Comprar productos con descuento rápido', 'Entrenar el pensamiento crítico y cuestionar referencias iniciales', 'Hacer multitarea para distraer al cerebro', 'Leer a más de 1000 palabras por minuto'], correct: 1 }
+    ],
+  },
+  {
+    id: 'p_loci_origin',
+    title: 'Simónides y el Origen de los Loci',
+    length: 'long',
+    text: 'El origen del Método de Loci o Palacio de la Memoria se remonta al año 500 antes de Cristo en Grecia. El poeta Simónides de Ceos asistía a un banquete señorial que terminó en tragedia cuando el techo del palacio colapsó, aplastando e desfigurando a los invitados de forma irreconocible. Simónides, el único superviviente, logró identificar cada uno de los cadáveres recordando exactamente el asiento que ocupaba cada invitado en torno a la mesa. Este trágico suceso le hizo comprender que el cerebro humano tiene una asombrosa predisposición genética para recordar el orden espacial y la ubicación de las cosas. Al estructurar esta intuición, Simónides inventó la mnemotecnia: asociar datos abstractos con coordenadas físicas, convirtiendo el espacio en un organizador indestructible de la memoria humana.',
+    questions: [
+      { q: '¿En qué siglo y lugar se origina el método de los Loci?', opts: ['Siglo V a.C. en la antigua Grecia', 'Siglo I d.C. en el Imperio Romano', 'Siglo XVIII en Gran Bretaña', 'Siglo XX en laboratorios de Japón'], correct: 0 },
+      { q: '¿Cómo logró Simónides identificar los cadáveres del colapso?', opts: ['Revisando sus documentos de identidad', 'Recordando el asiento exacto de cada invitado', 'Usando técnicas avanzadas de ADN', 'Por el color de sus vestimentas'], correct: 1 },
+      { q: '¿Qué predisposición cerebral clave descubrió Simónides tras el colapso?', opts: ['El cerebro prefiere recordar números de teléfono', 'El cerebro tiene facilidad para recordar el orden y espacio físico', 'El cerebro procesa palabras como golpes visuales', 'El cerebro suprime la regresión de forma innata'], correct: 1 },
+      { q: '¿Cómo define el texto a la mnemotecnia inventada por Simónides?', opts: ['Un software de estudio por repetición espaciada', 'Asociar datos abstractos con coordenadas físicas y espaciales', 'El arte de escribir poesía banquete por banquete', 'Una regla de lectura guiada táctil'], correct: 1 }
+    ],
+  },
 ];
+
 
 export const WORD_BANK_BASIC = ['luz','río','viento','hoja','sol','nube','piedra','mar','fuego','bosque','árbol','lluvia','cielo','flor','montaña','agua','tierra','estrella','luna','pájaro'];
 export const WORD_BANK_MEDIUM = ['biblioteca','memoria','concepto','ventana','sendero','tormenta','cristal','silencio','horizonte','mariposa','quietud','reflejo','instante','mecánica','umbral'];

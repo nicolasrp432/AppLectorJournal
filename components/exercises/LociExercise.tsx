@@ -11,6 +11,7 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
+import { useLociStore } from '../../store/useLociStore';
 import { supabase } from '../../lib/supabase';
 
 const ROOM_THEMES = {
@@ -61,6 +62,7 @@ interface Props {
   count?: number;
   studyMs?: number;
   accent?: string;
+  palaceId?: string; // New palaceId prop
   onFinish: (result: { correct: number; total: number; time: number }) => void;
   onQuit: () => void;
 }
@@ -80,14 +82,42 @@ function getSurrealLociAssociation(roomLabel: string, objectWord: string): strin
     .replace('{ROOM}', roomLabel.toLowerCase());
 }
 
-export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', onFinish, onQuit }: Props) {
-  const palaceTheme = usePrefsStore(state => state.prefs.loci_palace) || 'casa';
-  const ALL_ROOMS = ROOM_THEMES[palaceTheme as keyof typeof ROOM_THEMES] || ROOM_THEMES.casa;
+export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', palaceId, onFinish, onQuit }: Props) {
+  const { getPalace } = useLociStore();
+  const customPalace = palaceId ? getPalace(palaceId) : undefined;
 
-  const wantCount = Math.min(8, Math.max(3, count));
-  const rooms = ALL_ROOMS.slice(0, wantCount);
-  const words = LOCI_OBJECTS.slice(0, wantCount);
-  const [assoc] = useState(() => rooms.map((r, i) => ({ ...r, word: words[i] })));
+  const [assoc] = useState(() => {
+    if (customPalace && customPalace.memories) {
+      const themeName = customPalace.theme || 'casa';
+      const ALL_ROOMS = ROOM_THEMES[themeName] || ROOM_THEMES.casa;
+      return customPalace.memories.map((m, i) => {
+        const templateRoom = ALL_ROOMS.find(r => r.label.toLowerCase() === m.room.toLowerCase()) || ALL_ROOMS[i % ALL_ROOMS.length];
+        return {
+          id: templateRoom?.id || `room_${i}`,
+          label: m.room,
+          word: m.item,
+          story: m.story,
+          image_url: m.image_url,
+          x: templateRoom?.x ?? 50,
+          y: templateRoom?.y ?? 50,
+          icon: templateRoom?.icon ?? 'home-outline',
+        };
+      });
+    } else {
+      const palaceTheme = usePrefsStore.getState().prefs.loci_palace || 'casa';
+      const ALL_ROOMS = ROOM_THEMES[palaceTheme as keyof typeof ROOM_THEMES] || ROOM_THEMES.casa;
+      const wantCount = Math.min(8, Math.max(3, count));
+      const rooms = ALL_ROOMS.slice(0, wantCount);
+      const words = LOCI_OBJECTS.slice(0, wantCount);
+      return rooms.map((r, i) => ({
+        ...r,
+        word: words[i],
+        story: '',
+        image_url: '',
+      }));
+    }
+  });
+
   const [aiStories, setAiStories] = useState<Record<string, string>>({});
   const [aiImages, setAiImages] = useState<Record<string, string>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(false);
@@ -100,6 +130,7 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   const startTime = React.useRef(Date.now());
 
   useEffect(() => {
+    if (customPalace) return; // Skip entirely for custom palaces as stories are already present
     let active = true;
     async function fetchAIStories() {
       setIsLoadingAI(true);
@@ -193,7 +224,7 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
     }
     fetchAIStories();
     return () => { active = false; };
-  }, [assoc]);
+  }, [assoc, customPalace]);
 
   // Loci Hint state
   const { owned, consume } = useRewardsStore();
@@ -233,8 +264,15 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
   const current = phase === 'learn' ? assoc[learnIdx] : assoc[recallIdx];
   
   // Get dynamic surreal mnemonic text
-  const bizarreText = aiStories[current.id] || getSurrealLociAssociation(current.label, current.word);
-  const isStoryLoading = isLoadingAI && !aiStories[current.id];
+  const bizarreText = customPalace
+    ? current.story
+    : (aiStories[current.id] || getSurrealLociAssociation(current.label, current.word));
+  
+  const imageUri = customPalace
+    ? current.image_url
+    : aiImages[current.id];
+
+  const isStoryLoading = !customPalace && isLoadingAI && !aiStories[current.id];
 
   return (
     <View style={styles.container}>
@@ -264,7 +302,7 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', on
             <LociStoryCard
               text={bizarreText}
               roomId={current.id}
-              imageUri={aiImages[current.id]}
+              imageUri={imageUri}
               isLoading={isStoryLoading}
               key={learnIdx}
             />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, Pressable, ScrollView, StyleSheet,
-  NativeSyntheticEvent, NativeScrollEvent,
+  NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -11,6 +11,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
+import { useQuizCacheStore, QuizQuestion } from '../../store/useQuizCacheStore';
+import { supabase } from '../../lib/supabase';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -18,10 +20,20 @@ import { XPBanner } from '../../components/ui/XPBanner';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 
-type ReaderPhase = 'setup' | 'reading' | 'done';
+type ReaderPhase = 'setup' | 'reading' | 'quiz' | 'done';
 type ReadMode = 'rsvp' | 'scroll';
 
 const ACCENT = COLORS.swift;
+
+function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash |= 0; // Convert to 32bit integer
+  }
+  return `h_${Math.abs(hash)}`;
+}
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -63,6 +75,14 @@ export default function ReaderScreen() {
   const [showBanner, setShowBanner] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
 
+  // Quiz state variables
+  const [activeQuiz, setActiveQuiz] = useState<QuizQuestion[]>([]);
+  const [qIdx, setQIdx] = useState(0);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [quizScore, setQuizScore] = useState(0);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [loadingQuiz, setLoadingQuiz] = useState(false);
+
   const startRef = useRef(Date.now());
   const hasScrollStarted = useRef(false);
   const scrollStartRef = useRef(Date.now());
@@ -92,23 +112,113 @@ export default function ReaderScreen() {
     return () => clearTimeout(t);
   }, [wordIdx, playing, msPerWord, mode, words.length, phase]);
 
-  const finishSession = () => {
+  const getReadSlice = () => {
+    if (!book?.content) return '';
+    if (mode === 'scroll') {
+      const end = Math.floor(scrollPct * book.content.length);
+      const start = Math.max(0, end - 3000); // last 3000 characters
+      return book.content.substring(start, end).trim();
+    } else {
+      const totalWords = words.length;
+      const currentWordCount = Math.min(wordIdx, totalWords);
+      const start = Math.max(0, currentWordCount - 500);
+      return words.slice(start, currentWordCount).join(' ').trim();
+    }
+  };
+
+  const finishSession = async () => {
     const progress = mode === 'scroll'
       ? scrollPct
       : (words.length > 0 ? Math.min(1, wordIdx / words.length) : 0);
-    const xp = Math.floor(50 * progress);
-    setXpEarned(xp);
+
+    const slice = getReadSlice();
+    const sliceWords = slice.split(/\s+/).filter(Boolean).length;
 
     if (book?.id && progress > 0) {
       update(book.id, {
         progress,
         last_read_at: new Date().toISOString(),
       });
-      addXP(xp);
+    }
+
+    if (book && sliceWords >= 40) {
+      const sliceHash = simpleHash(slice);
+      setLoadingQuiz(true);
+      setPhase('quiz');
+
+      try {
+        const quizCacheStore = useQuizCacheStore.getState();
+        await quizCacheStore.fetchQuizzes(book.id);
+        const cached = quizCacheStore.getQuiz(book.id, sliceHash);
+
+        if (cached && cached.questions && cached.questions.length > 0) {
+          setActiveQuiz(cached.questions);
+          setQIdx(0);
+          setQuizScore(0);
+          setLoadingQuiz(false);
+          return;
+        }
+
+        const { data, error } = await supabase.functions.invoke('ai-questions', {
+          body: { text: slice, count: 3 }
+        });
+
+        if (error) throw error;
+        if (data && data.questions && data.questions.length > 0) {
+          await quizCacheStore.insertQuiz(book.id, sliceHash, data.questions);
+          setActiveQuiz(data.questions);
+          setQIdx(0);
+          setQuizScore(0);
+        } else {
+          throw new Error('No se pudieron generar preguntas de comprensión.');
+        }
+      } catch (err: any) {
+        console.warn('AI Quiz generation failed, bypassing to done phase:', err);
+        completeSessionXP(progress, 0);
+      } finally {
+        setLoadingQuiz(false);
+      }
+    } else {
+      completeSessionXP(progress, 0);
+    }
+  };
+
+  const completeSessionXP = (progress: number, score: number) => {
+    const baseXP = Math.floor(50 * progress);
+    const bonusXP = score * 15; // +15 XP bonus per correct answer
+    const totalXP = baseXP + bonusXP;
+    setXpEarned(totalXP);
+
+    if (book?.id && progress > 0) {
+      addXP(totalXP);
     }
 
     setPhase('done');
-    if (xp > 0) setShowBanner(true);
+    if (totalXP > 0) setShowBanner(true);
+  };
+
+  const handleAnswerSelect = (oi: number) => {
+    setPicked(oi);
+    setShowFeedback(true);
+    const isCorrect = activeQuiz[qIdx].correct === oi;
+    if (isCorrect) {
+      setQuizScore(s => s + 1);
+    }
+
+    setTimeout(() => {
+      setPicked(null);
+      setShowFeedback(false);
+
+      if (qIdx + 1 >= activeQuiz.length) {
+        const finalScore = quizScore + (isCorrect ? 1 : 0);
+        const progress = mode === 'scroll'
+          ? scrollPct
+          : (words.length > 0 ? Math.min(1, wordIdx / words.length) : 0);
+        completeSessionXP(progress, finalScore);
+      } else {
+        setQIdx(idx => idx + 1);
+      }
+    }, 1500);
   };
 
   const handleBack = () => {
@@ -366,6 +476,80 @@ export default function ReaderScreen() {
     );
   }
 
+  // ── Quiz phase ───────────────────────────────────────────────────────────────
+  if (phase === 'quiz') {
+    if (loadingQuiz) {
+      return (
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.quizLoadingBox}>
+            <MascotChar which="swift" expression="happy" size={110} />
+            <ActivityIndicator color={ACCENT} size="large" style={{ marginTop: 24 }} />
+            <Text style={styles.quizLoadingText}>Procesando lectura con IA...</Text>
+            <Text style={styles.quizLoadingSub}>Diseñando preguntas personalizadas para evaluar tu comprensión lectora.</Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    if (activeQuiz.length > 0) {
+      const currentQ = activeQuiz[qIdx];
+      return (
+        <SafeAreaView style={styles.safe}>
+          <ScrollView contentContainerStyle={styles.quizScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.quizHeader}>
+              <Text style={[styles.eyebrow, { color: ACCENT }]}>Evaluación de Comprensión</Text>
+              <Text style={styles.quizProgressText}>Pregunta {qIdx + 1} de {activeQuiz.length}</Text>
+            </View>
+
+            <View style={styles.quizCard}>
+              <Text style={styles.quizQuestionText}>{currentQ.q}</Text>
+            </View>
+
+            <View style={styles.optionsList}>
+              {currentQ.opts.map((opt, oi) => {
+                const isPicked = picked === oi;
+                const isCorrect = currentQ.correct === oi;
+                
+                let btnStyle = {};
+                let textStyle = {};
+
+                if (showFeedback) {
+                  if (isCorrect) {
+                    btnStyle = { borderColor: '#10B981', backgroundColor: '#10B98115' };
+                    textStyle = { color: '#047857', fontFamily: FONTS.headingSemi };
+                  } else if (isPicked) {
+                    btnStyle = { borderColor: '#EF4444', backgroundColor: '#EF444415' };
+                    textStyle = { color: '#B91C1C', fontFamily: FONTS.headingSemi };
+                  } else {
+                    btnStyle = { opacity: 0.6 };
+                  }
+                } else if (isPicked) {
+                  btnStyle = { borderColor: ACCENT, backgroundColor: ACCENT + '10' };
+                }
+
+                return (
+                  <Pressable
+                    key={oi}
+                    disabled={showFeedback}
+                    onPress={() => handleAnswerSelect(oi)}
+                    style={[styles.optionBtn, btnStyle]}
+                  >
+                    <View style={styles.optionRow}>
+                      <View style={[styles.optionDot, isPicked && { backgroundColor: ACCENT }, showFeedback && isCorrect && { backgroundColor: '#10B981' }, showFeedback && isPicked && !isCorrect && { backgroundColor: '#EF4444' }]}>
+                        <Text style={styles.optionDotText}>{String.fromCharCode(65 + oi)}</Text>
+                      </View>
+                      <Text style={[styles.optionText, textStyle]}>{opt}</Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      );
+    }
+  }
+
   // ── Done phase ───────────────────────────────────────────────────────────────
   const readPct = mode === 'scroll'
     ? Math.round(scrollPct * 100)
@@ -484,4 +668,22 @@ const styles = StyleSheet.create({
   // Empty state
   emptyCenter:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   emptyText:        { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.muted },
+
+  // Quiz styling
+  quizScroll:       { padding: 24 },
+  quizHeader:       { marginBottom: 20, alignItems: 'center' },
+  eyebrow:          { fontFamily: FONTS.headingSemi, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 4 },
+  quizProgressText: { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
+  quizCard:         { backgroundColor: COLORS.white, borderRadius: 20, padding: 24, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 20, shadowColor: COLORS.ink, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  quizQuestionText: { fontFamily: FONTS.headingSemi, fontSize: 16, lineHeight: 24, color: COLORS.ink },
+  optionsList:      { gap: 12 },
+  optionBtn:        { backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: COLORS.border },
+  optionRow:        { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  optionDot:        { width: 28, height: 28, borderRadius: 14, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
+  optionDotText:    { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
+  optionText:       { fontFamily: FONTS.body, fontSize: 14, color: COLORS.ink, flex: 1, lineHeight: 20 },
+  
+  quizLoadingBox:   { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
+  quizLoadingText:  { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink, marginTop: 16, textAlign: 'center' },
+  quizLoadingSub:   { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, marginTop: 8, textAlign: 'center', lineHeight: 20 },
 });

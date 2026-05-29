@@ -3,6 +3,8 @@ import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndic
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { supabase } from '../../lib/supabase';
 import { useLibraryStore } from '../../store/useLibraryStore';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
@@ -159,6 +161,72 @@ function AddBookModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: I
   const [title,   setTitle]   = useState('');
   const [author,  setAuthor]  = useState('');
   const [content, setContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+
+  const handlePickFile = async () => {
+    try {
+      setIsLoading(true);
+      setErrorMsg('');
+      const pickerResult = await DocumentPicker.getDocumentAsync({
+        type: ['text/plain', 'application/pdf'],
+        copyToCacheDirectory: true,
+      });
+
+      if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
+        setIsLoading(false);
+        return;
+      }
+
+      const asset = pickerResult.assets[0];
+      const fileName = asset.name || 'Documento';
+      const isPdf = asset.mimeType === 'application/pdf' || fileName.toLowerCase().endsWith('.pdf');
+
+      // Set title based on filename
+      const suggestedTitle = fileName.replace(/\.[^/.]+$/, "");
+      setTitle(suggestedTitle);
+
+      if (isPdf) {
+        const formData = new FormData();
+        // Standard React Native FormData attachment object
+        formData.append('file', {
+          uri: asset.uri,
+          name: fileName,
+          type: 'application/pdf',
+        } as any);
+
+        const { data: sessionData } = await supabase.auth.getSession();
+        const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/process-pdf`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionData?.session?.access_token || ''}`,
+            'apikey': process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '',
+          },
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const errorJson = await response.json().catch(() => ({ error: 'Error processing PDF server side.' }));
+          throw new Error(errorJson.error || 'Error processing PDF');
+        }
+
+        const resData = await response.json();
+        if (!resData.text) {
+          throw new Error('El PDF no contiene texto legible.');
+        }
+        setContent(resData.text);
+      } else {
+        // Plain text file: read locally in client using fetch
+        const text = await (await fetch(asset.uri)).text();
+        setContent(text);
+      }
+    } catch (err: any) {
+      console.warn(err);
+      setErrorMsg(err.message || 'Error al procesar el archivo. Intenta de nuevo.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleAdd = async () => {
     if (!title.trim()) return;
@@ -174,43 +242,67 @@ function AddBookModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: I
 
   return (
     <View style={styles.modal}>
-      <View style={styles.modalSheet}>
-        <Text style={styles.modalTitle}>Agregar libro</Text>
-        {[
-          { label: 'Título *', value: title, setter: setTitle, placeholder: 'Nombre del libro' },
-          { label: 'Autor', value: author, setter: setAuthor, placeholder: 'Opcional' },
-        ].map(f => (
-          <View key={f.label} style={{ marginBottom: 12 }}>
-            <Text style={styles.fieldLabel}>{f.label}</Text>
-            <TextInput
-              style={styles.input}
-              value={f.value}
-              onChangeText={f.setter}
-              placeholder={f.placeholder}
-              placeholderTextColor={COLORS.subtle}
-            />
-          </View>
-        ))}
-        <Text style={styles.fieldLabel}>Texto</Text>
-        <TextInput
-          style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
-          value={content}
-          onChangeText={setContent}
-          placeholder="Pega aquí el contenido…"
-          placeholderTextColor={COLORS.subtle}
-          multiline
-        />
-        <View style={{ height: 16 }} />
-        <PushButton color={COLORS.focus} onPress={handleAdd}>Agregar</PushButton>
-        <View style={{ height: 8 }} />
-        <Pressable onPress={onClose} style={{ alignItems: 'center', paddingVertical: 8 }}>
-          <Text style={{ fontFamily: FONTS.body, color: COLORS.muted }}>Cancelar</Text>
-        </Pressable>
-      </View>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
+        <View style={styles.modalSheet}>
+          <Text style={styles.modalTitle}>Agregar libro o documento</Text>
+
+          <Pressable 
+            onPress={handlePickFile} 
+            disabled={isLoading}
+            style={[styles.uploadBtn, isLoading && { opacity: 0.7 }]}
+          >
+            <Ionicons name="document-attach-outline" size={20} color={COLORS.focus} />
+            <Text style={styles.uploadBtnText}>Subir archivo (PDF o TXT)</Text>
+          </Pressable>
+
+          {isLoading && (
+            <View style={styles.uploadingContainer}>
+              <ActivityIndicator color={COLORS.focus} size="small" />
+              <Text style={styles.uploadingText}>Procesando con Inteligencia Artificial...</Text>
+            </View>
+          )}
+
+          {errorMsg ? (
+            <Text style={styles.errorText}>{errorMsg}</Text>
+          ) : null}
+
+          {[
+            { label: 'Título *', value: title, setter: setTitle, placeholder: 'Nombre del libro o documento' },
+            { label: 'Autor / Origen', value: author, setter: setAuthor, placeholder: 'Opcional' },
+          ].map(f => (
+            <View key={f.label} style={{ marginBottom: 12 }}>
+              <Text style={styles.fieldLabel}>{f.label}</Text>
+              <TextInput
+                style={styles.input}
+                value={f.value}
+                onChangeText={f.setter}
+                placeholder={f.placeholder}
+                placeholderTextColor={COLORS.subtle}
+              />
+            </View>
+          ))}
+          <Text style={styles.fieldLabel}>Texto o contenido</Text>
+          <TextInput
+            style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
+            value={content}
+            onChangeText={setContent}
+            placeholder="Pega aquí el contenido o súbelo usando el botón de arriba…"
+            placeholderTextColor={COLORS.subtle}
+            multiline
+          />
+          <View style={{ height: 16 }} />
+          <PushButton color={COLORS.focus} onPress={handleAdd} disabled={isLoading || !title.trim()}>
+            Agregar a biblioteca
+          </PushButton>
+          <View style={{ height: 8 }} />
+          <Pressable onPress={onClose} style={{ alignItems: 'center', paddingVertical: 8 }}>
+            <Text style={{ fontFamily: FONTS.body, color: COLORS.muted }}>Cancelar</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     </View>
   );
 }
-
 type CatalogItem = { id: string; title: string; cover_color: string } & Partial<LibraryItem>;
 const CATALOG: CatalogItem[] = [
   { id: 'c1', title: 'El cerebro lector',        author: 'S. Dehaene',     words: 95000,  cover_color: COLORS.calm,  progress: 0, source: 'catalog' },
@@ -221,6 +313,9 @@ const CATALOG: CatalogItem[] = [
   { id: 'c6', title: 'El método Pomodoro',        author: 'F. Cirillo',     words: 22000,  cover_color: COLORS.swift, progress: 0, source: 'catalog' },
   { id: 'c7', title: 'Lectura activa',            author: 'M. Adler',       words: 35000,  cover_color: COLORS.memo,  progress: 0, source: 'catalog' },
   { id: 'c8', title: 'Neuroplasticidad',          author: 'M. Doidge',      words: 65000,  cover_color: COLORS.joy,   progress: 0, source: 'catalog' },
+  { id: 'c9', title: 'La meta es el enfoque',     author: 'C. Newport',     words: 80000,  cover_color: COLORS.focus, progress: 0, source: 'catalog' },
+  { id: 'c10', title: 'Aprender a aprender',      author: 'B. Oakley',      words: 45000,  cover_color: COLORS.loci,  progress: 0, source: 'catalog' },
+  { id: 'c11', title: 'El arte del palacio mental',author: 'F. Yates',       words: 38000,  cover_color: COLORS.memo,  progress: 0, source: 'catalog' },
 ];
 
 const styles = StyleSheet.create({
@@ -253,4 +348,41 @@ const styles = StyleSheet.create({
   modalTitle: { fontFamily: FONTS.heading, fontSize: 20, color: COLORS.ink, marginBottom: 20 },
   fieldLabel: { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 6 },
   input:      { fontFamily: FONTS.body, fontSize: 15, borderWidth: 2, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, color: COLORS.ink },
+  uploadBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: COLORS.focus + '80',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginBottom: 16,
+    backgroundColor: COLORS.focus + '05',
+  },
+  uploadBtnText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 14,
+    color: COLORS.focus,
+  },
+  uploadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  uploadingText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: COLORS.muted,
+  },
+  errorText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
 });

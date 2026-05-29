@@ -1,6 +1,42 @@
 import type { ExerciseMeta } from '../types/exercises';
 
 export const EXERCISES: Record<string, ExerciseMeta> = {
+  reading_test: {
+    id: 'reading_test',
+    title: 'Test de Velocidad',
+    category: 'Diagnóstico',
+    mascot: 'swift',
+    color: '#F97316',
+    xp: 50,
+    duration: '2 min',
+    difficulty: 'Fácil',
+    improves: 'Velocidad base',
+    description: 'Mide tu velocidad natural de lectura (WPM) y comprensión base.',
+    whyEffective: 'Para entrenar eficazmente, es crucial saber de dónde partes. Este test mide tu velocidad de lectura real y tu comprensión para configurar de manera óptima los ejercicios futuros.',
+    steps: [
+      'Lee el texto a tu ritmo natural de comprensión',
+      'Presiona "Terminé de leer" al terminar',
+      'Responde las preguntas de comprensión para validar el test',
+    ],
+  },
+  focus_circle: {
+    id: 'focus_circle',
+    title: 'Círculo de Enfoque',
+    category: 'Enfoque',
+    mascot: 'focus',
+    color: '#22C55E',
+    xp: 40,
+    duration: '1 min',
+    difficulty: 'Fácil',
+    improves: 'Foco y Atención',
+    description: 'Entrena tu atención fija y visión periférica relajando la mente.',
+    whyEffective: 'El foco es el pilar de la lectura. Al mantener tu mirada en un punto mientras el círculo crece, aumentas el control atencional, disminuyes la distracción externa y expandes tu visión periférica.',
+    steps: [
+      'Mira fijamente el punto blanco en el centro',
+      'Sigue el ritmo de respiración en pantalla',
+      'Nota la expansión del círculo sin desviar la mirada',
+    ],
+  },
   schulte: {
     id: 'schulte',
     title: 'Tabla de Schulte',

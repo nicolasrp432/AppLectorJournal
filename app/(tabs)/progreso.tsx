@@ -385,7 +385,7 @@ export default function ProgresoScreen() {
               style={styles.emptyStateGradient}
             >
               <View style={[styles.emptyStateMascotWrap, { marginRight: 12 }]}>
-                <MascotChar type="focus" size={60} breathe />
+                <MascotChar which="focus" size={60} breathing />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.emptyStateTitle}>🚀 ¡Comienza tu Neuro-Viaje!</Text>

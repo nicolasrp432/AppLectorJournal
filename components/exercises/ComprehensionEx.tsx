@@ -33,6 +33,22 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
   const [picked, setPicked] = useState<number | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
 
+  // Divide text into individual sentences safely for sentence-by-sentence pacing
+  const sentences = React.useMemo(() => {
+    return passage.text.split(/([.!?]\s+)/).reduce<string[]>((acc, current, index) => {
+      if (index % 2 === 0) {
+        if (current) acc.push(current);
+      } else {
+        if (acc.length > 0) {
+          acc[acc.length - 1] += current;
+        }
+      }
+      return acc;
+    }, []);
+  }, [passage.text]);
+
+  const [activeSentence, setActiveSentence] = useState(0);
+
   useEffect(() => {
     let active = true;
     async function loadAIQuestions() {
@@ -64,8 +80,17 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
 
   // ─── 3D Page Flip and Reading Ruler Reanimated State ──────────────────────
   const pageRotation = useSharedValue(0);
-  const rulerY = useSharedValue(24);
+  const rulerY = useSharedValue(16);
   const rulerOpacity = useSharedValue(1);
+
+  // Animate the reading ruler smoothly to the active sentence card
+  useEffect(() => {
+    if (phase === 'read' && sentences.length > 0) {
+      // 12px padding top + estimated Y index offset per card
+      const targetY = activeSentence * 74 + 18;
+      rulerY.value = withSpring(targetY, { damping: 15, stiffness: 90 });
+    }
+  }, [activeSentence, phase, sentences.length]);
 
   // Rewards powerup skip question state
   const { owned, consume } = useRewardsStore();
@@ -135,10 +160,8 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
     }
   };
 
-  const handlePressPassageCard = (event: any) => {
-    const y = event.nativeEvent.locationY;
-    // Snap ruler vertically and animate with smooth bouncy spring
-    rulerY.value = withSpring(y - 14, { damping: 16 });
+  const handlePressSentence = (idx: number) => {
+    setActiveSentence(idx);
   };
 
   // Reanimated Styles
@@ -193,18 +216,44 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
                 </Text>
               </View>
 
-              {/* Passage Card Container with Tap Gesture Snapping Ruler */}
-              <Pressable onPress={handlePressPassageCard} style={styles.passageCardWrap}>
-                <View style={styles.passageCard}>
-                  <Text style={styles.passageText}>{passage.text}</Text>
-                </View>
+              {/* Passage Card Container with Interactive Sentence-by-Sentence pacing */}
+              <View style={styles.passageCardWrap}>
+                <ScrollView scrollEnabled={false} style={styles.passageCard}>
+                  <View style={styles.sentencesContainer}>
+                    {sentences.map((sentence, idx) => {
+                      const isActive = idx === activeSentence;
+                      const isPast = idx < activeSentence;
+                      return (
+                        <Pressable
+                          key={idx}
+                          onPress={() => handlePressSentence(idx)}
+                          style={[
+                            styles.sentenceBlock,
+                            isActive && { backgroundColor: accent + '0C', borderColor: accent }
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.sentenceText,
+                              isActive && { color: COLORS.ink, fontFamily: FONTS.headingSemi },
+                              isPast && { color: COLORS.muted, opacity: 0.45 },
+                              !isActive && !isPast && { color: COLORS.ink }
+                            ]}
+                          >
+                            {sentence}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
 
                 {/* Glassmorphic Sliding Focus Ruler Line */}
-                <Animated.View pointerEvents="none" style={[styles.readingRuler, { borderColor: accent, backgroundColor: `${accent}16` }, rulerStyle]}>
-                  <View style={[styles.rulerHandleLeft, { backgroundColor: accent }]} />
-                  <View style={[styles.rulerHandleRight, { backgroundColor: accent }]} />
+                <Animated.View pointerEvents="none" style={[styles.readingRuler, { borderColor: accent, backgroundColor: `${accent}14`, height: 38 }, rulerStyle]}>
+                  <View style={[styles.rulerHandleLeft, { backgroundColor: accent, height: 22 }]} />
+                  <View style={[styles.rulerHandleRight, { backgroundColor: accent, height: 22 }]} />
                 </Animated.View>
-              </Pressable>
+              </View>
 
               <Text style={styles.hint}>Tómate tu tiempo. Después responderás {passage.questions.length} preguntas.</Text>
               <View style={{ height: 16 }} />
@@ -212,10 +261,18 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
 
             <View style={styles.footer}>
               <Pressable
-                onPress={handleNextPhase}
+                onPress={() => {
+                  if (activeSentence < sentences.length - 1) {
+                    setActiveSentence(s => s + 1);
+                  } else {
+                    handleNextPhase();
+                  }
+                }}
                 style={[styles.ctaBtn, { backgroundColor: accent }]}
               >
-                <Text style={styles.ctaBtnText}>Ya leí, continuar al Quiz</Text>
+                <Text style={styles.ctaBtnText}>
+                  {activeSentence < sentences.length - 1 ? 'Siguiente oración' : 'Ya leí, continuar al Quiz'}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -496,5 +553,24 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.headingSemi,
     fontSize: 10,
     color: '#6B7280',
+  },
+  sentencesContainer: {
+    gap: 4,
+  },
+  sentenceBlock: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+    minHeight: 66,
+    justifyContent: 'center',
+  },
+  sentenceText: {
+    fontFamily: FONTS.body,
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: '#334155',
   },
 });

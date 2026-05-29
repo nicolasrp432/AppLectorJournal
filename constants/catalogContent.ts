@@ -126,7 +126,29 @@ Doidge recoge casos clínicos asombrosos que ilustran los alcances de la plastic
 
 La plasticidad no se limita a la recuperación de daños. Los estudios con neuroimagen muestran diferencias estructurales significativas entre el cerebro de un taxista de Londres, que ha memorizado miles de calles, y el de alguien sin esa experiencia: el hipocampo del primero es literalmente más grande en la región que procesa la navegación espacial.
 
-Esta plasticidad tiene, sin embargo, una cara oscura. Los hábitos negativos, las adicciones, los patrones de pensamiento destructivos también dejan su huella en la arquitectura neuronal. El cerebro no discrimina entre los circuitos que queremos fortalecer y los que queremos debilitar: simplemente consolida lo que se practica.
+Esta gran promesa de la neuroplasticidad es la siguiente: no somos prisioneros de la biología que heredamos. Con el entorno adecuado, la práctica deliberada y la perseverancia, el cerebro puede transformarse a cualquier edad.`,
 
-La gran promesa de la neuroplasticidad es la siguiente: no somos prisioneros de la biología que heredamos. Con el entorno adecuado, la práctica deliberada y la perseverancia, el cerebro puede transformarse a cualquier edad.`,
+  c9: `La meta es el enfoque — extracto educativo
+
+En la economía de la información del siglo veintiuno, nos enfrentamos a un desequilibrio atencional sin precedentes. Cal Newport, profesor e investigador, introduce el concepto de "Deep Work" o Trabajo Profundo como la habilidad indispensable para prosperar. Se trata de la capacidad de concentrarse sin distracciones en una tarea cognitivamente exigente.
+
+El profesional promedio pasa la mayor parte de su día en un estado de "Trabajo Superficial": respondiendo correos electrónicos constantemente, atendiendo chats y participando en reuniones que fragmentan su capacidad de concentración. Esta fragmentación tiene un coste neurológico directo: el residuo de atención. Cuando pasamos de la Tarea A a la Tarea B, nuestro cerebro no hace un cambio instantáneo; una fracción de nuestra atención permanece anclada en la tarea anterior, limitando nuestro rendimiento en la nueva.
+
+Para combatir esto, Newport propone blindar períodos de concentración profunda. No basta con apagar las notificaciones; se requiere estructurar el día para eliminar las señales de distracción por completo. Al limitar el acceso al correo y entrenar al cerebro a sostener la atención de forma voluntaria en un único problema durante noventa minutos o más, permitimos que se activen las redes de consolidación profunda y razonamiento analítico riguroso. Este enfoque deliberado nos ayuda a producir a un nivel óptimo y con una calidad única que las herramientas automatizadas no pueden igualar fácilmente.`,
+
+  c10: `Aprender a aprender — extracto educativo
+
+El aprendizaje efectivo no depende de la cantidad de horas invertidas, sino de la forma en que el cerebro asimila e integra la información. Barbara Oakley sugiere que la mente utiliza dos modos de pensamiento complementarios para procesar ideas complejas: el modo enfocado y el modo difuso.
+
+El modo enfocado se activa cuando concentramos la mirada y la mente en un problema específico con intensidad. Utiliza rutas sinápticas preexistentes y es ideal para el cálculo riguroso, la lectura secuencial y la edición crítica. Sin embargo, cuando nos atascamos en un problema difícil, insistir en el modo enfocado suele ser contraproducente, produciendo el efecto Einstellung: un bloqueo donde el cerebro se obstina en resolver el problema usando una ruta incorrecta.
+
+Para romper el bloqueo, debemos reclutar el modo difuso. Este se enciende al relajar la concentración consciente y dejar que la mente divague (por ejemplo, al dar un paseo, ducharse o descansar). En este modo, el cerebro procesa la información en segundo plano, realizando conexiones lejanas y no lineales entre distintas áreas de la corteza. La verdadera maestría intelectual proviene de saber alternar de manera estructurada entre la concentración del modo enfocado y la libertad creativa del modo difuso.`,
+
+  c11: `El arte del palacio mental — extracto educativo
+
+El Palacio de la Memoria o Método de los Loci es una de las técnicas de memorización más antiguas del mundo, datando del siglo V antes de Cristo. Frances Yates, destacada historiadora, analiza cómo los filósofos, oradores y científicos del Renacimiento utilizaban este arte de la memoria no solo para recordar discursos, sino como una verdadera herramienta cognitiva para organizar todo el conocimiento humano.
+
+La técnica aprovecha una ventaja biológica innata: nuestro cerebro evolucionó para recordar espacios, trayectorias e imágenes vívidas mucho mejor que datos abstractos o números secos. Al construir un Palacio Mental, asociamos cada dato que deseamos memorizar con una coordenada o rincón específico de un lugar familiar (los loci).
+
+Para que la asociación sea verdaderamente indestructible, Yates describe cómo los antiguos aplicaban la Ley del Efecto Absurdo. Si depositamos mentalmente un objeto ordinario en la sala, lo olvidaremos rápidamente. Pero si visualizamos una estatua gigante de oro que baila cómicamente y sostiene un libro encendido, la amígdala y el hipocampo procesarán esa escena como un evento inusual e impactante, consolidando el recuerdo al instante. Reconstruir este vaivén visual e interiorizar el mapa de tus palacios transforma los datos fríos en recuerdos indestructibles que puedes consultar siempre que camines mentalmente por ellos.`,
 };

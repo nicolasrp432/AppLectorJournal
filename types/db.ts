@@ -83,7 +83,7 @@ export interface OwnedReward {
   acquired_at: string;
 }
 
-export type ExerciseId = 'schulte' | 'reading' | 'wordspan' | 'loci' | 'comprehension' | 'boss' | 'freereading' | 'flashcards';
+export type ExerciseId = 'schulte' | 'reading' | 'wordspan' | 'loci' | 'comprehension' | 'boss' | 'freereading' | 'flashcards' | 'reading_test' | 'focus_circle';
 
 export interface Deck {
   id: string;

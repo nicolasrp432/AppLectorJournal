@@ -53,14 +53,14 @@ interface ZoneNode {
 
 const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey; nodes: ZoneNode[] }[] = [
   {
-    title: 'Zona 1', subtitle: 'Enfoque',
+    title: 'Zona 1', subtitle: 'Diagnóstico y Velocidad',
     color: COLORS.focus, mascot: 'focus',
     nodes: [
       { id: 'z1_lesson', kind: 'lesson',   side: 'center', label: 'Lección',       color: COLORS.focus },
-      { id: 'z1_s1',     kind: 'exercise', side: 'left',   label: 'Schulte 3×3',   color: COLORS.focus, exId: 'schulte' },
-      { id: 'z1_s2',     kind: 'exercise', side: 'right',  label: 'Schulte 4×4',   color: COLORS.focus, exId: 'schulte' },
+      { id: 'z1_s1',     kind: 'exercise', side: 'left',   label: 'Test Velocidad', color: COLORS.swift, exId: 'reading_test' },
+      { id: 'z1_s2',     kind: 'exercise', side: 'right',  label: 'Lectura Focal',  color: COLORS.swift, exId: 'reading' },
       { id: 'z1_chest',  kind: 'chest',    side: 'center', label: 'Cofre',          color: '#EAB308' },
-      { id: 'z1_focal',  kind: 'exercise', side: 'left',   label: 'Lectura focal',  color: COLORS.swift, exId: 'reading' },
+      { id: 'z1_focal',  kind: 'exercise', side: 'left',   label: 'Lectura Libre',  color: COLORS.joy,   exId: 'freereading' },
       { id: 'z1_comp',   kind: 'exercise', side: 'right',  label: 'Comprensión',   color: COLORS.joy,   exId: 'comprehension' },
       { id: 'z1_boss',   kind: 'boss',     side: 'center', label: 'Jefe de Zona',  color: COLORS.boss,  exId: 'boss' },
     ],
@@ -78,12 +78,13 @@ const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey
     ],
   },
   {
-    title: 'Zona 3', subtitle: 'Velocidad',
+    title: 'Zona 3', subtitle: 'Enfoque Avanzado',
     color: COLORS.swift, mascot: 'swift',
     nodes: [
       { id: 'z3_lesson', kind: 'lesson',   side: 'center', label: 'Lección',        color: COLORS.swift },
       { id: 'z3_f1',     kind: 'exercise', side: 'left',   label: '400 WPM',        color: COLORS.swift, exId: 'reading' },
       { id: 'z3_chest',  kind: 'chest',    side: 'center', label: 'Cofre',           color: '#EAB308' },
+      { id: 'z3_focus',  kind: 'exercise', side: 'left',   label: 'Enfoque Visual', color: COLORS.focus, exId: 'focus_circle' },
       { id: 'z3_f2',     kind: 'exercise', side: 'right',  label: '600 WPM',        color: COLORS.swift, exId: 'reading' },
       { id: 'z3_boss',   kind: 'boss',     side: 'center', label: 'Jefe de Zona',   color: COLORS.boss,  exId: 'boss' },
     ],
@@ -97,6 +98,8 @@ const EX_MASCOT: Record<string, MascotKey> = {
   loci: 'loci',
   comprehension: 'joy',
   boss: 'boss',
+  reading_test: 'swift',
+  focus_circle: 'focus',
 };
 
 const EX_METRICS: Record<string, { title: string; desc: string; skills: string[] }> = {
@@ -130,13 +133,23 @@ const EX_METRICS: Record<string, { title: string; desc: string; skills: string[]
     desc: 'Un desafío extremo cronometrado que fusiona todas las habilidades aprendidas en la zona.',
     skills: ['Reacción Cognitiva', 'Resistencia Mental', 'Dominio Integral'],
   },
+  reading_test: {
+    title: 'Test Diagnóstico Lector',
+    desc: 'Mide tu velocidad natural de lectura y tu retención para calibrar el entrenamiento.',
+    skills: ['Velocidad Inicial', 'Medición de WPM', 'Comprensión Base'],
+  },
+  focus_circle: {
+    title: 'Círculo de Enfoque',
+    desc: 'Entrena la atención visual sostenida y visión periférica fijando la mirada en el círculo en expansión.',
+    skills: ['Atención Sostenida', 'Concentración Periférica', 'Relajación Mental'],
+  },
 };
 
 const NODE_DEPENDENCIES: Record<string, string[][]> = {
   z1_lesson: [],
   z1_s1:     [['z1_lesson']],
-  z1_s2:     [['z1_lesson']],
-  z1_chest:  [['z1_s1'], ['z1_s2']],
+  z1_s2:     [['z1_s1']],
+  z1_chest:  [['z1_s2']],
   z1_focal:  [['z1_chest']],
   z1_comp:   [['z1_chest']],
   z1_boss:   [['z1_focal', 'z1_comp']],
@@ -151,7 +164,8 @@ const NODE_DEPENDENCIES: Record<string, string[][]> = {
   z3_lesson: [],
   z3_f1:     [['z3_lesson']],
   z3_chest:  [['z3_f1']],
-  z3_f2:     [['z3_chest']],
+  z3_focus:  [['z3_chest']],
+  z3_f2:     [['z3_focus']],
   z3_boss:   [['z3_f2']],
 };
 
@@ -1375,6 +1389,16 @@ function ExercisePreviewSheet({
             <Text style={styles.previewStartText}>Comenzar Entrenamiento</Text>
             <Ionicons name="play" size={18} color="#fff" style={{ marginLeft: 8 }} />
           </Pressable>
+
+          {node.exId === 'loci' && (
+            <Pressable 
+              style={[styles.customLociButton, { borderColor: node.color + '40' }]} 
+              onPress={() => { onClose(); router.push('/loci/view' as any); }}
+            >
+              <Ionicons name="images-outline" size={16} color={node.color} />
+              <Text style={[styles.customLociText, { color: node.color }]}>Galería y Creador de Palacios</Text>
+            </Pressable>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -1386,6 +1410,7 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
   const scale = useSharedValue(0.9);
   const opacity = useSharedValue(0);
   const mascotBounce = useSharedValue(0);
+  const mascotRotate = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
@@ -1396,7 +1421,16 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
       
       mascotBounce.value = withRepeat(
         withSequence(
-          withTiming(-8, { duration: 800 }),
+          withSpring(-14, { damping: 10, stiffness: 80 }),
+          withSpring(0, { damping: 10, stiffness: 80 })
+        ),
+        -1,
+        true
+      );
+      mascotRotate.value = withRepeat(
+        withSequence(
+          withTiming(-4, { duration: 800 }),
+          withTiming(4, { duration: 1600 }),
           withTiming(0, { duration: 800 })
         ),
         -1,
@@ -1413,7 +1447,10 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
   }));
 
   const mascotStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: mascotBounce.value }],
+    transform: [
+      { translateY: mascotBounce.value },
+      { rotate: `${mascotRotate.value}deg` }
+    ],
   }));
 
   const handleDismiss = () => {
@@ -1424,50 +1461,29 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={handleDismiss}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
-        <Animated.View style={[styles.welcomeCard, cardStyle]}>
-          <View style={styles.welcomeBannerDecor}>
-            <LinearGradient
-              colors={['#10B981', '#3B82F6']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
-
-          <Animated.View style={[styles.welcomeMascotWrap, mascotStyle]}>
-            <MascotChar which="focus" size={100} expression="happy" />
+        <BlurView intensity={50} style={StyleSheet.absoluteFill} tint="dark" />
+        <Animated.View style={[styles.welcomeCard, cardStyle, { paddingTop: 40 }]}>
+          
+          <Animated.View style={[styles.welcomeMascotWrap, mascotStyle, { marginBottom: 20 }]}>
+            <MascotChar which="focus" size={120} expression="wow" />
           </Animated.View>
 
-          <Text style={styles.welcomeHeader}>¡BIENVENIDO!</Text>
-          <Text style={styles.welcomeTitle}>Tu viaje neuro-cognitivo comienza hoy</Text>
-
-          <View style={styles.welcomeDivider} />
-
-          <Text style={styles.welcomeBody}>
-            Entrena tu visión periférica, agudiza tu memoria y duplica tu velocidad de lectura.
+          <Text style={styles.welcomeHeader}>¡HOLA, EXPLORADOR!</Text>
+          <Text style={[styles.welcomeTitle, { fontSize: 16, paddingHorizontal: 12, lineHeight: 22, marginTop: 10, textAlign: 'center', color: COLORS.ink }]}>
+            Vamos a entrenar tu cerebro para leer el <Text style={{ color: '#10B981', fontFamily: FONTS.headingBold }}>doble de rápido</Text>, comprender al máximo y enfocar tu atención en un viaje divertido.
           </Text>
 
-          <View style={styles.welcomeHighlights}>
-            <View style={styles.welcomeHighlightRow}>
-              <Ionicons name="sparkles" size={16} color="#10B981" />
-              <Text style={styles.welcomeHighlightText}>Ejercicios interactivos personalizados</Text>
-            </View>
-            <View style={styles.welcomeHighlightRow}>
-              <Ionicons name="stats-chart" size={16} color="#3B82F6" />
-              <Text style={styles.welcomeHighlightText}>Métricas de velocidad y progreso</Text>
-            </View>
-          </View>
+          <View style={{ height: 24 }} />
 
-          <Pressable style={styles.welcomeBtn} onPress={handleDismiss}>
+          <Pressable style={[styles.welcomeBtn, { marginTop: 10 }]} onPress={handleDismiss}>
             <LinearGradient
               colors={['#10B981', '#059669']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            <Text style={styles.welcomeBtnText}>Comenzar entrenamiento</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
+            <Text style={styles.welcomeBtnText}>¡Comenzar Entrenamiento!</Text>
+            <Ionicons name="rocket-outline" size={18} color="#fff" style={{ marginLeft: 8 }} />
           </Pressable>
         </Animated.View>
       </View>
@@ -1809,6 +1825,22 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.headingBold,
     fontSize: 15,
     color: '#fff',
+  },
+  customLociButton: {
+    height: 48,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 12,
+    backgroundColor: '#fff',
+  },
+  customLociText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
   },
 
   // Modal overlay common
