@@ -504,6 +504,7 @@ export default function RutaScreen() {
   const [showConfetti, setShowConfetti] = React.useState(false);
   const [showAIChat, setShowAIChat] = React.useState(false);
   const [unlockingZoneTitle, setUnlockingZoneTitle] = React.useState<string | null>(null);
+  const [showWarmupModal, setShowWarmupModal] = React.useState(false);
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
@@ -629,27 +630,10 @@ export default function RutaScreen() {
         {/* Botón Calentamiento Rápido */}
         <Pressable
           onPress={() => {
-            const suggested = selectWarmupExercises(all);
-            if (suggested && suggested.length > 0) {
-              const firstExId = suggested[0];
-              const exMeta = EXERCISES[firstExId];
-              Alert.alert(
-                '⚡ Calentamiento rápido listo',
-                `¡Tu cerebro necesita entrenar la destreza de [${exMeta?.category}] hoy!\n\nIniciando ${exMeta?.title}...`,
-                [
-                  {
-                    text: '¡Vamos!',
-                    onPress: () => router.push({ pathname: `/exercise/${firstExId}` as any, params: { mode: 'free' } })
-                  },
-                  {
-                    text: 'Cancelar',
-                    style: 'cancel'
-                  }
-                ]
-              );
-            } else {
-              Alert.alert('Calentamiento', '¡Tu cerebro está al 100% hoy! No se requieren recomendaciones.');
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             }
+            setShowWarmupModal(true);
           }}
           style={({ pressed }) => [
             styles.warmupBannerCard,
@@ -704,18 +688,17 @@ export default function RutaScreen() {
           ]}
         >
           <LinearGradient
-            colors={['rgba(139, 92, 246, 0.25)', 'rgba(59, 130, 246, 0.15)']}
+            colors={['#7C3AED', '#2563EB']}
             style={styles.aiBentoGradient}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <View style={styles.aiBentoLeft}>
-              <View style={styles.aiBentoSpark}>
-                <Ionicons name="sparkles" size={12} color="#C084FC" style={{ marginRight: 5 }} />
-                <Text style={styles.aiBentoSparkText}>MENTOR VIRTUAL ACTIVO</Text>
+              <View style={[styles.aiBentoSpark, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]}>
+                <Ionicons name="sparkles" size={12} color="#FFF" style={{ marginRight: 5 }} />
+                <Text style={[styles.aiBentoSparkText, { color: '#FFF' }]}>MENTOR VIRTUAL ACTIVO</Text>
               </View>
               <Text style={styles.aiBentoTitle}>Conversa con Mente IA</Text>
-              <Text style={styles.aiBentoSub}>Pregúntame sobre técnicas de lectura rápida, mnemotecnia o neurociencia cognitiva. ¡Potencia tu cerebro! 🧠⚡</Text>
             </View>
             <View style={styles.aiBentoRight}>
               <MascotChar which="loci" size={50} breathing={true} blinking={true} />
@@ -769,6 +752,13 @@ export default function RutaScreen() {
       {showConfetti && (
         <ConfettiOverlay onAnimationEnd={() => setShowConfetti(false)} />
       )}
+
+      {/* Interactive Warmup Recommendation Modal */}
+      <WarmupModal
+        visible={showWarmupModal}
+        onClose={() => setShowWarmupModal(false)}
+        allProgress={all}
+      />
     </SafeAreaView>
   );
 }
@@ -859,6 +849,10 @@ function ZoneSection({
     zone.title === 'Zona 2' ? completed.includes('z2_boss') :
     completed.includes('z3_boss');
 
+  const completedInZone = zone.nodes.filter(n => completed.includes(n.id)).length;
+  const totalInZone = zone.nodes.length;
+  const progressPercent = totalInZone > 0 ? (completedInZone / totalInZone) : 0;
+
   const initialCollapsed = !zoneForceUnlocked || isZoneCompleted;
   const [collapsed, setCollapsed] = React.useState(initialCollapsed);
   const heightAnim = useSharedValue(initialCollapsed ? 0 : Math.min(380, svgH));
@@ -910,16 +904,31 @@ function ZoneSection({
         onPress={toggleCollapse}
         style={({ pressed }) => [
           styles.zoneBanner, 
-          { backgroundColor: pressed ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255, 255, 255, 0.12)' }
+          { 
+            backgroundColor: pressed ? 'rgba(255, 255, 255, 0.1)' : 'rgba(255, 255, 255, 0.05)', 
+            borderColor: 'rgba(255, 255, 255, 0.12)',
+            marginBottom: collapsed ? 0 : 16 // Dynamic margin-bottom to avoid unharmonious folded padding!
+          }
         ]}
       >
         <View style={styles.zoneBannerLeft}>
           <Text style={[styles.zoneTitle, { color: '#fff' }]}>{zone.title}</Text>
           <View style={styles.zoneSubRow}>
-            {!zoneForceUnlocked && (
-              <Ionicons name="lock-closed" size={13} color="rgba(255, 255, 255, 0.5)" style={{ marginRight: 4 }} />
+            {!zoneForceUnlocked ? (
+              <React.Fragment>
+                <Ionicons name="lock-closed" size={13} color="rgba(255, 255, 255, 0.4)" style={{ marginRight: 4 }} />
+                <Text style={[styles.zoneSub, { color: 'rgba(255, 255, 255, 0.4)' }]}>Bloqueada</Text>
+              </React.Fragment>
+            ) : (
+              <React.Fragment>
+                <Text style={[styles.zoneSub, { color: 'rgba(255, 255, 255, 0.8)' }]}>{zone.subtitle}</Text>
+                {collapsed && (
+                  <Text style={[styles.zoneProgressText, { color: isZoneCompleted ? '#10B981' : 'rgba(255,255,255,0.6)' }]}>
+                    {'  •  '}{isZoneCompleted ? 'Completada 👑' : `${completedInZone}/${totalInZone} Ejercicios`}
+                  </Text>
+                )}
+              </React.Fragment>
             )}
-            <Text style={[styles.zoneSub, { color: 'rgba(255, 255, 255, 0.8)' }]}>{zone.subtitle}</Text>
           </View>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -939,6 +948,21 @@ function ZoneSection({
             />
           )}
         </View>
+
+        {/* Dynamic neon progress bar at the very bottom of the folded banner */}
+        {zoneForceUnlocked && (
+          <View style={styles.bannerProgressBarBg}>
+            <View 
+              style={[
+                styles.bannerProgressBarFill, 
+                { 
+                  width: `${progressPercent * 100}%`, 
+                  backgroundColor: zone.color,
+                }
+              ]} 
+            />
+          </View>
+        )}
       </Pressable>
 
       {/* SVG trail + nodes */}
@@ -1056,16 +1080,24 @@ function ZoneSection({
       {(!zoneForceUnlocked || animatingUnlock) && (
         <Animated.View style={[StyleSheet.absoluteFill, styles.lockOverlay, lockOverlayStyle]}>
           <BlurView intensity={16} style={StyleSheet.absoluteFill} tint="dark" />
-          <Animated.View style={[styles.lockCenterCircle, padlockStyle]}>
-            <Ionicons name="lock-closed" size={32} color="#FBBF24" />
+          <Animated.View 
+            style={[
+              styles.lockCenterCircle, 
+              padlockStyle, 
+              !animatingUnlock && { marginBottom: 0, width: 48, height: 48, borderRadius: 24 } // perfectly centered compact look
+            ]}
+          >
+            <Ionicons name="lock-closed" size={animatingUnlock ? 32 : 22} color="#FBBF24" />
           </Animated.View>
-          <Text style={styles.lockOverlayText}>Zona Bloqueada</Text>
-          <Text style={styles.lockOverlaySub}>Completa la zona anterior para desbloquear</Text>
-
+          
           {animatingUnlock && (
-            <Animated.View style={[styles.unlockAlertBox, textAlertStyle]}>
-              <Text style={styles.unlockAlertText}>¡NUEVA ZONA DESBLOQUEADA!</Text>
-            </Animated.View>
+            <React.Fragment>
+              <Text style={styles.lockOverlayText}>Zona Bloqueada</Text>
+              <Text style={styles.lockOverlaySub}>Completa la zona anterior para desbloquear</Text>
+              <Animated.View style={[styles.unlockAlertBox, textAlertStyle]}>
+                <Text style={styles.unlockAlertText}>¡NUEVA ZONA DESBLOQUEADA!</Text>
+              </Animated.View>
+            </React.Fragment>
           )}
         </Animated.View>
       )}
@@ -1326,6 +1358,137 @@ function ChestModal({ node, onClose, onClaim, completed }: {
               </Pressable>
             </View>
           )}
+        </Animated.View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── WARMUP INTERACTIVE MODAL COMPONENT ──────────────────────────────────────
+function WarmupModal({
+  visible,
+  onClose,
+  allProgress,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  allProgress: Record<string, any>;
+}) {
+  const scale = useSharedValue(0.9);
+  const opacity = useSharedValue(0);
+
+  useEffect(() => {
+    if (visible) {
+      scale.value = 0.9;
+      opacity.value = 0;
+      scale.value = withSpring(1, { damping: 14 });
+      opacity.value = withTiming(1, { duration: 300 });
+    }
+  }, [visible]);
+
+  if (!visible) return null;
+
+  const suggested = selectWarmupExercises(allProgress);
+  const firstExId = suggested[0] ?? 'schulte';
+  const exMeta = EXERCISES[firstExId];
+  const otherSuggs = suggested.slice(1);
+
+  const progress = allProgress[firstExId] || { mastery: 0, total_sessions: 0, best_score: 0, current_level: 1 };
+  const masteryPercent = Math.round((progress.mastery ?? 0) * 100);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  const handleStart = () => {
+    onClose();
+    if (Platform.OS !== 'web') {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    router.push({ pathname: `/exercise/${firstExId}` as any, params: { mode: 'free' } });
+  };
+
+  return (
+    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
+        <Animated.View style={[styles.warmupCard, animatedStyle]}>
+          <View style={styles.warmupHeaderRow}>
+            <Ionicons name="flash" size={20} color="#F97316" />
+            <Text style={styles.warmupHeaderTitle}>CALENTAMIENTO PERSONALIZADO</Text>
+          </View>
+          
+          <Text style={styles.warmupIntroText}>
+            Mente IA analizó tu progreso cerebral en tiempo real. Hoy te sugerimos fortalecer la destreza de:
+          </Text>
+
+          {/* Exercise card */}
+          <View style={[styles.warmupExCard, { borderColor: `${exMeta?.color || '#3B82F6'}40` }]}>
+            <View style={styles.warmupExHeader}>
+              <View style={[styles.warmupExBadge, { backgroundColor: `${exMeta?.color || '#3B82F6'}15` }]}>
+                <Text style={[styles.warmupExBadgeText, { color: exMeta?.color || '#3B82F6' }]}>{exMeta?.category}</Text>
+              </View>
+              <View style={styles.warmupMetaRow}>
+                <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.warmupMetaText}>{exMeta?.duration}</Text>
+                <Ionicons name="star-outline" size={13} color="rgba(255,255,255,0.5)" style={{ marginLeft: 6 }} />
+                <Text style={styles.warmupMetaText}>{exMeta?.difficulty}</Text>
+              </View>
+            </View>
+
+            <View style={styles.warmupExBody}>
+              <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={styles.warmupExTitle}>{exMeta?.title}</Text>
+                <Text style={styles.warmupExDesc}>{exMeta?.description}</Text>
+              </View>
+              <MascotChar which={exMeta?.mascot} size={56} breathing blinking />
+            </View>
+
+            {/* Stats section */}
+            <View style={styles.warmupStatsBox}>
+              <Text style={styles.warmupStatsTitle}>TUS ESTADÍSTICAS EN TIEMPO REAL</Text>
+              
+              <View style={styles.warmupStatRow}>
+                <Text style={styles.warmupStatLabel}>Maestría:</Text>
+                <View style={styles.warmupProgressBg}>
+                  <View style={[styles.warmupProgressFill, { width: `${masteryPercent}%`, backgroundColor: exMeta?.color || '#3B82F6' }]} />
+                </View>
+                <Text style={styles.warmupStatValue}>{masteryPercent}%</Text>
+              </View>
+
+              <View style={styles.warmupStatsGrid}>
+                <View style={styles.warmupGridCol}>
+                  <Text style={styles.warmupGridLabel}>Sesiones</Text>
+                  <Text style={styles.warmupGridValue}>{progress.total_sessions ?? 0}</Text>
+                </View>
+                <View style={styles.warmupGridCol}>
+                  <Text style={styles.warmupGridLabel}>Máx. Puntaje</Text>
+                  <Text style={styles.warmupGridValue}>{progress.best_score ?? 0}</Text>
+                </View>
+                <View style={styles.warmupGridCol}>
+                  <Text style={styles.warmupGridLabel}>Nivel</Text>
+                  <Text style={styles.warmupGridValue}>{progress.current_level ?? 1}</Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {otherSuggs.length > 0 && (
+            <Text style={styles.warmupOthersText}>
+              Otras sugerencias: {otherSuggs.map(id => EXERCISES[id]?.title).join(', ')}
+            </Text>
+          )}
+
+          {/* Action buttons */}
+          <View style={styles.warmupActionsRow}>
+            <Pressable style={styles.warmupCancelBtn} onPress={onClose}>
+              <Text style={styles.warmupCancelText}>Quizás luego</Text>
+            </Pressable>
+            <Pressable style={[styles.warmupStartBtn, { backgroundColor: exMeta?.color || '#F97316' }]} onPress={handleStart}>
+              <Text style={styles.warmupStartText}>¡Vamos! ⚡</Text>
+            </Pressable>
+          </View>
         </Animated.View>
       </View>
     </Modal>
@@ -2213,5 +2376,211 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     overflow: 'hidden',
     backgroundColor: '#0F172A',
+  },
+  bannerProgressBarBg: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 4.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
+    overflow: 'hidden',
+  },
+  bannerProgressBarFill: {
+    height: '100%',
+    borderRadius: 2.25,
+  },
+  zoneProgressText: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    letterSpacing: 0.1,
+  },
+  warmupCard: {
+    width: W - 32,
+    maxWidth: 380,
+    backgroundColor: '#0F172A',
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+    padding: 22,
+    alignItems: 'stretch',
+    shadowColor: '#F97316',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  warmupHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 8,
+  },
+  warmupHeaderTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 12.5,
+    color: '#F97316',
+    letterSpacing: 0.8,
+  },
+  warmupIntroText: {
+    fontFamily: FONTS.body,
+    fontSize: 12.5,
+    color: '#94A3B8',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  warmupExCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.02)',
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    marginBottom: 14,
+  },
+  warmupExHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  warmupExBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  warmupExBadgeText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 10,
+  },
+  warmupMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  warmupMetaText: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.5)',
+  },
+  warmupExBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  warmupExTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 17,
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  warmupExDesc: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: '#CBD5E1',
+    lineHeight: 16.5,
+  },
+  warmupStatsBox: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  warmupStatsTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 9,
+    color: '#64748B',
+    letterSpacing: 0.6,
+    marginBottom: 10,
+  },
+  warmupStatRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  warmupStatLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: '#94A3B8',
+    width: 70,
+  },
+  warmupProgressBg: {
+    flex: 1,
+    height: 6,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginRight: 8,
+  },
+  warmupProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  warmupStatValue: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11.5,
+    color: '#FFF',
+    minWidth: 26,
+    textAlign: 'right',
+  },
+  warmupStatsGrid: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+    paddingTop: 10,
+    justifyContent: 'space-between',
+  },
+  warmupGridCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  warmupGridLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 10,
+    color: '#64748B',
+    marginBottom: 2,
+  },
+  warmupGridValue: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 14,
+    color: '#F8FAFC',
+  },
+  warmupOthersText: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+  warmupActionsRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  warmupCancelBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  warmupCancelText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  warmupStartBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warmupStartText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
+    color: '#FFF',
   },
 });

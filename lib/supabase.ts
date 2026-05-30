@@ -77,12 +77,15 @@ export async function invokeEdgeFunction<T = any>(
       return { data: null, error: new Error('Supabase URL no configurada') };
     }
 
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token ?? SUPABASE_ANON;
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'apikey': SUPABASE_ANON,
-        'Authorization': `Bearer ${SUPABASE_ANON}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify(body),
     });
