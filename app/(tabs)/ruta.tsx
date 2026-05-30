@@ -863,6 +863,13 @@ function ZoneSection({
       heightAnim.value = withTiming(Math.min(380, svgH), { duration: 1000 });
     }
   }, [isUnlockingNow]);
+  // React to asynchronous loading of node completion data in real-time
+  useEffect(() => {
+    const isCompleted = !zoneForceUnlocked || isZoneCompleted;
+    setCollapsed(isCompleted);
+    heightAnim.value = withTiming(isCompleted ? 0 : Math.min(380, svgH), { duration: 300 });
+  }, [isZoneCompleted, zoneForceUnlocked]);
+
 
   const toggleCollapse = () => {
     if (Platform.OS !== 'web') {
@@ -1250,8 +1257,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   completed: string[];
 }) {
   const [chestState, setChestState] = React.useState<'closed' | 'opened'>('closed');
-  const scale = useSharedValue(0.9);
-  const opacity = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
   const giftRotate = useSharedValue(0);
 
   const isAlreadyCompleted = node ? completed.includes(node.id) : false;
@@ -1260,10 +1266,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
     if (node) {
       const alreadyClaimed = completed.includes(node.id);
       setChestState(alreadyClaimed ? 'opened' : 'closed');
-      scale.value = 0.9;
-      opacity.value = 0;
-      scale.value = withSpring(1, { damping: 12 });
-      opacity.value = withTiming(1, { duration: 300 });
+      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
       if (!alreadyClaimed) {
         giftRotate.value = withRepeat(
           withSequence(withTiming(-5, { duration: 150 }), withTiming(5, { duration: 150 })),
@@ -1273,14 +1276,15 @@ function ChestModal({ node, onClose, onClaim, completed }: {
       } else {
         giftRotate.value = 0;
       }
+    } else {
+      sheetTranslateY.value = SCREEN_HEIGHT;
     }
   }, [node, completed]);
 
   if (!node) return null;
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
   }));
 
   const giftAnimatedStyle = useAnimatedStyle(() => ({
@@ -1320,15 +1324,18 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   return (
     <Modal transparent visible={!!node} animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
-        <Animated.View style={[styles.chestCard, animatedStyle]}>
+        <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+        <Animated.View style={[styles.chestBottomSheet, sheetAnimatedStyle]}>
+          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(0, 0, 0, 0.15)' }]} />
+          
           <Text style={styles.chestHeader}>REGALO NEURONAL</Text>
           <Text style={styles.chestSubtitle}>Zona {node.id.includes('z1') ? '1' : node.id.includes('z2') ? '2' : '3'}</Text>
           
           <Animated.View style={[styles.giftIconWrap, giftAnimatedStyle]}>
             <Ionicons 
               name={chestState === 'opened' ? 'gift' : 'gift-outline'} 
-              size={110} 
+              size={100} 
               color={chestState === 'opened' ? '#FBBF24' : '#EAB308'} 
             />
           </Animated.View>
@@ -1374,15 +1381,20 @@ function WarmupModal({
   onClose: () => void;
   allProgress: Record<string, any>;
 }) {
-  const scale = useSharedValue(0.9);
-  const opacity = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
 
   useEffect(() => {
     if (visible) {
-      scale.value = 0.9;
-      opacity.value = 0;
-      scale.value = withSpring(1, { damping: 14 });
-      opacity.value = withTiming(1, { duration: 300 });
+      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
+      
+      const backAction = () => {
+        onClose();
+        return true;
+      };
+      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+      return () => backHandler.remove();
+    } else {
+      sheetTranslateY.value = SCREEN_HEIGHT;
     }
   }, [visible]);
 
@@ -1396,9 +1408,8 @@ function WarmupModal({
   const progress = allProgress[firstExId] || { mastery: 0, total_sessions: 0, best_score: 0, current_level: 1 };
   const masteryPercent = Math.round((progress.mastery ?? 0) * 100);
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
   }));
 
   const handleStart = () => {
@@ -1412,8 +1423,12 @@ function WarmupModal({
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={40} style={StyleSheet.absoluteFill} tint="dark" />
-        <Animated.View style={[styles.warmupCard, animatedStyle]}>
+        <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+
+        <Animated.View style={[styles.warmupBottomSheet, sheetAnimatedStyle]}>
+          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} />
+          
           <View style={styles.warmupHeaderRow}>
             <Ionicons name="flash" size={20} color="#F97316" />
             <Text style={styles.warmupHeaderTitle}>CALENTAMIENTO PERSONALIZADO</Text>
@@ -1624,17 +1639,13 @@ function ExercisePreviewSheet({
 
 // ─── WELCOME MODAL COMPONENT (FOR NEW USERS) ──────────────────────────────────
 function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const scale = useSharedValue(0.9);
-  const opacity = useSharedValue(0);
+  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
   const mascotBounce = useSharedValue(0);
   const mascotRotate = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      scale.value = 0.9;
-      opacity.value = 0;
-      scale.value = withSpring(1, { damping: 14, stiffness: 100 });
-      opacity.value = withTiming(1, { duration: 400 });
+      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
       
       mascotBounce.value = withRepeat(
         withSequence(
@@ -1653,14 +1664,15 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
         -1,
         true
       );
+    } else {
+      sheetTranslateY.value = SCREEN_HEIGHT;
     }
   }, [visible]);
 
   if (!visible) return null;
 
-  const cardStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-    opacity: opacity.value,
+  const sheetAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslateY.value }],
   }));
 
   const mascotStyle = useAnimatedStyle(() => ({
@@ -1678,19 +1690,22 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
   return (
     <Modal transparent visible={visible} animationType="fade" onRequestClose={handleDismiss}>
       <View style={styles.modalOverlay}>
-        <BlurView intensity={50} style={StyleSheet.absoluteFill} tint="dark" />
-        <Animated.View style={[styles.welcomeCard, cardStyle, { paddingTop: 40 }]}>
+        <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleDismiss} />
+        
+        <Animated.View style={[styles.welcomeBottomSheet, sheetAnimatedStyle, { paddingTop: 30 }]}>
+          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(0, 0, 0, 0.15)', marginBottom: 15 }]} />
           
-          <Animated.View style={[styles.welcomeMascotWrap, mascotStyle, { marginBottom: 20 }]}>
-            <MascotChar which="focus" size={120} expression="wow" />
+          <Animated.View style={[styles.welcomeMascotWrap, mascotStyle, { marginBottom: 15 }]}>
+            <MascotChar which="focus" size={100} expression="wow" />
           </Animated.View>
 
           <Text style={styles.welcomeHeader}>¡HOLA, EXPLORADOR!</Text>
-          <Text style={[styles.welcomeTitle, { fontSize: 16, paddingHorizontal: 12, lineHeight: 22, marginTop: 10, textAlign: 'center', color: COLORS.ink }]}>
+          <Text style={[styles.welcomeTitle, { fontSize: 15, paddingHorizontal: 12, lineHeight: 21, marginTop: 10, textAlign: 'center', color: COLORS.ink }]}>
             Vamos a entrenar tu cerebro para leer el <Text style={{ color: '#10B981', fontFamily: FONTS.headingBold }}>doble de rápido</Text>, comprender al máximo y enfocar tu atención en un viaje divertido.
           </Text>
 
-          <View style={{ height: 24 }} />
+          <View style={{ height: 20 }} />
 
           <Pressable style={[styles.welcomeBtn, { marginTop: 10 }]} onPress={handleDismiss}>
             <LinearGradient
@@ -2067,20 +2082,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
-  chestCard: {
-    backgroundColor: '#fff',
-    borderRadius: 28,
-    borderWidth: 1.5,
-    borderColor: '#E2E8F0',
-    padding: 24,
+  chestBottomSheet: {
     width: '100%',
-    maxWidth: 360,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
+    position: 'absolute',
+    bottom: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
+    shadowColor: '#FBBF24',
+    shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
-    elevation: 10,
+    elevation: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(251, 191, 36, 0.25)',
+    backgroundColor: '#fff',
   },
   chestHeader: {
     fontFamily: FONTS.heading,
@@ -2181,20 +2198,23 @@ const styles = StyleSheet.create({
   },
 
   // Welcome Modal styles
-  welcomeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 32,
+  welcomeBottomSheet: {
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: -10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 16,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    padding: 24,
-    width: '100%',
-    maxWidth: 360,
+    backgroundColor: '#fff',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.15,
-    shadowRadius: 20,
-    elevation: 12,
     overflow: 'hidden',
   },
   welcomeBannerDecor: {
@@ -2397,20 +2417,22 @@ const styles = StyleSheet.create({
     fontSize: 12,
     letterSpacing: 0.1,
   },
-  warmupCard: {
-    width: W - 32,
-    maxWidth: 380,
-    backgroundColor: '#0F172A',
-    borderRadius: 28,
-    borderWidth: 1.5,
-    borderColor: 'rgba(249, 115, 22, 0.25)',
-    padding: 22,
-    alignItems: 'stretch',
+  warmupBottomSheet: {
+    width: '100%',
+    position: 'absolute',
+    bottom: 0,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 24,
+    paddingBottom: 36,
     shadowColor: '#F97316',
-    shadowOffset: { width: 0, height: 10 },
+    shadowOffset: { width: 0, height: -10 },
     shadowOpacity: 0.25,
     shadowRadius: 20,
-    elevation: 10,
+    elevation: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(249, 115, 22, 0.25)',
+    backgroundColor: '#0F172A',
   },
   warmupHeaderRow: {
     flexDirection: 'row',
