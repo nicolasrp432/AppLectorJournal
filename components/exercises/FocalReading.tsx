@@ -13,7 +13,7 @@ import { ExerciseTopBar } from './ExerciseTopBar';
 import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 
 type Mode = 'rsvp' | 'guide' | 'chunk';
 type Phase = 'config' | 'reading' | 'quiz';
@@ -104,28 +104,14 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
           return;
         }
 
-        // Invoke Edge Function if not cached via direct fetch to bypass local session JWT errors (403)
-        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-        const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-
-        if (!supabaseUrl) {
-          throw new Error('Supabase URL no configurada');
-        }
-
-        const response = await fetch(`${supabaseUrl}/functions/v1/ai-analyze-reading`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseAnon,
-          },
-          body: JSON.stringify({ text: passage.text }),
+        // Invoke Edge Function if not cached via safe utility to bypass local session JWT errors (403)
+        const { data, error } = await invokeEdgeFunction<{ difficulty: string; explanation: string; suggestedWpm: number }>('ai-analyze-reading', {
+          text: passage.text,
         });
 
-        if (!response.ok) {
-          throw new Error(`Edge Function falló con estado ${response.status}`);
+        if (error || !data) {
+          throw error || new Error('Respuesta de Edge Function vacía');
         }
-
-        const data = await response.json();
         if (data && active) {
           setAiAnalysis(data);
           if (data.suggestedWpm) {

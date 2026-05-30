@@ -13,7 +13,7 @@ import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 
 type Phase = 'read' | 'quiz';
 
@@ -54,27 +54,14 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
     async function loadAIQuestions() {
       setIsLoadingAI(true);
       try {
-        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-        const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-
-        if (!supabaseUrl) {
-          throw new Error('Supabase URL no configurada');
-        }
-
-        const response = await fetch(`${supabaseUrl}/functions/v1/ai-questions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'apikey': supabaseAnon,
-          },
-          body: JSON.stringify({ text: basePassage.text, count: 3 }),
+        const { data, error } = await invokeEdgeFunction<{ questions: any[] }>('ai-questions', {
+          text: basePassage.text,
+          count: 3,
         });
 
-        if (!response.ok) {
-          throw new Error(`Edge Function falló con estado ${response.status}`);
+        if (error || !data) {
+          throw error || new Error('Respuesta de Edge Function vacía');
         }
-
-        const data = await response.json();
         if (active && data && data.questions && data.questions.length > 0) {
           setPassage({
             ...basePassage,

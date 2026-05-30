@@ -15,7 +15,7 @@ import { COLORS, darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const W = Math.min(SCREEN_WIDTH, 520);
@@ -539,11 +539,9 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
     if (!roomImages[room.id] && !loadingImages[room.id]) {
       setLoadingImages(prev => ({ ...prev, [room.id]: true }));
       try {
-        const { data, error } = await supabase.functions.invoke('ai-loci-images', {
-          body: {
-            room: room.name,
-            hook: room.hook
-          }
+        const { data, error } = await invokeEdgeFunction<{ imageBase64: string; mimeType?: string }>('ai-loci-images', {
+          room: room.name,
+          hook: room.hook,
         });
         if (!error && data) {
           const imageUri = data.imageBase64

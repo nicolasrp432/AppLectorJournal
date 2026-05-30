@@ -62,3 +62,41 @@ function makeClient(): SupabaseClient {
 }
 
 export const supabase = makeClient();
+
+/**
+ * Invoca de forma segura una Supabase Edge Function usando fetch nativo directo.
+ * Esto evita que un token de sesión de usuario corrupto/expirado en AsyncStorage
+ * provoque errores 403 Forbidden a nivel de API Gateway en Supabase.
+ */
+export async function invokeEdgeFunction<T = any>(
+  functionName: string,
+  body: any
+): Promise<{ data: T | null; error: Error | null }> {
+  try {
+    if (!SUPABASE_URL) {
+      return { data: null, error: new Error('Supabase URL no configurada') };
+    }
+
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON,
+        'Authorization': `Bearer ${SUPABASE_ANON}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      return {
+        data: null,
+        error: new Error(`Edge Function falló con estado ${response.status}`),
+      };
+    }
+
+    const data = await response.json();
+    return { data, error: null };
+  } catch (err: any) {
+    return { data: null, error: err instanceof Error ? err : new Error(String(err)) };
+  }
+}

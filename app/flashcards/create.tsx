@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useFlashcardStore } from '../../store/useFlashcardStore';
 import { FONTS, FONT_SIZE } from '../../constants/typography';
 import { COLORS } from '../../constants/colors';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 
 const { width } = Dimensions.get('window');
 
@@ -79,8 +79,8 @@ export default function CreateDeck() {
 
         if (newDeck) {
           try {
-            const { data, error } = await supabase.functions.invoke('ai-flashcards', {
-              body: { text: sourceText },
+            const { data, error } = await invokeEdgeFunction<{ flashcards: any[] }>('ai-flashcards', {
+              text: sourceText,
             });
 
             if (error || !data || !data.flashcards) {

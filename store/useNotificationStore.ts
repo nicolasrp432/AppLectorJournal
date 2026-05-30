@@ -76,6 +76,15 @@ export const useNotificationStore = create<NotificationState>()(
 
           if (!error && data) {
             if (data.length === 0) {
+              // Si ya existe la notificación de bienvenida localmente, no la volvemos a crear para no sobreescribir su estado de reclamada/leída
+              const alreadyHasWelcome = get().notifications.some(n => 
+                n.id === 'welcome_auth_fallback' || n.id === 'welcome_local' || n.title.includes('Bienvenido')
+              );
+
+              if (alreadyHasWelcome) {
+                return;
+              }
+
               // Brand new authenticated user: seed in Supabase + store
               const welcomeNotif = {
                 user_id: profile.id,

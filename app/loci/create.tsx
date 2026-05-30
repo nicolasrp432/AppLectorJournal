@@ -11,7 +11,7 @@ import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 
 const THEME_OPTIONS = [
   { id: 'casa' as const, label: '🏠 Hogar Dulce Hogar', desc: 'Entrada, Cocina, Sala, Dormitorio, Oficina (5 loci)' },
@@ -63,8 +63,10 @@ export default function LociCreateScreen() {
     setLoadingText('Decomponiendo tu tema con Inteligencia Artificial...');
     
     try {
-      const { data, error } = await supabase.functions.invoke('ai-loci-split', {
-        body: { topic, theme, rooms }
+      const { data, error } = await invokeEdgeFunction<{ concepts: any[] }>('ai-loci-split', {
+        topic,
+        theme,
+        rooms,
       });
 
       if (error) throw error;
@@ -101,12 +103,10 @@ export default function LociCreateScreen() {
       let base64Image: string | undefined = undefined;
 
       try {
-        const { data, error } = await supabase.functions.invoke('ai-loci-images', {
-          body: {
-            room: item.room,
-            items: [item.concept],
-            hook: item.story
-          }
+        const { data, error } = await invokeEdgeFunction<{ imageBase64: string; mimeType?: string }>('ai-loci-images', {
+          room: item.room,
+          items: [item.concept],
+          hook: item.story,
         });
 
         if (!error && data && data.imageBase64) {

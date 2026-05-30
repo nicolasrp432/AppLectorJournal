@@ -12,7 +12,7 @@ import { useLibraryStore } from '../../store/useLibraryStore';
 import { useProfileStore } from '../../store/useProfileStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
 import { useQuizCacheStore, QuizQuestion } from '../../store/useQuizCacheStore';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -159,8 +159,9 @@ export default function ReaderScreen() {
           return;
         }
 
-        const { data, error } = await supabase.functions.invoke('ai-questions', {
-          body: { text: slice, count: 3 }
+        const { data, error } = await invokeEdgeFunction<{ questions: any[] }>('ai-questions', {
+          text: slice,
+          count: 3,
         });
 
         if (error) throw error;

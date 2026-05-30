@@ -25,7 +25,7 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { MascotChar } from './MascotChar';
 import { EXERCISES } from '../../constants/exercises';
-import { supabase } from '../../lib/supabase';
+import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -244,30 +244,13 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
       : null;
 
     try {
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-      const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
-
-      if (!supabaseUrl) {
-        throw new Error('Supabase URL no configurada');
-      }
-
-      const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': supabaseAnon,
-        },
-        body: JSON.stringify({ messages: messagesToSend, context: exContext }),
+      const { data, error } = await invokeEdgeFunction<{ text: string }>('ai-chat', {
+        messages: messagesToSend,
+        context: exContext,
       });
 
-      if (!response.ok) {
-        throw new Error(`Edge Function falló con estado ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (!data || !data.text) {
-        throw new Error('Respuesta de Edge Function inválida');
+      if (error || !data || !data.text) {
+        throw new Error(error?.message || 'Respuesta de Edge Function inválida');
       }
 
       setMessages((prev) => [
