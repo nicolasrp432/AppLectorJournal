@@ -104,11 +104,28 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
           return;
         }
 
-        // Invoke Edge Function if not cached
-        const { data, error } = await supabase.functions.invoke('ai-analyze-reading', {
-          body: { text: passage.text }
+        // Invoke Edge Function if not cached via direct fetch to bypass local session JWT errors (403)
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+        const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+        if (!supabaseUrl) {
+          throw new Error('Supabase URL no configurada');
+        }
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/ai-analyze-reading`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnon,
+          },
+          body: JSON.stringify({ text: passage.text }),
         });
-        if (error) throw error;
+
+        if (!response.ok) {
+          throw new Error(`Edge Function falló con estado ${response.status}`);
+        }
+
+        const data = await response.json();
         if (data && active) {
           setAiAnalysis(data);
           if (data.suggestedWpm) {

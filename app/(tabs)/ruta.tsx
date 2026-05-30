@@ -502,6 +502,7 @@ export default function RutaScreen() {
   const [activeExerciseNode, setActiveExerciseNode] = React.useState<ZoneNode | null>(null);
   const [showWelcome, setShowWelcome] = React.useState(false);
   const [showConfetti, setShowConfetti] = React.useState(false);
+  const [showAIChat, setShowAIChat] = React.useState(false);
   const [unlockingZoneTitle, setUnlockingZoneTitle] = React.useState<string | null>(null);
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
@@ -689,11 +690,58 @@ export default function RutaScreen() {
           />
         ))}
 
-        {/* Asistente Conversacional Mente IA */}
-        <AIChatbot mode="embedded" />
+        {/* Bento Card de Mente IA */}
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            }
+            setShowAIChat(true);
+          }}
+          style={({ pressed }) => [
+            styles.aiBentoCard,
+            { transform: [{ scale: pressed ? 0.98 : 1 }] }
+          ]}
+        >
+          <LinearGradient
+            colors={['rgba(139, 92, 246, 0.25)', 'rgba(59, 130, 246, 0.15)']}
+            style={styles.aiBentoGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+            <View style={styles.aiBentoLeft}>
+              <View style={styles.aiBentoSpark}>
+                <Ionicons name="sparkles" size={12} color="#C084FC" style={{ marginRight: 5 }} />
+                <Text style={styles.aiBentoSparkText}>MENTOR VIRTUAL ACTIVO</Text>
+              </View>
+              <Text style={styles.aiBentoTitle}>Conversa con Mente IA</Text>
+              <Text style={styles.aiBentoSub}>Pregúntame sobre técnicas de lectura rápida, mnemotecnia o neurociencia cognitiva. ¡Potencia tu cerebro! 🧠⚡</Text>
+            </View>
+            <View style={styles.aiBentoRight}>
+              <MascotChar which="loci" size={50} breathing={true} blinking={true} />
+            </View>
+          </LinearGradient>
+        </Pressable>
 
         <View style={{ height: 110 }} />
       </Animated.ScrollView>
+
+      {/* Modal deslizante con la IA en la Ruta de Aprendizaje */}
+      <Modal
+        visible={showAIChat}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAIChat(false)}
+      >
+        <View style={styles.aiModalOverlay}>
+          <View style={styles.aiModalContent}>
+            <AIChatbot
+              mode="modal"
+              onClose={() => setShowAIChat(false)}
+            />
+          </View>
+        </View>
+      </Modal>
 
       {/* Interactive Chest Reward Modal */}
       <ChestModal
@@ -1506,7 +1554,7 @@ const styles = StyleSheet.create({
   xpBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   xpText:         { fontFamily: FONTS.heading, fontSize: 13, color: '#78350F' },
   scroll:         { paddingTop: 10, alignItems: 'center' },
-  zoneCard:       { width: W, borderRadius: 24, padding: 16, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.08)', marginBottom: 28, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8, position: 'relative' },
+  zoneCard:       { width: W, borderRadius: 24, padding: 16, borderWidth: 1.5, borderColor: 'rgba(255, 255, 255, 0.08)', marginBottom: 14, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.25, shadowRadius: 16, elevation: 8, position: 'relative' },
   zoneBanner:     { borderWidth: 1, borderRadius: 16, paddingVertical: 10, paddingHorizontal: 16, marginBottom: 16, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', overflow: 'hidden', zIndex: 2 },
   zoneBannerLeft: { flex: 1, justifyContent: 'center' },
   zoneSubRow:     { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
@@ -2097,5 +2145,73 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255, 255, 255, 0.85)',
     lineHeight: 16,
+  },
+  aiBentoCard: {
+    width: W,
+    borderRadius: 24,
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(139, 92, 246, 0.15)',
+    marginBottom: 20,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  aiBentoGradient: {
+    padding: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  aiBentoLeft: {
+    flex: 1,
+    marginRight: 12,
+  },
+  aiBentoSpark: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(139, 92, 246, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  aiBentoSparkText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 9,
+    color: '#C084FC',
+    letterSpacing: 0.8,
+  },
+  aiBentoTitle: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 17,
+    color: '#FFF',
+    marginBottom: 4,
+  },
+  aiBentoSub: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.7)',
+    lineHeight: 16,
+  },
+  aiBentoRight: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  aiModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  aiModalContent: {
+    height: '80%',
+    width: '100%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
   },
 });

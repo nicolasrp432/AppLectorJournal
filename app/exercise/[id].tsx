@@ -74,6 +74,26 @@ export default function ExerciseScreen() {
   const exerciseId = (id ?? 'schulte') as ExerciseId;
   const exercise = EXERCISES[exerciseId];
   const [showAIChat, setShowAIChat] = useState(false);
+  const touchStartY = useRef(0);
+  const touchStartX = useRef(0);
+
+  const handleTouchStart = (e: any) => {
+    touchStartY.current = e.nativeEvent.pageY;
+    touchStartX.current = e.nativeEvent.pageX;
+  };
+
+  const handleTouchEnd = (e: any) => {
+    const deltaY = touchStartY.current - e.nativeEvent.pageY;
+    const deltaX = Math.abs(touchStartX.current - e.nativeEvent.pageX);
+    
+    // Si se desliza hacia arriba al menos 80px y no se desvía lateralmente más de 60px
+    if (deltaY > 80 && deltaX < 60) {
+      if (Platform.OS !== 'web') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      }
+      setShowAIChat(true);
+    }
+  };
 
   const {
     addXP,
@@ -327,27 +347,12 @@ export default function ExerciseScreen() {
   }
 
   return (
-    <View style={{ flex: 1 }}>
+    <View 
+      style={{ flex: 1 }}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={handleTouchEnd}
+    >
       {content}
-
-      {/* Botón Flotante para Consultas IA */}
-      {!showAIChat && (
-        <Pressable
-          onPress={() => {
-            if (Platform.OS !== 'web') {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-            }
-            setShowAIChat(true);
-          }}
-          style={({ pressed }) => [
-            aiStyles.floatingAiFab,
-            { backgroundColor: accent, transform: [{ scale: pressed ? 0.95 : 1 }] },
-          ]}
-        >
-          <Ionicons name="sparkles" size={15} color="#FFF" style={{ marginRight: 6 }} />
-          <Text style={aiStyles.floatingAiFabText}>Mente IA</Text>
-        </Pressable>
-      )}
 
       {/* Modal deslizante con la IA en modo modal */}
       <Modal
@@ -363,13 +368,6 @@ export default function ExerciseScreen() {
           )}
 
           <View style={aiStyles.chatModalContent}>
-            {phase === 'playing' && (
-              <View style={aiStyles.pauseBadge}>
-                <Ionicons name="pause" size={11} color="#FFF" style={{ marginRight: 5 }} />
-                <Text style={aiStyles.pauseBadgeText}>ENTRENAMIENTO EN PAUSA</Text>
-              </View>
-            )}
-
             <AIChatbot
               mode="modal"
               exerciseId={exerciseId}

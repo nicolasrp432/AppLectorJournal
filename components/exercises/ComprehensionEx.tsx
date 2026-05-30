@@ -54,10 +54,27 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
     async function loadAIQuestions() {
       setIsLoadingAI(true);
       try {
-        const { data, error } = await supabase.functions.invoke('ai-questions', {
-          body: { text: basePassage.text, count: 3 }
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+        const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+        if (!supabaseUrl) {
+          throw new Error('Supabase URL no configurada');
+        }
+
+        const response = await fetch(`${supabaseUrl}/functions/v1/ai-questions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': supabaseAnon,
+          },
+          body: JSON.stringify({ text: basePassage.text, count: 3 }),
         });
-        if (error) throw error;
+
+        if (!response.ok) {
+          throw new Error(`Edge Function falló con estado ${response.status}`);
+        }
+
+        const data = await response.json();
         if (active && data && data.questions && data.questions.length > 0) {
           setPassage({
             ...basePassage,

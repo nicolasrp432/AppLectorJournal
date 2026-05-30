@@ -244,12 +244,30 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
       : null;
 
     try {
-      const { data, error } = await supabase.functions.invoke('ai-chat', {
-        body: { messages: messagesToSend, context: exContext },
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+      const supabaseAnon = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+      if (!supabaseUrl) {
+        throw new Error('Supabase URL no configurada');
+      }
+
+      const response = await fetch(`${supabaseUrl}/functions/v1/ai-chat`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': supabaseAnon,
+        },
+        body: JSON.stringify({ messages: messagesToSend, context: exContext }),
       });
 
-      if (error || !data || !data.text) {
-        throw new Error(error?.message || 'Error en Edge Function');
+      if (!response.ok) {
+        throw new Error(`Edge Function falló con estado ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (!data || !data.text) {
+        throw new Error('Respuesta de Edge Function inválida');
       }
 
       setMessages((prev) => [
@@ -394,7 +412,7 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
             value={input}
             onChangeText={setInput}
             placeholder="Haz una pregunta sobre tu cerebro..."
-            placeholderTextColor="rgba(255,255,255,0.4)"
+            placeholderTextColor="rgba(255,255,255,0.65)"
             style={styles.textInput}
             multiline={false}
             maxLength={180}
@@ -564,13 +582,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: 30,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    borderWidth: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderWidth: 1.5,
   },
   chipText: {
     fontFamily: FONTS.body,
     fontSize: 11.5,
-    color: '#94A3B8',
+    color: '#FFFFFF',
   },
   inputRow: {
     flexDirection: 'row',
@@ -587,7 +605,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.05)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     marginRight: 10,
     maxHeight: 40,
   },
