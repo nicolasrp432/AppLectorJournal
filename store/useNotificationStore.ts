@@ -48,7 +48,22 @@ export const useNotificationStore = create<NotificationState>()(
         if (!profile) return;
 
         if (profile.id === 'local') {
-          // Keep local notifications as is
+          // If local guest has no notifications, seed the welcome one
+          if (get().notifications.length === 0) {
+            const localWelcome: NotificationItem = {
+              id: 'welcome_local',
+              user_id: 'local',
+              title: '🎉 ¡Bienvenido a LectorApp!',
+              message: '¡Comienza tu viaje de neuro-lectura! Explora la Ruta de Aprendizaje, realiza tu Test de Velocidad inicial y desbloquea el poder de tu mente.',
+              category: 'system',
+              icon: 'rocket-outline',
+              xp_reward: 50,
+              claimed: false,
+              read: false,
+              created_at: new Date().toISOString(),
+            };
+            set({ notifications: [localWelcome] });
+          }
           return;
         }
 
@@ -60,7 +75,39 @@ export const useNotificationStore = create<NotificationState>()(
             .order('created_at', { ascending: false });
 
           if (!error && data) {
-            set({ notifications: data as NotificationItem[] });
+            if (data.length === 0) {
+              // Brand new authenticated user: seed in Supabase + store
+              const welcomeNotif = {
+                user_id: profile.id,
+                title: '🎉 ¡Bienvenido a LectorApp!',
+                message: '¡Comienza tu viaje de neuro-lectura! Explora la Ruta de Aprendizaje, realiza tu Test de Velocidad inicial y desbloquea el poder de tu mente.',
+                category: 'system' as const,
+                icon: 'rocket-outline',
+                xp_reward: 50,
+                claimed: false,
+                read: false,
+              };
+
+              const { data: inserted, error: insertError } = await supabase
+                .from('notifications')
+                .insert(welcomeNotif)
+                .select()
+                .single();
+
+              if (!insertError && inserted) {
+                set({ notifications: [inserted as NotificationItem] });
+              } else {
+                // Local fallback
+                const fallbackNotif: NotificationItem = {
+                  ...welcomeNotif,
+                  id: 'welcome_auth_fallback',
+                  created_at: new Date().toISOString(),
+                };
+                set({ notifications: [fallbackNotif] });
+              }
+            } else {
+              set({ notifications: data as NotificationItem[] });
+            }
           }
         } catch (err) {
           console.warn('Failed to fetch notifications from Supabase:', err);

@@ -31,22 +31,34 @@ function shuffle<T>(arr: T[]): T[] {
 
 // Local Engine for Surreal Spanish Story Generation
 function generateSurrealStory(words: string[]): string {
-  const templates = [
-    "¡Surrealista! Un {W0} flotante cruzó el {W1} devorando un {W2} que brillaba tanto como el {W3}.",
-    "En un universo paralelo, el {W0} es adorado en el {W1} por un {W2} mágico bajo el calor del {W3}.",
-    "Un astuto {W0} escapó del {W1} y escondió un {W2} dorado dentro del sagrado {W3}.",
-    "Cuenta la leyenda que el {W0} cayó del {W1} rebotando contra un {W2} gigante del {W3}.",
-    "Un {W0} misterioso se materializó en el {W1} revelando un {W2} oculto bajo el brillo del {W3}.",
-  ];
+  if (words.length === 0) return '';
   
-  const template = templates[words.length % templates.length];
-  return template
-    .replace('{W0}', `«${(words[0] || 'objeto').toUpperCase()}»`)
-    .replace('{W1}', `«${(words[1] || 'lugar').toUpperCase()}»`)
-    .replace('{W2}', `«${(words[2] || 'artículo').toUpperCase()}»`)
-    .replace('{W3}', `«${(words[3] || 'planeta').toUpperCase()}»`)
-    .replace('{W4}', `«${(words[4] || 'portal').toUpperCase()}»`)
-    .replace('{W5}', `«${(words[5] || 'secreto').toUpperCase()}»`);
+  // List of funny surreal connectors linking W[i] to W[i+1]
+  const connectors = [
+    "que cobró vida y pateó a un",
+    "que flotaba montado sobre un",
+    "que estaba cocinando a fuego lento un",
+    "que devoraba alegremente un",
+    "que pintaba con grafitis a un",
+    "que bailaba reguetón encima de un",
+    "que tocaba la trompeta despertando a un",
+    "que huía asustado persiguiendo a un",
+    "que hacía malabares con un",
+    "que se tragó entero un",
+    "que soñaba despierto con un",
+    "que piloteaba un cohete hacia un",
+    "que le regalaba un anillo a un",
+  ];
+
+  let story = `Primero, visualiza un/a «${words[0].toUpperCase()}»`;
+  
+  for (let i = 0; i < words.length - 1; i++) {
+    const conn = connectors[(i * 3 + words[i].length) % connectors.length];
+    story += ` ${conn} «${words[i + 1].toUpperCase()}»`;
+  }
+  
+  story += ".";
+  return story;
 }
 
 const POSITION_COLORS = [

@@ -73,7 +73,7 @@ export interface UserPrefs {
   notifications_enabled: boolean;
   notifications_time: string;
   updated_at: string;
-  loci_palace?: 'casa' | 'oficina' | 'naturaleza';
+  loci_palace?: 'casa' | 'oficina' | 'naturaleza' | 'cuerpo' | 'mano' | 'custom';
 }
 
 export interface OwnedReward {

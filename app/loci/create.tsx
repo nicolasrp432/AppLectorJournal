@@ -14,21 +14,27 @@ import { FONTS } from '../../constants/typography';
 import { supabase } from '../../lib/supabase';
 
 const THEME_OPTIONS = [
-  { id: 'casa' as const, label: '🏠 Hogar Dulce Hogar', desc: 'Entrada, Cocina, Sala, Dormitorio, Oficina' },
-  { id: 'oficina' as const, label: '🏢 Oficina Moderna', desc: 'Recepción, Cafetería, Sala Reuniones, Relax, Escritorio' },
-  { id: 'naturaleza' as const, label: '🌲 Parque Natural', desc: 'Sendero, Campamento, El Claro, Cabaña, Mirador' },
+  { id: 'casa' as const, label: '🏠 Hogar Dulce Hogar', desc: 'Entrada, Cocina, Sala, Dormitorio, Oficina (5 loci)' },
+  { id: 'oficina' as const, label: '🏢 Oficina Moderna', desc: 'Recepción, Cafetería, Sala Reuniones, Relax, Escritorio (5 loci)' },
+  { id: 'naturaleza' as const, label: '🌲 Parque Natural', desc: 'Sendero, Campamento, El Claro, Cabaña, Mirador (5 loci)' },
+  { id: 'cuerpo' as const, label: '🧘 Mi Propio Cuerpo', desc: 'Cabeza, Ojos, Boca, Hombros, Pecho, Manos, Rodillas, Pies (8 loci)' },
+  { id: 'mano' as const, label: '🖐️ Dedos de la Mano', desc: 'Pulgar, Índice, Medio, Anular, Meñique (5 loci)' },
+  { id: 'custom' as const, label: '🛠️ Palacio Personalizado', desc: 'Escribe tus propias habitaciones físicas' },
 ];
 
 const ROOMS_LIST = {
   casa: ['Entrada', 'Cocina', 'Sala', 'Dormitorio', 'Oficina'],
   oficina: ['Recepción', 'Cafetería', 'Reuniones', 'Relax', 'Escritorio'],
   naturaleza: ['Sendero', 'Campamento', 'El Claro', 'Cabaña', 'Mirador'],
+  cuerpo: ['Cabeza', 'Ojos', 'Boca', 'Hombros', 'Pecho', 'Manos', 'Rodillas', 'Pies'],
+  mano: ['Pulgar', 'Índice', 'Medio', 'Anular', 'Meñique'],
 };
 
 export default function LociCreateScreen() {
   const { createPalace } = useLociStore();
   const [topic, setTopic] = useState('');
-  const [theme, setTheme] = useState<'casa' | 'oficina' | 'naturaleza'>('casa');
+  const [theme, setTheme] = useState<'casa' | 'oficina' | 'naturaleza' | 'cuerpo' | 'mano' | 'custom'>('casa');
+  const [customRoomsText, setCustomRoomsText] = useState('');
   
   const [step, setStep] = useState<'input' | 'splitting' | 'concepts' | 'generating' | 'success'>('input');
   const [loadingText, setLoadingText] = useState('');
@@ -40,11 +46,23 @@ export default function LociCreateScreen() {
 
   const handleStartDecomposition = async () => {
     if (!topic.trim()) return;
+    
+    let rooms: string[] = [];
+    if (theme === 'custom') {
+      const parsed = customRoomsText.split(',').map(r => r.trim()).filter(Boolean);
+      if (parsed.length < 3) {
+        alert('Por favor ingresa al menos 3 habitaciones separadas por comas.');
+        return;
+      }
+      rooms = parsed;
+    } else {
+      rooms = ROOMS_LIST[theme];
+    }
+
     setStep('splitting');
     setLoadingText('Decomponiendo tu tema con Inteligencia Artificial...');
     
     try {
-      const rooms = ROOMS_LIST[theme];
       const { data, error } = await supabase.functions.invoke('ai-loci-split', {
         body: { topic, theme, rooms }
       });
@@ -60,10 +78,10 @@ export default function LociCreateScreen() {
       console.warn(err);
       alert('Error al conectar con la Inteligencia Artificial. Usando desglose básico.');
       // Local fallback
-      const fallback = ROOMS_LIST[theme].map((room, idx) => ({
+      const fallback = rooms.map((room, idx) => ({
         room,
         concept: `${topic} - Parte ${idx + 1}`,
-        story: `Una escena surrealista y divertida sobre ${topic} que ocurre en la ${room.toLowerCase()}.`,
+        story: `Una escena surrealista y divertida sobre ${topic} que ocurre en: ${room}.`,
       }));
       setGeneratedConcepts(fallback);
       setStep('concepts');
@@ -78,7 +96,7 @@ export default function LociCreateScreen() {
     for (let i = 0; i < generatedConcepts.length; i++) {
       const item = generatedConcepts[i];
       setCurrentGenIndex(i);
-      setLoadingText(`Pintando con Google Imagen 3:\nHabitación ${i + 1} de 5 (${item.room})`);
+      setLoadingText(`Pintando con Google Imagen 3:\nHabitación ${i + 1} de ${generatedConcepts.length} (${item.room})`);
 
       let base64Image: string | undefined = undefined;
 
@@ -96,6 +114,24 @@ export default function LociCreateScreen() {
         }
       } catch (err) {
         console.warn(`Imagen generation failed for ${item.room}:`, err);
+      }
+
+      // Fallback robusto con imágenes espectaculares de Unsplash si falla la IA o CORS
+      if (!base64Image) {
+        const randomUnsplashSeed = (item.room.length + item.concept.length) % 10;
+        const premiumFallbacks = [
+          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1618005198143-d3667cd6f29e?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1564186763535-ebb21ef5277f?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1533827436517-5782748b430b?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1527489377706-5bf97e608852?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&auto=format&fit=crop&q=80',
+          'https://images.unsplash.com/photo-1517256064527-09c53b2d0bc6?w=600&auto=format&fit=crop&q=80'
+        ];
+        base64Image = premiumFallbacks[randomUnsplashSeed];
       }
 
       finalMemories.push({
@@ -168,8 +204,28 @@ export default function LociCreateScreen() {
             })}
           </View>
 
+          {theme === 'custom' && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={styles.fieldLabel}>Tus Habitaciones (separadas por comas)</Text>
+              <TextInput
+                style={styles.input}
+                value={customRoomsText}
+                onChangeText={setCustomRoomsText}
+                placeholder="Ej: Recibidor, Biblioteca, Pasillo, Terraza, Balcón"
+                placeholderTextColor={COLORS.subtle}
+              />
+              <Text style={{ fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: -12, marginLeft: 4, lineHeight: 16 }}>
+                Ingresa tus propios lugares favoritos separados por comas. (Mínimo 3 ubicaciones).
+              </Text>
+            </View>
+          )}
+
           <View style={{ height: 24 }} />
-          <PushButton color={COLORS.loci} onPress={handleStartDecomposition} disabled={!topic.trim()}>
+          <PushButton
+            color={COLORS.loci}
+            onPress={handleStartDecomposition}
+            disabled={!topic.trim() || (theme === 'custom' && !customRoomsText.trim())}
+          >
             Comenzar construcción
           </PushButton>
           <View style={{ height: 40 }} />
@@ -184,8 +240,8 @@ export default function LociCreateScreen() {
           <Text style={styles.loadingTitle}>{loadingText}</Text>
           {step === 'generating' && (
             <View style={{ width: '80%', marginTop: 20 }}>
-              <ProgressBar value={(currentGenIndex + 1) / 5} color={COLORS.loci} height={8} />
-              <Text style={styles.progressCounter}>Habitación {currentGenIndex + 1} de 5</Text>
+              <ProgressBar value={(currentGenIndex + 1) / generatedConcepts.length} color={COLORS.loci} height={8} />
+              <Text style={styles.progressCounter}>Habitación {currentGenIndex + 1} de {generatedConcepts.length}</Text>
             </View>
           )}
         </View>

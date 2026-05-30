@@ -15,7 +15,7 @@ export interface LociMemoryItem {
 export interface UserMemoryPalace {
   id: string;
   topic: string;
-  theme: 'casa' | 'oficina' | 'naturaleza';
+  theme: 'casa' | 'oficina' | 'naturaleza' | 'cuerpo' | 'mano' | 'custom';
   created_at: string;
   memories: LociMemoryItem[];
 }
@@ -25,7 +25,7 @@ interface LociStoreState {
   isLoading: boolean;
 
   fetchPalaces: () => Promise<void>;
-  createPalace: (topic: string, theme: 'casa' | 'oficina' | 'naturaleza', memories: Omit<LociMemoryItem, 'id' | 'palace_id'>[]) => Promise<UserMemoryPalace | null>;
+  createPalace: (topic: string, theme: 'casa' | 'oficina' | 'naturaleza' | 'cuerpo' | 'mano' | 'custom', memories: Omit<LociMemoryItem, 'id' | 'palace_id'>[]) => Promise<UserMemoryPalace | null>;
   getPalace: (id: string) => UserMemoryPalace | undefined;
   deletePalace: (id: string) => Promise<void>;
   reset: () => void;

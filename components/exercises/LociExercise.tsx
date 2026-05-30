@@ -7,6 +7,7 @@ import Animated, {
 import { LinearGradient } from 'expo-linear-gradient';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { LOCI_OBJECTS } from '../../constants/passages';
+import { getLociPresetStory, LOCI_OBJECT_METAS } from '../../constants/lociPresets';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
@@ -45,6 +46,23 @@ const ROOM_THEMES = {
     { id: 'garden',   label: 'El Lago',   x: 18, y: 46, icon: 'boat-outline' },
     { id: 'attic',    label: 'La Cueva',  x: 50, y:  8, icon: 'prism-outline' },
   ],
+  cuerpo: [
+    { id: 'head',     label: 'Cabeza',    x: 50, y:  8, icon: 'person-outline' },
+    { id: 'eyes',     label: 'Ojos',      x: 32, y: 22, icon: 'eye-outline' },
+    { id: 'mouth',    label: 'Boca',      x: 68, y: 22, icon: 'happy-outline' },
+    { id: 'shoulders',label: 'Hombros',   x: 18, y: 46, icon: 'shield-outline' },
+    { id: 'chest',    label: 'Pecho',     x: 50, y: 46, icon: 'heart-outline' },
+    { id: 'hands',    label: 'Manos',     x: 82, y: 46, icon: 'hand-left-outline' },
+    { id: 'knees',    label: 'Rodillas',  x: 32, y: 72, icon: 'walk-outline' },
+    { id: 'feet',     label: 'Pies',      x: 68, y: 72, icon: 'foot-outline' },
+  ],
+  mano: [
+    { id: 'thumb',    label: 'Pulgar',    x: 18, y: 72, icon: 'thumbs-up-outline' },
+    { id: 'index',    label: 'Índice',    x: 32, y: 38, icon: 'hand-left-outline' },
+    { id: 'middle',   label: 'Medio',     x: 50, y: 16, icon: 'finger-print-outline' },
+    { id: 'ring',     label: 'Anular',    x: 68, y: 38, icon: 'star-outline' },
+    { id: 'pinky',    label: 'Meñique',   x: 82, y: 72, icon: 'sparkles-outline' },
+  ],
 };
 
 const ROOM_ASPECTS: Record<string, { emoji: string; colors: [string, string]; border: string; textColor: string }> = {
@@ -56,6 +74,19 @@ const ROOM_ASPECTS: Record<string, { emoji: string; colors: [string, string]; bo
   bath:     { emoji: '🛁', colors: ['#F0FDFA', '#CCFBF1'], border: '#99F6E4', textColor: '#0F766E' },
   garden:   { emoji: '🏡', colors: ['#F0FDF4', '#DCFCE7'], border: '#BBF7D0', textColor: '#166534' },
   attic:    { emoji: '📦', colors: ['#FAFAF9', '#F5F5F4'], border: '#E7E5E4', textColor: '#44403C' },
+  head:      { emoji: '🧘', colors: ['#FFF5F5', '#FEE2E2'], border: '#FEBACA', textColor: '#991B1B' },
+  eyes:      { emoji: '👁️', colors: ['#EFF6FF', '#DBEAFE'], border: '#BFDBFE', textColor: '#1E40AF' },
+  mouth:     { emoji: '👄', colors: ['#FFF7ED', '#FFEDD5'], border: '#FED7AA', textColor: '#9A3412' },
+  shoulders: { emoji: '💪', colors: ['#F5F3FF', '#EDE9FE'], border: '#DDD6FE', textColor: '#5B21B6' },
+  chest:     { emoji: '💖', colors: ['#FDF2F8', '#FCE7F3'], border: '#FBCFE8', textColor: '#9D174D' },
+  hands:     { emoji: '👐', colors: ['#ECFDF5', '#D1FAE5'], border: '#A7F3D0', textColor: '#065F46' },
+  knees:     { emoji: '🦵', colors: ['#F0FDF4', '#DCFCE7'], border: '#BBF7D0', textColor: '#166534' },
+  feet:      { emoji: '👣', colors: ['#FAFAF9', '#F5F5F4'], border: '#E7E5E4', textColor: '#44403C' },
+  thumb:     { emoji: '👍', colors: ['#ECFDF5', '#D1FAE5'], border: '#A7F3D0', textColor: '#065F46' },
+  index:     { emoji: '☝️', colors: ['#EFF6FF', '#DBEAFE'], border: '#BFDBFE', textColor: '#1E40AF' },
+  middle:    { emoji: '🖕', colors: ['#F5F3FF', '#EDE9FE'], border: '#DDD6FE', textColor: '#5B21B6' },
+  ring:      { emoji: '💍', colors: ['#FDF2F8', '#FCE7F3'], border: '#FBCFE8', textColor: '#9D174D' },
+  pinky:     { emoji: '🤙', colors: ['#FFF7ED', '#FFEDD5'], border: '#FED7AA', textColor: '#9A3412' },
 };
 
 interface Props {
@@ -89,9 +120,9 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', pa
   const [assoc] = useState(() => {
     if (customPalace && customPalace.memories) {
       const themeName = customPalace.theme || 'casa';
-      const ALL_ROOMS = ROOM_THEMES[themeName] || ROOM_THEMES.casa;
+      const ALL_ROOMS = themeName !== 'custom' ? (ROOM_THEMES[themeName as keyof typeof ROOM_THEMES] || ROOM_THEMES.casa) : ROOM_THEMES.casa;
       return customPalace.memories.map((m, i) => {
-        const templateRoom = ALL_ROOMS.find(r => r.label.toLowerCase() === m.room.toLowerCase()) || ALL_ROOMS[i % ALL_ROOMS.length];
+        const templateRoom = ALL_ROOMS.find((r: { id: string; label: string; x: number; y: number; icon: string }) => r.label.toLowerCase() === m.room.toLowerCase()) || ALL_ROOMS[i % ALL_ROOMS.length];
         return {
           id: templateRoom?.id || `room_${i}`,
           label: m.room,
@@ -105,16 +136,22 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', pa
       });
     } else {
       const palaceTheme = usePrefsStore.getState().prefs.loci_palace || 'casa';
-      const ALL_ROOMS = ROOM_THEMES[palaceTheme as keyof typeof ROOM_THEMES] || ROOM_THEMES.casa;
+      const ALL_ROOMS = palaceTheme !== 'custom' ? (ROOM_THEMES[palaceTheme as keyof typeof ROOM_THEMES] || ROOM_THEMES.casa) : ROOM_THEMES.casa;
       const wantCount = Math.min(8, Math.max(3, count));
       const rooms = ALL_ROOMS.slice(0, wantCount);
       const words = LOCI_OBJECTS.slice(0, wantCount);
-      return rooms.map((r, i) => ({
-        ...r,
-        word: words[i],
-        story: '',
-        image_url: '',
-      }));
+      return rooms.map((r, i) => {
+        const word = words[i];
+        const story = getLociPresetStory(palaceTheme, r.label, word);
+        const meta = LOCI_OBJECT_METAS[word.toLowerCase()] || LOCI_OBJECT_METAS.llave;
+        const image_url = meta.imageUrl;
+        return {
+          ...r,
+          word,
+          story,
+          image_url,
+        };
+      });
     }
   });
 
@@ -130,100 +167,9 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', pa
   const startTime = React.useRef(Date.now());
 
   useEffect(() => {
-    if (customPalace) return; // Skip entirely for custom palaces as stories are already present
-    let active = true;
-    async function fetchAIStories() {
-      setIsLoadingAI(true);
-      try {
-        // Get the current user ID
-        const { data: { user } } = await supabase.auth.getUser();
-        const userId = user?.id;
-
-        // Fetch cached items in a single request to optimize DB performance
-        let cachedItems: any[] = [];
-        if (userId) {
-          const { data: dbData, error: dbError } = await supabase
-            .from('loci_memories')
-            .select('room, item, story, image_url')
-            .eq('user_id', userId);
-          if (!dbError && dbData) {
-            cachedItems = dbData;
-          }
-        }
-
-        const promises = assoc.map(async (item) => {
-          const defaultStory = getSurrealLociAssociation(item.label, item.word);
-          
-          // Check if already present in persistent cache
-          const cached = cachedItems.find(c => c.room === item.label && c.item === item.word);
-          if (cached) {
-            return {
-              id: item.id,
-              story: cached.story || defaultStory,
-              imageUri: cached.image_url || undefined,
-            };
-          }
-
-          // Fetch from Supabase Edge Function if not cached
-          try {
-            const { data, error } = await supabase.functions.invoke('ai-loci-images', {
-              body: {
-                room: item.label,
-                items: [item.word],
-                hook: defaultStory
-              }
-            });
-            if (error) throw error;
-            if (data) {
-              const storyText = data.description || defaultStory;
-              const imageUri = data.imageBase64
-                ? `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`
-                : undefined;
-
-              // Persist generated story and image to user's memory palace in the cloud
-              if (userId) {
-                await supabase.from('loci_memories').insert({
-                  user_id: userId,
-                  room: item.label,
-                  item: item.word,
-                  story: storyText,
-                  image_url: imageUri
-                });
-              }
-
-              return {
-                id: item.id,
-                story: storyText,
-                imageUri: imageUri,
-              };
-            }
-          } catch (err) {
-            console.warn('Loci story/image fetch failed for room:', item.label, err);
-          }
-          return { id: item.id, story: defaultStory, imageUri: undefined };
-        });
-        
-        const results = await Promise.all(promises);
-        if (active) {
-          const storyMapping: Record<string, string> = {};
-          const imageMapping: Record<string, string> = {};
-          results.forEach(res => {
-            storyMapping[res.id] = res.story;
-            if (res.imageUri) {
-              imageMapping[res.id] = res.imageUri;
-            }
-          });
-          setAiStories(storyMapping);
-          setAiImages(imageMapping);
-        }
-      } catch (err) {
-        console.warn('Failed to load AI stories & images:', err);
-      } finally {
-        if (active) setIsLoadingAI(false);
-      }
-    }
-    fetchAIStories();
-    return () => { active = false; };
+    // Presets are loaded statically, no edge function needed for default exercises.
+    // Custom palaces are loaded in creation phase.
+    return;
   }, [assoc, customPalace]);
 
   // Loci Hint state
@@ -264,15 +210,11 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', pa
   const current = phase === 'learn' ? assoc[learnIdx] : assoc[recallIdx];
   
   // Get dynamic surreal mnemonic text
-  const bizarreText = customPalace
-    ? current.story
-    : (aiStories[current.id] || getSurrealLociAssociation(current.label, current.word));
+  const bizarreText = current.story || getSurrealLociAssociation(current.label, current.word);
   
-  const imageUri = customPalace
-    ? current.image_url
-    : aiImages[current.id];
+  const imageUri = current.image_url || aiImages[current.id];
 
-  const isStoryLoading = !customPalace && isLoadingAI && !aiStories[current.id];
+  const isStoryLoading = false;
 
   return (
     <View style={styles.container}>

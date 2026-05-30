@@ -13,6 +13,8 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring,
 } from 'react-native-reanimated';
 import { MascotChar } from '../../components/ui/MascotChar';
+import * as Haptics from 'expo-haptics';
+import { AIChatbot } from '../../components/ui/AIChatbot';
 
 import { EXERCISES } from '../../constants/exercises';
 import { COLORS } from '../../constants/colors';
@@ -71,6 +73,7 @@ export default function ExerciseScreen() {
   const { id, nodeId, palaceId } = useLocalSearchParams<{ id: string; nodeId?: string; palaceId?: string }>();
   const exerciseId = (id ?? 'schulte') as ExerciseId;
   const exercise = EXERCISES[exerciseId];
+  const [showAIChat, setShowAIChat] = useState(false);
 
   const {
     addXP,
@@ -183,8 +186,12 @@ export default function ExerciseScreen() {
     setPhase('result');
   };
 
+  const quit = () => router.back();
+  const accent = exercise.color;
+
+  let content;
   if (phase === 'intro') {
-    return (
+    content = (
       <>
         <ExerciseIntro
           exercise={exercise}
@@ -262,10 +269,8 @@ export default function ExerciseScreen() {
         </Modal>
       </>
     );
-  }
-
-  if (phase === 'result' && result) {
-    return (
+  } else if (phase === 'result' && result) {
+    content = (
       <ExerciseResult
         exercise={exercise}
         result={result}
@@ -274,45 +279,107 @@ export default function ExerciseScreen() {
         onRetry={() => { setResult(null); setPhase('playing'); setNewAchievements([]); }}
       />
     );
-  }
-
-  // Playing
-  const quit = () => router.back();
-  const accent = exercise.color;
-
-  switch (exerciseId) {
-    case 'reading_test':
-      return <ReadingSpeedTest accent={accent} onFinish={handleFinish} onQuit={quit} />;
-    case 'focus_circle':
-      return <FocusCircle accent={accent} onFinish={handleFinish} onQuit={quit} />;
-    case 'schulte': {
-      const currentLevel = getProgress('schulte').current_level;
-      return (
-        <SchulteGrid
-          size={schulteSize}
-          accent={accent}
-          inverse={currentLevel >= 5}
-          showQuadrantHint={currentLevel >= 3}
-          onFinish={handleFinish}
-          onQuit={quit}
-        />
-      );
+  } else {
+    // Playing
+    switch (exerciseId) {
+      case 'reading_test':
+        content = <ReadingSpeedTest accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'focus_circle':
+        content = <FocusCircle accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'schulte': {
+        const currentLevel = getProgress('schulte').current_level;
+        content = (
+          <SchulteGrid
+            size={schulteSize}
+            accent={accent}
+            inverse={currentLevel >= 5}
+            showQuadrantHint={currentLevel >= 3}
+            onFinish={handleFinish}
+            onQuit={quit}
+          />
+        );
+        break;
+      }
+      case 'reading':
+        content = <FocalReadingExercise initialWpm={readingWpm} initialMode={readingMode} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'wordspan':
+        content = <WordSpanExercise level={wordSpanCount} showMs={wordSpanInterval} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'loci':
+        content = <LociExercise count={lociCount} studyMs={lociStudyTime} accent={accent} palaceId={palaceId} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'comprehension':
+        content = <ComprehensionExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'boss':
+        content = <BossExercise onFinish={handleFinish} onQuit={quit} />;
+        break;
+      case 'freereading':
+        content = <FreeReadingExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
+      default:
+        content = <FocalReadingExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
+        break;
     }
-    case 'reading':
-      return <FocalReadingExercise initialWpm={readingWpm} initialMode={readingMode} accent={accent} onFinish={handleFinish} onQuit={quit} />;
-    case 'wordspan':
-      return <WordSpanExercise level={wordSpanCount} showMs={wordSpanInterval} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
-    case 'loci':
-      return <LociExercise count={lociCount} studyMs={lociStudyTime} accent={accent} palaceId={palaceId} onFinish={handleFinish} onQuit={quit} />;
-    case 'comprehension':
-      return <ComprehensionExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
-    case 'boss':
-      return <BossExercise onFinish={handleFinish} onQuit={quit} />;
-    case 'freereading':
-      return <FreeReadingExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
-    default:
-      return <FocalReadingExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
   }
+
+  return (
+    <View style={{ flex: 1 }}>
+      {content}
+
+      {/* Botón Flotante para Consultas IA */}
+      {!showAIChat && (
+        <Pressable
+          onPress={() => {
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            }
+            setShowAIChat(true);
+          }}
+          style={({ pressed }) => [
+            aiStyles.floatingAiFab,
+            { backgroundColor: accent, transform: [{ scale: pressed ? 0.95 : 1 }] },
+          ]}
+        >
+          <Ionicons name="sparkles" size={15} color="#FFF" style={{ marginRight: 6 }} />
+          <Text style={aiStyles.floatingAiFabText}>Mente IA</Text>
+        </Pressable>
+      )}
+
+      {/* Modal deslizante con la IA en modo modal */}
+      <Modal
+        visible={showAIChat}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowAIChat(false)}
+      >
+        <View style={aiStyles.chatModalOverlay}>
+          {/* Pause Blur Overlay for Active Gameplay */}
+          {phase === 'playing' && (
+            <BlurView intensity={35} tint="dark" style={StyleSheet.absoluteFill} />
+          )}
+
+          <View style={aiStyles.chatModalContent}>
+            {phase === 'playing' && (
+              <View style={aiStyles.pauseBadge}>
+                <Ionicons name="pause" size={11} color="#FFF" style={{ marginRight: 5 }} />
+                <Text style={aiStyles.pauseBadgeText}>ENTRENAMIENTO EN PAUSA</Text>
+              </View>
+            )}
+
+            <AIChatbot
+              mode="modal"
+              exerciseId={exerciseId}
+              onClose={() => setShowAIChat(false)}
+            />
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
 }
 
 // ─── Intro screen ─────────────────────────────────────────────────────────────
@@ -502,11 +569,13 @@ function ExerciseIntro({
               <Text style={introStyles.settingLabel}>Tema del Palacio</Text>
               <Text style={[introStyles.settingValue, { color: c, textTransform: 'capitalize' }]}>{lociPalace}</Text>
             </View>
-            <View style={introStyles.pillRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={introStyles.pillScrollRow}>
               {[
                 { val: 'casa', label: '🏠 Casa' },
-                { val: 'oficina', label: '💻 Oficina' },
+                { val: 'oficina', label: '🏢 Oficina' },
                 { val: 'naturaleza', label: '🌲 Naturaleza' },
+                { val: 'cuerpo', label: '🧘 Cuerpo' },
+                { val: 'mano', label: '🖐️ Dedos' },
               ].map((item) => (
                 <SelectPill
                   key={item.val}
@@ -516,7 +585,7 @@ function ExerciseIntro({
                   color={c}
                 />
               ))}
-            </View>
+            </ScrollView>
 
             <View style={[introStyles.settingTextRow, { marginTop: 14 }]}>
               <Text style={introStyles.settingLabel}>Elementos de Asociación</Text>
@@ -635,6 +704,19 @@ function ExerciseIntro({
         </View>
 
         {renderSettingsPanel()}
+
+        {exercise.id === 'loci' && (
+          <View style={introStyles.memoryExplainerCard}>
+            <View style={introStyles.memoryExplainerHeader}>
+              <MaterialCommunityIcons name="brain" size={20} color="#8B5CF6" />
+              <Text style={introStyles.memoryExplainerTitle}>¿Cómo Funciona la Mnemotecnia Absurda?</Text>
+            </View>
+            <Text style={introStyles.memoryExplainerText}>
+              El cerebro humano no está diseñado evolutivamente para memorizar listas frías de palabras abstractas, sino para recordar <Text style={{ fontWeight: 'bold' }}>espacios, recorridos y ubicaciones físicas (visión espacial)</Text> a través del hipocampo.{"\n\n"}
+              Al forzar asociaciones <Text style={{ fontWeight: 'bold', color: '#8B5CF6' }}>inverosímiles, locas, cómicas y surrealistas</Text> en rincones o puntos físicos concretos, provocamos una micro-respuesta emocional en la amígdala. Esta emoción le indica al cerebro: <Text style={{ fontStyle: 'italic', fontWeight: '600' }}>"¡Esto es sumamente inusual y llamativo, no lo borres!"</Text>, consolidando los datos en tu memoria a largo plazo durante mucho más tiempo.
+            </Text>
+          </View>
+        )}
 
         <View style={[introStyles.whyCard, { borderColor: COLORS.border }]}>
           <View style={[introStyles.whyIcon, { backgroundColor: c + '15' }]}>
@@ -1088,6 +1170,34 @@ const introStyles = StyleSheet.create({
   pillScrollRow: { flexDirection: 'row', gap: 6, paddingVertical: 4 },
   pill: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', minWidth: 50 },
   pillText: { fontFamily: FONTS.headingSemi, fontSize: 11 },
+  memoryExplainerCard: {
+    backgroundColor: '#FAF5FF',
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  memoryExplainerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  memoryExplainerTitle: {
+    fontFamily: FONTS.heading || 'System',
+    fontSize: 13,
+    color: '#6D28D9',
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
+  memoryExplainerText: {
+    fontFamily: FONTS.body || 'System',
+    fontSize: 12.5,
+    color: '#5B21B6',
+    lineHeight: 18,
+  },
 });
 
 const metaStyles = StyleSheet.create({
@@ -1244,5 +1354,66 @@ const limitStyles = StyleSheet.create({
     fontFamily: FONTS.headingSemi || 'System',
     fontSize: 12,
     color: '#4B5563',
+  },
+});
+
+const aiStyles = StyleSheet.create({
+  floatingAiFab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 15,
+    paddingVertical: 11,
+    borderRadius: 25,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 12,
+    elevation: 6,
+    zIndex: 999,
+  },
+  floatingAiFabText: {
+    fontFamily: FONTS.headingBold || 'System',
+    fontSize: 12.5,
+    color: '#FFF',
+    letterSpacing: 0.5,
+  },
+  chatModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  chatModalContent: {
+    height: '80%',
+    width: '100%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+  },
+  pauseBadge: {
+    position: 'absolute',
+    top: -15,
+    left: '50%',
+    marginLeft: -80,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 12,
+    zIndex: 1000,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
+    width: 160,
+  },
+  pauseBadgeText: {
+    fontFamily: FONTS.headingBold || 'System',
+    fontSize: 9,
+    color: '#FFF',
+    letterSpacing: 0.5,
   },
 });
