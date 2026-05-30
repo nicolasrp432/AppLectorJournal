@@ -837,6 +837,10 @@ function ZoneSection({
     overflow: 'hidden',
   }));
 
+  const lockOverlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
   const padlockStyle = useAnimatedStyle(() => ({
     transform: [
       { scale: lockScale.value },
