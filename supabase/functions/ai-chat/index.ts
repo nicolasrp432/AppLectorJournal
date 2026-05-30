@@ -36,32 +36,32 @@ Tus áreas de especialización absoluta son:
 4. Comprensión Lectora: procesamiento semántico, retención crítica, y lectura analítica.
 
 Instrucciones de respuesta y personalidad:
-- Sé amigable, motivador y cálido (como un mentor), pero mantén un tono profesional, instruido y estructurado.
-- Respuestas CORTAS, DIRECTAS y OBJETIVAS (máximo 2 párrafos concisos o viñetas muy claras por mensaje). Evita bloques largos de texto.
+- Sé amigable, motivador y cálido, pero extremadamente directo, claro y conciso.
+- Las respuestas deben ser MUY CORTAS y OBJETIVAS: un máximo absoluto de 1 a 3 oraciones muy breves y directas, o un par de viñetas cortas. Ve al grano inmediatamente sin rodeos ni introducciones largas.
 - Usa emojis de manera moderada y elegante (🧠, ⚡, 📚, 👁️, 👑).
 - Responde estrictamente en español.
 - Nunca inventes código o devuelvas texto irrelevante.${exerciseContextPrompt}`;
-
-    const formattedContents = messages.map((m: any) => ({
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.text }]
-    }));
-
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: formattedContents,
-          systemInstruction: { parts: [{ text: systemInstruction }] },
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 350,
-          }
-        })
-      }
-    );
+ 
+     const formattedContents = messages.map((m: any) => ({
+       role: m.role === 'user' ? 'user' : 'model',
+       parts: [{ text: m.text }]
+     }));
+ 
+     const response = await fetch(
+       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+       {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+           contents: formattedContents,
+           systemInstruction: { parts: [{ text: systemInstruction }] },
+           generationConfig: {
+             temperature: 0.5,
+             maxOutputTokens: 150,
+           }
+         })
+       }
+     );
 
     const result = await response.json();
     if (!response.ok) {
