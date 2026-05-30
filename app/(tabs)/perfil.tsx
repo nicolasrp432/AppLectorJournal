@@ -75,6 +75,14 @@ export default function PerfilScreen() {
   const libraryItems = useLibraryStore(s => s.items);
   const progress = useProgressStore(s => s.all);
 
+  const getSpentXP = () => {
+    const owned = useRewardsStore.getState().owned;
+    return owned.reduce((sum, rewardId) => {
+      const rewardItem = REWARDS.find(r => r.id === rewardId);
+      return sum + (rewardItem ? rewardItem.cost : 0);
+    }, 0);
+  };
+
   const [editing, setEditing]     = useState(false);
   const [editName, setEditName]   = useState('');
   const [editBio,  setEditBio]    = useState('');
@@ -270,6 +278,36 @@ export default function PerfilScreen() {
   const isProfilePremium = useProfileStore(s => s.isPremium());
   const isPremium = isPremiumRC || isProfilePremium;
 
+  const getLeagueInfo = (lvl: number) => {
+    if (lvl >= 9) return { name: 'Liga Diamante', icon: 'diamond', color: '#06B6D4', colorBg: '#ECFEFF' };
+    if (lvl >= 7) return { name: 'Liga Esmeralda', icon: 'shield-checkmark', color: '#10B981', colorBg: '#ECFDF5' };
+    if (lvl >= 5) return { name: 'Liga Oro', icon: 'ribbon', color: '#EAB308', colorBg: '#FEFCE8' };
+    if (lvl >= 3) return { name: 'Liga Plata', icon: 'shield', color: '#94A3B8', colorBg: '#F8FAFC' };
+    return { name: 'Liga Bronce', icon: 'trophy', color: '#B45309', colorBg: '#FFFBEB' };
+  };
+
+  const getWeeklyXP = () => {
+    const oneWeekAgo = new Date();
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+    return sessions
+      .filter(s => new Date(s.finished_at) >= oneWeekAgo)
+      .reduce((sum, s) => sum + (s.xp_earned ?? 0), 0);
+  };
+
+  const weeklyXP = getWeeklyXP();
+  const league = getLeagueInfo(profile.level);
+
+  // Dynamic ranking of competitors
+  const competitors = [
+    { name: 'Camila', xp: 750, avatar: 'loci' as MascotKey, isUser: false },
+    { name: 'Carlos', xp: 620, avatar: 'swift' as MascotKey, isUser: false },
+    { name: 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', isUser: true },
+    { name: 'Mateo', xp: 320, avatar: 'calm' as MascotKey, isUser: false },
+    { name: 'Sofía', xp: 210, avatar: 'memo' as MascotKey, isUser: false },
+  ].sort((a, b) => b.xp - a.xp);
+
+  const userRank = competitors.findIndex(c => c.isUser) + 1;
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -346,10 +384,20 @@ export default function PerfilScreen() {
 
           <View style={styles.levelRow}>
             <Text style={styles.levelLabel}>Nivel {profile.level}</Text>
-            <Text style={styles.levelXP}>{xpForNextLevel(profile.xp)} XP para Nivel {profile.level + 1}</Text>
+            {profile.level >= 10 ? (
+              <Text style={styles.levelXP}>¡Nivel Máximo alcanzado! 👑</Text>
+            ) : (
+              <Text style={styles.levelXP}>
+                {xpForNextLevel(profile.xp + getSpentXP())} XP para Nivel {profile.level + 1}
+              </Text>
+            )}
           </View>
           <View style={{ marginTop: 8, width: '100%' }}>
-            <ProgressBar value={levelProgress(profile.xp)} color={themeColor} height={10} />
+            <ProgressBar 
+              value={profile.level >= 10 ? 1 : levelProgress(profile.xp + getSpentXP())} 
+              color={themeColor} 
+              height={10} 
+            />
           </View>
         </View>
 
@@ -429,6 +477,71 @@ export default function PerfilScreen() {
             );
           })}
         </ScrollView>
+
+        {/* ── Liga Competitiva Semanal ────────────────────────────────────── */}
+        <View style={styles.sectionHeaderRow}>
+          <Text style={styles.sectionTitle}>Liga Competitiva</Text>
+          <View style={[styles.sectionTitleRightBadge, { backgroundColor: league.color + '15' }]}>
+            <Text style={[styles.sectionTitleRightBadgeText, { color: league.color }]}>Semana Activa</Text>
+          </View>
+        </View>
+
+        <View style={[styles.leagueCard, { borderColor: league.color + '25', shadowColor: league.color }]}>
+          <View style={[styles.leagueHeader, { backgroundColor: league.color + '0E' }]}>
+            <View style={[styles.leagueIconCircle, { backgroundColor: league.color + '18' }]}>
+              <Ionicons name={league.icon as any} size={26} color={league.color} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.leagueName}>{league.name}</Text>
+              <Text style={styles.leagueWeeklyXP}>{weeklyXP} XP acumulados esta semana</Text>
+            </View>
+            <View style={styles.leagueTimerBadge}>
+              <Ionicons name="time-outline" size={11} color={COLORS.muted} style={{ marginRight: 3 }} />
+              <Text style={styles.leagueTimerText}>Termina en 3d 12h</Text>
+            </View>
+          </View>
+
+          <View style={styles.leagueLeaderboard}>
+            {competitors.map((comp, idx) => {
+              const rank = idx + 1;
+              return (
+                <View key={comp.name} style={[styles.leaderboardRow, comp.isUser && [styles.leaderboardRowUser, { borderColor: themeColor + '30' }]]}>
+                  <Text style={styles.leaderboardRank}>
+                    {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}
+                  </Text>
+                  <View style={styles.leaderboardAvatarWrapper}>
+                    <MascotChar which={comp.avatar} size={24} breathing={false} blinking={false} />
+                  </View>
+                  <Text style={[styles.leaderboardName, comp.isUser && [styles.leaderboardNameUser, { color: themeColor }]]}>
+                    {comp.name}
+                  </Text>
+                  <Text style={styles.leaderboardXP}>{comp.xp} XP</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Promotion / Demotion Zone Indicator */}
+          <View style={[
+            styles.zoneIndicator,
+            userRank <= 2 ? styles.zoneAscenso : userRank === 5 ? styles.zonePeligro : styles.zonePermanencia
+          ]}>
+            <Ionicons
+              name={userRank <= 2 ? 'rocket-outline' : userRank === 5 ? 'alert-circle-outline' : 'shield-checkmark-outline'}
+              size={15}
+              color={userRank <= 2 ? '#16A34A' : userRank === 5 ? '#DC2626' : '#6B7280'}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[
+              styles.zoneIndicatorText,
+              userRank <= 2 ? { color: '#16A34A' } : userRank === 5 ? { color: '#DC2626' } : { color: '#4B5563' }
+            ]}>
+              {userRank <= 2 ? 'Zona de Ascenso (Top 2) 🚀 ¡Vas rumbo a subir de liga!' :
+               userRank === 5 ? 'Zona de Descenso ⚠️ ¡Entrena más para conservar tu liga!' :
+               'Zona de Permanencia 🛡️ Mantienes tu puesto en la liga.'}
+            </Text>
+          </View>
+        </View>
 
         {/* ── Settings ─────────────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Configuración</Text>
@@ -1738,5 +1851,117 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.headingSemi,
     fontSize: 13,
     color: '#EF4444',
+  },
+  leagueCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    borderWidth: 1.5,
+    padding: 16,
+    marginBottom: 20,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+  leagueHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 16,
+    gap: 12,
+    marginBottom: 14,
+  },
+  leagueIconCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leagueName: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 16,
+    color: COLORS.ink,
+  },
+  leagueWeeklyXP: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: COLORS.muted,
+    marginTop: 2,
+  },
+  leagueTimerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    backgroundColor: COLORS.canvas,
+    borderRadius: 8,
+  },
+  leagueTimerText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 9,
+    color: COLORS.muted,
+  },
+  leagueLeaderboard: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  leaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: COLORS.surface + '20',
+  },
+  leaderboardRowUser: {
+    backgroundColor: COLORS.surface,
+    borderWidth: 1.5,
+  },
+  leaderboardRank: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
+    color: COLORS.muted,
+    width: 28,
+    textAlign: 'center',
+  },
+  leaderboardAvatarWrapper: {
+    marginRight: 10,
+  },
+  leaderboardName: {
+    fontFamily: FONTS.body,
+    fontSize: 13.5,
+    color: COLORS.inkLight,
+    flex: 1,
+  },
+  leaderboardNameUser: {
+    fontFamily: FONTS.headingBold,
+  },
+  leaderboardXP: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 13,
+    color: COLORS.ink,
+  },
+  zoneIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  zoneAscenso: {
+    backgroundColor: '#DCFCE7',
+  },
+  zonePermanencia: {
+    backgroundColor: '#F1F5F9',
+  },
+  zonePeligro: {
+    backgroundColor: '#FEE2E2',
+  },
+  zoneIndicatorText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 10.5,
+    flex: 1,
   },
 });

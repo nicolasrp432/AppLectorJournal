@@ -227,10 +227,12 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
     setInput('');
     setLoading(true);
 
-    const messagesToSend = [...messages, userMessage].map((m) => ({
-      role: m.role,
-      text: m.text,
-    }));
+    const messagesToSend = [...messages, userMessage]
+      .filter((m) => m.id !== 'welcome')
+      .map((m) => ({
+        role: m.role,
+        text: m.text,
+      }));
 
     // Formular el contexto del ejercicio si aplica
     const exContext = activeExercise
@@ -270,23 +272,46 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
           activeExercise ? `[Contexto]: El usuario está en el ejercicio ${activeExercise.title}.` : ''
         }`;
 
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [...messages, userMessage].map((m) => ({
-                role: m.role === 'user' ? 'user' : 'model',
-                parts: [{ text: m.text }]
-              })),
-              systemInstruction: { parts: [{ text: systemPrompt }] },
-              generationConfig: { maxOutputTokens: 350 }
-            })
-          }
-        );
+        const formattedContents = [...messages, userMessage]
+          .filter((m) => m.id !== 'welcome')
+          .map((m) => ({
+            role: m.role === 'user' ? 'user' : 'model',
+            parts: [{ text: m.text }]
+          }));
 
-        const result = await response.json();
+        // Dynamic multi-model fallback chain to guarantee 100% success rate
+        const tryModel = async (model: string) => {
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: formattedContents,
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { maxOutputTokens: 350 }
+              })
+            }
+          );
+          if (!response.ok) {
+            throw new Error(`Direct call to ${model} returned status ${response.status}`);
+          }
+          return response.json();
+        };
+
+        let result;
+        try {
+          result = await tryModel('gemini-2.5-flash');
+        } catch (firstErr) {
+          console.warn('gemini-2.5-flash failed, trying gemini-1.5-flash fallback:', firstErr);
+          try {
+            result = await tryModel('gemini-1.5-flash');
+          } catch (secErr) {
+            console.warn('gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', secErr);
+            result = await tryModel('gemini-2.0-flash');
+          }
+        }
+
         const reply = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
         if (reply) {

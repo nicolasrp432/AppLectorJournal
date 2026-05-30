@@ -1589,23 +1589,7 @@ function ExercisePreviewSheet({
 
           <Text style={styles.previewDesc}>{data.desc}</Text>
 
-          <View style={styles.previewStatsGrid}>
-            <View style={styles.previewStatCard}>
-              <Ionicons name="trophy-outline" size={18} color="#D97706" />
-              <Text style={styles.previewStatLabel}>Récord Personal</Text>
-              <Text style={styles.previewStatVal}>{getRecordLabel()}</Text>
-            </View>
-            <View style={styles.previewStatCard}>
-              <Ionicons name="trending-up-outline" size={18} color="#10B981" />
-              <Text style={styles.previewStatLabel}>Dominio Total</Text>
-              <Text style={styles.previewStatVal}>{(bestRecord.mastery * 100).toFixed(0)}%</Text>
-            </View>
-            <View style={styles.previewStatCard}>
-              <Ionicons name="barbell-outline" size={18} color="#8B5CF6" />
-              <Text style={styles.previewStatLabel}>Sesiones</Text>
-              <Text style={styles.previewStatVal}>{bestRecord.total_sessions}</Text>
-            </View>
-          </View>
+
 
           <Text style={styles.previewSectionTitle}>Habilidades Potenciadas</Text>
           <View style={styles.previewSkillsWrap}>

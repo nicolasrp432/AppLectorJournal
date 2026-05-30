@@ -252,11 +252,7 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
                   </View>
                 </ScrollView>
 
-                {/* Glassmorphic Sliding Focus Ruler Line */}
-                <Animated.View pointerEvents="none" style={[styles.readingRuler, { borderColor: accent, backgroundColor: `${accent}14`, height: 38 }, rulerStyle]}>
-                  <View style={[styles.rulerHandleLeft, { backgroundColor: accent, height: 22 }]} />
-                  <View style={[styles.rulerHandleRight, { backgroundColor: accent, height: 22 }]} />
-                </Animated.View>
+
               </View>
 
               <Text style={styles.hint}>Tómate tu tiempo. Después responderás {passage.questions.length} preguntas.</Text>

@@ -42,26 +42,47 @@ Instrucciones de respuesta y personalidad:
 - Responde estrictamente en español.
 - Nunca inventes código o devuelvas texto irrelevante.${exerciseContextPrompt}`;
  
-     const formattedContents = messages.map((m: any) => ({
-       role: m.role === 'user' ? 'user' : 'model',
-       parts: [{ text: m.text }]
-     }));
- 
-     const response = await fetch(
-       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-       {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({
-           contents: formattedContents,
-           systemInstruction: { parts: [{ text: systemInstruction }] },
-           generationConfig: {
-             temperature: 0.5,
-             maxOutputTokens: 150,
-           }
-         })
+     const formattedContents = messages
+       .map((m: any) => ({
+         role: m.role === 'user' ? 'user' : 'model',
+         parts: [{ text: m.text }]
+       }))
+       .filter((m: any, idx: number) => !(idx === 0 && m.role === 'model'));
+
+     const tryModel = async (model: string) => {
+       const response = await fetch(
+         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+         {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             contents: formattedContents,
+             systemInstruction: { parts: [{ text: systemInstruction }] },
+             generationConfig: {
+               temperature: 0.5,
+               maxOutputTokens: 150,
+             }
+           })
+         }
+       );
+       if (!response.ok) {
+         throw new Error(`Model ${model} returned status ${response.status}`);
        }
-     );
+       return response;
+     };
+
+     let response;
+     try {
+       response = await tryModel('gemini-2.5-flash');
+     } catch (firstErr) {
+       console.warn('ai-chat edge: gemini-2.5-flash failed, trying gemini-1.5-flash fallback:', firstErr);
+       try {
+         response = await tryModel('gemini-1.5-flash');
+       } catch (secErr) {
+         console.warn('ai-chat edge: gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', secErr);
+         response = await tryModel('gemini-2.0-flash');
+       }
+     }
 
     const result = await response.json();
     if (!response.ok) {

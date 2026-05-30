@@ -4,6 +4,23 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
 import { xpToLevel } from '../lib/xpEngine';
 import type { Profile, MascotKey } from '../types/db';
+import { REWARDS } from '../constants/rewards';
+
+function getSpentXP(): number {
+  try {
+    const rewardsStore = require('./useRewardsStore').useRewardsStore;
+    const owned = rewardsStore.getState().owned;
+    if (!owned) return 0;
+    return owned.reduce((sum: number, rewardId: string) => {
+      const rewardItem = REWARDS.find(r => r.id === rewardId);
+      return sum + (rewardItem ? rewardItem.cost : 0);
+    }, 0);
+  } catch (err) {
+    console.warn('Error calculating spent XP, returning 0:', err);
+    return 0;
+  }
+}
+
 
 interface ProfileState {
   profile: Profile | null;
@@ -97,10 +114,22 @@ export const useProfileStore = create<ProfileState>()(
       addXP: async (amount: number) => {
         const current = get().profile;
         if (!current) return { newXP: 0, newLevel: 1 };
-        const newXP    = Math.max(0, current.xp + amount);
-        const newLevel = xpToLevel(newXP);
-        const updated  = { ...current, xp: newXP, level: newLevel };
+        
+        // Calculate new spendable XP
+        const newXP = Math.max(0, current.xp + amount);
+        
+        // Calculate new level using lifetime XP (spendable + spent)
+        // Level never decreases on shopping (when amount <= 0)
+        let newLevel = current.level;
+        if (amount > 0) {
+          const spentXP = getSpentXP();
+          const lifetimeXP = newXP + spentXP;
+          newLevel = Math.min(10, xpToLevel(lifetimeXP));
+        }
+
+        const updated = { ...current, xp: newXP, level: newLevel };
         set({ profile: updated });
+        
         if (current.id !== 'local') {
           await supabase.from('profiles').update({ xp: newXP, level: newLevel }).eq('id', current.id);
         }

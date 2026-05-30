@@ -347,12 +347,22 @@ export default function ExerciseScreen() {
   }
 
   return (
-    <View 
-      style={{ flex: 1 }}
-      onTouchStart={handleTouchStart}
-      onTouchEnd={handleTouchEnd}
-    >
+    <View style={{ flex: 1 }}>
       {content}
+
+      {/* Subtle Pull-up handle for Mente IA */}
+      {phase === 'playing' && (
+        <Pressable
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+            setShowAIChat(true);
+          }}
+          style={aiStyles.pullUpHandle}
+        >
+          <View style={aiStyles.pullUpLine} />
+          <Text style={aiStyles.pullUpText}>✨ Mente IA</Text>
+        </Pressable>
+      )}
 
       {/* Modal deslizante con la IA en modo modal */}
       <Modal
@@ -1356,6 +1366,36 @@ const limitStyles = StyleSheet.create({
 });
 
 const aiStyles = StyleSheet.create({
+  pullUpHandle: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 28,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    borderTopWidth: 1.5,
+    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    zIndex: 9999,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  pullUpLine: {
+    width: 32,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+  },
+  pullUpText: {
+    fontFamily: FONTS.headingBold || 'System',
+    fontSize: 9.5,
+    color: 'rgba(255, 255, 255, 0.75)',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
   floatingAiFab: {
     position: 'absolute',
     bottom: 24,
