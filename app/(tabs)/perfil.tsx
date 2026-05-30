@@ -28,6 +28,7 @@ import { levelProgress, xpForNextLevel } from '../../lib/xpEngine';
 import { scheduleDailyReminder, cancelDailyReminder } from '../../lib/notifications';
 import { supabase } from '../../lib/supabase';
 import { REWARDS } from '../../constants/rewards';
+import * as Haptics from 'expo-haptics';
 
 type IconLib = 'Ionicons' | 'MaterialCommunityIcons';
 
@@ -85,6 +86,7 @@ export default function PerfilScreen() {
 
   const [editing, setEditing]     = useState(false);
   const [editName, setEditName]   = useState('');
+  const [leagueExpanded, setLeagueExpanded] = useState(false);
   const [editBio,  setEditBio]    = useState('');
   const [uploading, setUploading] = useState(false);
 
@@ -299,11 +301,11 @@ export default function PerfilScreen() {
 
   // Dynamic ranking of competitors
   const competitors = [
-    { name: 'Camila', xp: 750, avatar: 'loci' as MascotKey, isUser: false },
-    { name: 'Carlos', xp: 620, avatar: 'swift' as MascotKey, isUser: false },
-    { name: 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', isUser: true },
-    { name: 'Mateo', xp: 320, avatar: 'calm' as MascotKey, isUser: false },
-    { name: 'Sofía', xp: 210, avatar: 'memo' as MascotKey, isUser: false },
+    { name: 'Camila', xp: 750, avatar: 'loci' as MascotKey, avatarUrl: null, isUser: false },
+    { name: 'Carlos', xp: 620, avatar: 'swift' as MascotKey, avatarUrl: null, isUser: false },
+    { name: 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', avatarUrl: profile.avatar_url, isUser: true },
+    { name: 'Mateo', xp: 320, avatar: 'calm' as MascotKey, avatarUrl: null, isUser: false },
+    { name: 'Sofía', xp: 210, avatar: 'memo' as MascotKey, avatarUrl: null, isUser: false },
   ].sort((a, b) => b.xp - a.xp);
 
   const userRank = competitors.findIndex(c => c.isUser) + 1;
@@ -487,7 +489,15 @@ export default function PerfilScreen() {
         </View>
 
         <View style={[styles.leagueCard, { borderColor: league.color + '25', shadowColor: league.color }]}>
-          <View style={[styles.leagueHeader, { backgroundColor: league.color + '0E' }]}>
+          <Pressable 
+            onPress={() => {
+              if (Platform.OS !== 'web') {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+              }
+              setLeagueExpanded(!leagueExpanded);
+            }}
+            style={[styles.leagueHeader, { backgroundColor: league.color + '0E' }]}
+          >
             <View style={[styles.leagueIconCircle, { backgroundColor: league.color + '18' }]}>
               <Ionicons name={league.icon as any} size={26} color={league.color} />
             </View>
@@ -495,52 +505,67 @@ export default function PerfilScreen() {
               <Text style={styles.leagueName}>{league.name}</Text>
               <Text style={styles.leagueWeeklyXP}>{weeklyXP} XP acumulados esta semana</Text>
             </View>
-            <View style={styles.leagueTimerBadge}>
-              <Ionicons name="time-outline" size={11} color={COLORS.muted} style={{ marginRight: 3 }} />
-              <Text style={styles.leagueTimerText}>Termina en 3d 12h</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={styles.leagueTimerBadge}>
+                <Ionicons name="time-outline" size={11} color={COLORS.muted} style={{ marginRight: 3 }} />
+                <Text style={styles.leagueTimerText}>3d 12h</Text>
+              </View>
+              <Ionicons 
+                name={leagueExpanded ? "chevron-up" : "chevron-down"} 
+                size={20} 
+                color={league.color} 
+              />
             </View>
-          </View>
+          </Pressable>
 
-          <View style={styles.leagueLeaderboard}>
-            {competitors.map((comp, idx) => {
-              const rank = idx + 1;
-              return (
-                <View key={comp.name} style={[styles.leaderboardRow, comp.isUser && [styles.leaderboardRowUser, { borderColor: themeColor + '30' }]]}>
-                  <Text style={styles.leaderboardRank}>
-                    {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}
-                  </Text>
-                  <View style={styles.leaderboardAvatarWrapper}>
-                    <MascotChar which={comp.avatar} size={24} breathing={false} blinking={false} />
-                  </View>
-                  <Text style={[styles.leaderboardName, comp.isUser && [styles.leaderboardNameUser, { color: themeColor }]]}>
-                    {comp.name}
-                  </Text>
-                  <Text style={styles.leaderboardXP}>{comp.xp} XP</Text>
-                </View>
-              );
-            })}
-          </View>
+          {leagueExpanded && (
+            <>
+              <View style={styles.leagueLeaderboard}>
+                {competitors.map((comp, idx) => {
+                  const rank = idx + 1;
+                  return (
+                    <View key={comp.name} style={[styles.leaderboardRow, comp.isUser && [styles.leaderboardRowUser, { borderColor: themeColor + '30' }]]}>
+                      <Text style={styles.leaderboardRank}>
+                        {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}
+                      </Text>
+                      <View style={styles.leaderboardAvatarWrapper}>
+                        {comp.avatarUrl ? (
+                          <Image source={{ uri: comp.avatarUrl }} style={styles.leaderboardAvatarImg} />
+                        ) : (
+                          <MascotChar which={comp.avatar} size={24} breathing={false} blinking={false} />
+                        )}
+                      </View>
+                      <Text style={[styles.leaderboardName, comp.isUser && [styles.leaderboardNameUser, { color: themeColor }]]}>
+                        {comp.name}
+                      </Text>
+                      <Text style={styles.leaderboardXP}>{comp.xp} XP</Text>
+                    </View>
+                  );
+                })}
+              </View>
 
-          {/* Promotion / Demotion Zone Indicator */}
-          <View style={[
-            styles.zoneIndicator,
-            userRank <= 2 ? styles.zoneAscenso : userRank === 5 ? styles.zonePeligro : styles.zonePermanencia
-          ]}>
-            <Ionicons
-              name={userRank <= 2 ? 'rocket-outline' : userRank === 5 ? 'alert-circle-outline' : 'shield-checkmark-outline'}
-              size={15}
-              color={userRank <= 2 ? '#16A34A' : userRank === 5 ? '#DC2626' : '#6B7280'}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[
-              styles.zoneIndicatorText,
-              userRank <= 2 ? { color: '#16A34A' } : userRank === 5 ? { color: '#DC2626' } : { color: '#4B5563' }
-            ]}>
-              {userRank <= 2 ? 'Zona de Ascenso (Top 2) 🚀 ¡Vas rumbo a subir de liga!' :
-               userRank === 5 ? 'Zona de Descenso ⚠️ ¡Entrena más para conservar tu liga!' :
-               'Zona de Permanencia 🛡️ Mantienes tu puesto en la liga.'}
-            </Text>
-          </View>
+              {/* Promotion / Demotion Zone Indicator */}
+              <View style={[
+                styles.zoneIndicator,
+                userRank <= 2 ? styles.zoneAscenso : userRank === 5 ? styles.zonePeligro : styles.zonePermanencia
+              ]}>
+                <Ionicons
+                  name={userRank <= 2 ? 'rocket-outline' : userRank === 5 ? 'alert-circle-outline' : 'shield-checkmark-outline'}
+                  size={15}
+                  color={userRank <= 2 ? '#16A34A' : userRank === 5 ? '#DC2626' : '#6B7280'}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[
+                  styles.zoneIndicatorText,
+                  userRank <= 2 ? { color: '#16A34A' } : userRank === 5 ? { color: '#DC2626' } : { color: '#4B5563' }
+                ]}>
+                  {userRank <= 2 ? 'Zona de Ascenso (Top 2) 🚀 ¡Vas rumbo a subir de liga!' :
+                   userRank === 5 ? 'Zona de Descenso ⚠️ ¡Entrena más para conservar tu liga!' :
+                   'Zona de Permanencia 🛡️ Mantienes tu puesto en la liga.'}
+                </Text>
+              </View>
+            </>
+          )}
         </View>
 
         {/* ── Settings ─────────────────────────────────────────────────────── */}
@@ -1928,6 +1953,11 @@ const styles = StyleSheet.create({
   },
   leaderboardAvatarWrapper: {
     marginRight: 10,
+  },
+  leaderboardAvatarImg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
   },
   leaderboardName: {
     fontFamily: FONTS.body,

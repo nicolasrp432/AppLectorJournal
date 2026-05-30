@@ -73,14 +73,14 @@ Instrucciones de respuesta y personalidad:
 
      let response;
      try {
-       response = await tryModel('gemini-2.5-flash');
+       response = await tryModel('gemini-1.5-flash');
      } catch (firstErr) {
-       console.warn('ai-chat edge: gemini-2.5-flash failed, trying gemini-1.5-flash fallback:', firstErr);
+       console.warn('ai-chat edge: gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', firstErr);
        try {
-         response = await tryModel('gemini-1.5-flash');
-       } catch (secErr) {
-         console.warn('ai-chat edge: gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', secErr);
          response = await tryModel('gemini-2.0-flash');
+       } catch (secErr) {
+         console.warn('ai-chat edge: gemini-2.0-flash failed, trying gemini-1.5-pro fallback:', secErr);
+         response = await tryModel('gemini-1.5-pro');
        }
      }
 

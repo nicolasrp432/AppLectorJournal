@@ -294,21 +294,28 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
             }
           );
           if (!response.ok) {
-            throw new Error(`Direct call to ${model} returned status ${response.status}`);
+            let errMsg = `Direct call to ${model} returned status ${response.status}`;
+            try {
+              const errBody = await response.json();
+              if (errBody?.error?.message) {
+                errMsg += `: ${errBody.error.message}`;
+              }
+            } catch (_) {}
+            throw new Error(errMsg);
           }
           return response.json();
         };
 
         let result;
         try {
-          result = await tryModel('gemini-2.5-flash');
+          result = await tryModel('gemini-1.5-flash');
         } catch (firstErr) {
-          console.warn('gemini-2.5-flash failed, trying gemini-1.5-flash fallback:', firstErr);
+          console.warn('gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', firstErr);
           try {
-            result = await tryModel('gemini-1.5-flash');
-          } catch (secErr) {
-            console.warn('gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', secErr);
             result = await tryModel('gemini-2.0-flash');
+          } catch (secErr) {
+            console.warn('gemini-2.0-flash failed, trying gemini-1.5-pro fallback:', secErr);
+            result = await tryModel('gemini-1.5-pro');
           }
         }
 
@@ -327,14 +334,18 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
         } else {
           throw new Error('Gemini API response malformed');
         }
-      } catch (fallbackErr) {
+      } catch (fallbackErr: any) {
         console.warn('Fallback failed too:', fallbackErr);
+        const errMessage = fallbackErr?.message || '';
+        const isKeyExpired = errMessage.includes('expired') || errMessage.includes('API key') || errMessage.includes('API_KEY_INVALID');
         setMessages((prev) => [
           ...prev,
           {
             id: Math.random().toString(),
             role: 'assistant',
-            text: '¡Hola! Estoy experimentando una micro-desconexión en mis sinapsis digitales. Revisa tu conexión a internet e inténtalo de nuevo en unos momentos. 🧠⚡',
+            text: isKeyExpired
+              ? '🔑 Error de Configuración: La clave API de Gemini ha expirado. Por favor, actualiza la variable GEMINI_API_KEY en tu entorno o en los secretos de Supabase con una clave válida de Google AI Studio para reactivar mis sinapsis cognitivas. 🧠⚡'
+              : '¡Hola! Estoy experimentando una micro-desconexión en mis sinapsis digitales. Revisa tu conexión a internet e inténtalo de nuevo en unos momentos. 🧠⚡',
           },
         ]);
         triggerHaptic('warning');
