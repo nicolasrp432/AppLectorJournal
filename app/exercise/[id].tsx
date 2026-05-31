@@ -348,7 +348,9 @@ export default function ExerciseScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      {content}
+      <View style={{ flex: 1 }}>
+        {content}
+      </View>
 
       {/* Subtle Pull-up handle for Mente IA */}
       {phase === 'playing' && (
@@ -1367,32 +1369,27 @@ const limitStyles = StyleSheet.create({
 
 const aiStyles = StyleSheet.create({
   pullUpHandle: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 28,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-    borderTopWidth: 1.5,
-    borderTopColor: 'rgba(255, 255, 255, 0.1)',
+    height: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 8,
-    zIndex: 9999,
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
   },
   pullUpLine: {
-    width: 32,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    width: 28,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
   pullUpText: {
-    fontFamily: FONTS.headingBold || 'System',
-    fontSize: 9.5,
-    color: 'rgba(255, 255, 255, 0.75)',
+    fontFamily: FONTS.headingSemi || 'System',
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.45)',
     letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
