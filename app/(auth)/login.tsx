@@ -128,7 +128,7 @@ export default function LoginScreen() {
           <View style={{ height: 14 }} />
           <Field label="Contraseña" value={password} onChange={setPassword} placeholder="••••••••" secureTextEntry />
 
-          <Pressable style={styles.forgotRow}>
+          <Pressable style={styles.forgotRow} onPress={() => router.push('/(auth)/forgot-password')}>
             <Text style={styles.forgotText}>¿Olvidaste tu contraseña?</Text>
           </Pressable>
 

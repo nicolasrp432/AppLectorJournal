@@ -56,8 +56,10 @@ export default function RootLayout() {
       if (data.session) syncUser(data.session.user.id);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        router.replace('/(auth)/reset-password');
+      } else if (session) {
         syncUser(session.user.id);
         router.replace('/(tabs)/ruta');
       } else {
