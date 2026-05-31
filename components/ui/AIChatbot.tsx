@@ -267,7 +267,10 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
     } catch (err) {
       console.warn('Edge Function failure, invoking fallback Direct Gemini Call:', err);
       try {
-        const rawApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || "AIzaSyAa-CYZy22GmzO2_Y4TH84310yQVNBRSdE";
+        const rawApiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY || "";
+        if (!rawApiKey) {
+          throw new Error('Direct call fallback: EXPO_PUBLIC_GEMINI_API_KEY is not configured or expired.');
+        }
         const apiKey = rawApiKey.trim().replace(/^["']|["']$/g, "");
         const systemPrompt = `Eres "Mente IA", el mentor neuronal y asistente de LectorApp. Da respuestas CORTAS y DIRECTAS (max 2 párrafos). Sé amigable pero profesional. ${
           activeExercise ? `[Contexto]: El usuario está en el ejercicio ${activeExercise.title}.` : ''

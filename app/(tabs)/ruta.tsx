@@ -145,6 +145,11 @@ const EX_METRICS: Record<string, { title: string; desc: string; skills: string[]
     desc: 'Entrena la atención visual sostenida y visión periférica fijando la mirada en el círculo en expansión.',
     skills: ['Atención Sostenida', 'Concentración Periférica', 'Relajación Mental'],
   },
+  freereading: {
+    title: 'Lectura Libre',
+    desc: 'Lee un pasaje a tu ritmo natural y comprueba tu nivel de asimilación sin presiones.',
+    skills: ['Lectura Comprensiva', 'Ritmo Orgánico', 'Foco sin Tiempo'],
+  },
 };
 
 const NODE_DEPENDENCIES: Record<string, string[][]> = {
@@ -1428,6 +1433,9 @@ function ExercisePreviewSheet({
     }
     if (node.exId === 'loci') {
       return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 100).toFixed(0)}% Precisión` : 'Ninguno';
+    }
+    if (node.exId === 'freereading') {
+      return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 100).toFixed(0)}% Comprensión` : 'Ninguno';
     }
     return bestRecord.best_score > 0 ? `${(bestRecord.best_score * 100).toFixed(0)}%` : 'Ninguno';
   };

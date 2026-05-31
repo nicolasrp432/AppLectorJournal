@@ -20,6 +20,8 @@ export function ExerciseDemo({ kind, accent = '#22C55E', height = 180 }: Exercis
       { height, backgroundColor: accent + '08', borderColor: accent + '20' },
     ]}>
       {kind === 'schulte'                                   && <DemoSchulte accent={accent} />}
+      {kind === 'reading_test'                              && <DemoReadingTest accent={accent} />}
+      {kind === 'focus_circle'                              && <DemoFocusCircle accent={accent} />}
       {(kind === 'rsvp' || kind === 'reading' || kind === 'freereading') && <DemoRSVP accent={accent} />}
       {kind === 'wordspan'                                  && <DemoWordSpan accent={accent} />}
       {kind === 'loci'                                      && <DemoLoci accent={accent} />}
@@ -337,6 +339,129 @@ function DemoBoss({ accent }: { accent: string }) {
     </View>
   );
 }
+
+
+// ── Reading Test: document being scanned with a speedometer / WPM counter ──────────────────────────
+
+function DemoReadingTest({ accent }: { accent: string }) {
+  const [wpm, setWpm] = useState(150);
+  const scanY = useSharedValue(0);
+
+  useEffect(() => {
+    const wpmInterval = setInterval(() => {
+      setWpm(w => {
+        const next = w + Math.floor(Math.random() * 30) - 13;
+        return Math.max(120, Math.min(320, next));
+      });
+    }, 400);
+
+    scanY.value = withTiming(1, { duration: 1800 }, () => {
+      scanY.value = 0;
+      scanY.value = withTiming(1, { duration: 1800 });
+    });
+
+    const scanInterval = setInterval(() => {
+      scanY.value = 0;
+      scanY.value = withTiming(1, { duration: 1800 });
+    }, 2000);
+
+    return () => {
+      clearInterval(wpmInterval);
+      clearInterval(scanInterval);
+    };
+  }, []);
+
+  const scanStyle = useAnimatedStyle(() => ({
+    top: `${scanY.value * 90}%` as any,
+  }));
+
+  return (
+    <View style={demoStyles.center}>
+      <Text style={[demoStyles.phaseLabel, { color: accent }]}>Calibrando Velocidad</Text>
+      <View style={readingTestStyles.container}>
+        {/* Document lines */}
+        <View style={readingTestStyles.document}>
+          {[0, 1, 2, 3].map(i => (
+            <View
+              key={i}
+              style={[
+                readingTestStyles.docLine,
+                { width: i === 3 ? '50%' : i === 1 ? '85%' : '100%' },
+              ]}
+            />
+          ))}
+          <Animated.View style={[readingTestStyles.scanner, { backgroundColor: accent }, scanStyle]} />
+        </View>
+        
+        {/* Speedometer panel */}
+        <View style={[readingTestStyles.speedo, { borderColor: accent + '30' }]}>
+          <Text style={[readingTestStyles.speedoVal, { color: accent }]}>{wpm}</Text>
+          <Text style={readingTestStyles.speedoLabel}>WPM</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+const readingTestStyles = StyleSheet.create({
+  container:    { flexDirection: 'row', gap: 12, alignItems: 'center', width: 220, justifyContent: 'center' },
+  document:     { width: 100, height: 75, padding: 8, backgroundColor: COLORS.white, borderRadius: 10, borderWidth: 1.5, borderColor: COLORS.border, position: 'relative', overflow: 'hidden', gap: 5, justifyContent: 'center' },
+  docLine:      { height: 6, backgroundColor: COLORS.border, borderRadius: 3 },
+  scanner:      { position: 'absolute', left: 0, right: 0, height: 3, opacity: 0.8 },
+  speedo:       { width: 75, height: 75, borderRadius: 38, borderWidth: 2, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
+  speedoVal:    { fontFamily: FONTS.heading, fontSize: 20, lineHeight: 22 },
+  speedoLabel:  { fontFamily: FONTS.headingSemi, fontSize: 8, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
+});
+
+// ── Focus Circle: breathing/scaling circle around a center dot ───────────────────────────────
+
+function DemoFocusCircle({ accent }: { accent: string }) {
+  const scale = useSharedValue(0.4);
+  const opacity = useSharedValue(0.3);
+
+  useEffect(() => {
+    scale.value = withTiming(1.2, { duration: 2000 }, () => {
+      scale.value = withTiming(0.4, { duration: 2000 });
+    });
+    opacity.value = withTiming(0.8, { duration: 2000 }, () => {
+      opacity.value = withTiming(0.3, { duration: 2000 });
+    });
+
+    const interval = setInterval(() => {
+      scale.value = 0.4;
+      scale.value = withTiming(1.2, { duration: 2000 }, () => {
+        scale.value = withTiming(0.4, { duration: 2000 });
+      });
+      opacity.value = 0.3;
+      opacity.value = withTiming(0.8, { duration: 2000 }, () => {
+        opacity.value = withTiming(0.3, { duration: 2000 });
+      });
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  const circleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <View style={demoStyles.center}>
+      <Text style={[demoStyles.phaseLabel, { color: accent }]}>Expande Visión</Text>
+      <View style={focusCircleStyles.wrap}>
+        <Animated.View style={[focusCircleStyles.pulseCircle, { borderColor: accent }, circleStyle]} />
+        <View style={[focusCircleStyles.centerDot, { backgroundColor: accent }]} />
+      </View>
+    </View>
+  );
+}
+
+const focusCircleStyles = StyleSheet.create({
+  wrap: { width: 80, height: 80, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  pulseCircle: { position: 'absolute', width: 64, height: 64, borderRadius: 32, borderWidth: 3, borderStyle: 'solid' },
+  centerDot: { width: 12, height: 12, borderRadius: 6 },
+});
 
 const bossStyles = StyleSheet.create({
   skills:   { flexDirection: 'row', gap: 10, marginBottom: 12 },

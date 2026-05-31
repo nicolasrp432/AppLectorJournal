@@ -73,19 +73,33 @@ Instrucciones de respuesta y personalidad:
      };
 
      let response;
+     let lastError;
      try {
        response = await tryModel('gemini-1.5-flash');
-     } catch (firstErr) {
+     } catch (firstErr: any) {
+       lastError = firstErr;
        console.warn('ai-chat edge: gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', firstErr);
        try {
          response = await tryModel('gemini-2.0-flash');
-       } catch (secErr) {
+       } catch (secErr: any) {
+         lastError = secErr;
          console.warn('ai-chat edge: gemini-2.0-flash failed, trying gemini-1.5-pro fallback:', secErr);
-         response = await tryModel('gemini-1.5-pro');
+         try {
+           response = await tryModel('gemini-1.5-pro');
+         } catch (thirdErr: any) {
+           lastError = thirdErr;
+         }
        }
      }
 
-    const result = await response.json();
+     if (!response) {
+       return new Response(JSON.stringify({ error: `Todos los modelos de Gemini fallaron. Último error: ${lastError?.message || 'Desconocido'}` }), {
+         status: 500,
+         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+       });
+     }
+
+     const result = await response.json();
     if (!response.ok) {
       return new Response(JSON.stringify({ error: result }), {
         status: response.status,

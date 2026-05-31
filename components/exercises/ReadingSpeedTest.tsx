@@ -138,6 +138,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
   const animatedContentStyle = useAnimatedStyle(() => ({
     opacity: fadeAnim.value,
     flex: 1,
+    width: '100%',
   }));
 
   if (phase === 'intro') {
