@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, ScrollView, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, ScrollView, StyleSheet, Platform, Dimensions } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSpring,
-  runOnJS,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ExerciseTopBar } from './ExerciseTopBar';
@@ -13,6 +11,8 @@ import { MascotChar } from '../ui/MascotChar';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { usePrefsStore } from '../../store/usePrefsStore';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type Phase = 'intro' | 'read' | 'quiz' | 'result';
 
@@ -47,6 +47,7 @@ const PASSAGE = {
 
 export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props) {
   const [phase, setPhase] = useState<Phase>('intro');
+  const [isReadingStarted, setIsReadingStarted] = useState(false);
   const [qIdx, setQIdx] = useState(0);
   const [answers, setAnswers] = useState<boolean[]>([]);
   const [picked, setPicked] = useState<number | null>(null);
@@ -58,39 +59,40 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
   const readStart = useRef(Date.now());
   const readTimeRef = useRef(0);
 
-  // Reanimated states for glassmorphism ruler snaps
-  const pageRotation = useSharedValue(0);
-  const rulerY = useSharedValue(24);
-  const rulerOpacity = useSharedValue(1);
+  // Simple, extremely robust, web-safe fade animation values
+  const fadeAnim = useSharedValue(1);
 
-  const handleStartReading = () => {
-    readStart.current = Date.now();
-    setPhase('read');
+  const triggerFadeTransition = (nextPhaseCallback: () => void) => {
+    fadeAnim.value = withTiming(0, { duration: 150 }, () => {
+      nextPhaseCallback();
+      fadeAnim.value = withTiming(1, { duration: 250 });
+    });
   };
 
-  const startQuizPhase = () => {
-    setPhase('quiz');
+  const handleStartReading = () => {
+    triggerFadeTransition(() => {
+      setPhase('read');
+      setIsReadingStarted(false);
+    });
+  };
+
+  const handleRevealText = () => {
+    readStart.current = Date.now();
+    setIsReadingStarted(true);
   };
 
   const handleFinishReading = () => {
     readTimeRef.current = (Date.now() - readStart.current) / 1000;
-    
-    // 3D book page flip transition sequence
-    pageRotation.value = withTiming(-90, { duration: 300 }, () => {
-      runOnJS(startQuizPhase)();
-      pageRotation.value = 90;
-      pageRotation.value = withSpring(0, { damping: 14 });
+    triggerFadeTransition(() => {
+      setPhase('quiz');
     });
-  };
-
-  const startResultsPhase = () => {
-    setPhase('result');
   };
 
   const handlePick = (i: number) => {
     if (showFeedback) return;
     setPicked(i);
     setShowFeedback(true);
+    
     setTimeout(() => {
       const correct = i === PASSAGE.questions[qIdx].correct;
       const newAnswers = [...answers, correct];
@@ -114,10 +116,8 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
           });
         }
 
-        pageRotation.value = withTiming(-90, { duration: 300 }, () => {
-          runOnJS(startResultsPhase)();
-          pageRotation.value = 90;
-          pageRotation.value = withSpring(0, { damping: 14 });
+        triggerFadeTransition(() => {
+          setPhase('result');
         });
       } else {
         setQIdx(i => i + 1);
@@ -135,73 +135,61 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
     });
   };
 
-  const handlePressPassageCard = (event: any) => {
-    const y = event.nativeEvent.locationY;
-    rulerY.value = withSpring(y - 14, { damping: 16 });
-  };
-
-  const flipCardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 1200 },
-      { rotateY: `${pageRotation.value}deg` },
-    ],
-    backfaceVisibility: 'hidden',
+  const animatedContentStyle = useAnimatedStyle(() => ({
+    opacity: fadeAnim.value,
     flex: 1,
-  }));
-
-  const rulerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: rulerY.value }],
-    opacity: rulerOpacity.value,
   }));
 
   if (phase === 'intro') {
     return (
       <View style={styles.container}>
         <ExerciseTopBar progress={0} accent={accent} onQuit={onQuit} title="Test de Velocidad" />
-        <ScrollView contentContainerStyle={styles.centerScroll}>
-          <View style={styles.mascotWrapper}>
-            <MascotChar which="swift" size={130} expression="wow" />
-          </View>
-          <Text style={styles.title}>Diagnóstico Inicial</Text>
-          <Text style={styles.subtitle}>
-            Para adaptar la experiencia a tus capacidades, mediremos tu velocidad y comprensión lectora base en tres pasos rápidos.
-          </Text>
+        <Animated.View style={animatedContentStyle}>
+          <ScrollView contentContainerStyle={styles.centerScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.mascotWrapper}>
+              <MascotChar which="swift" size={130} expression="wow" />
+            </View>
+            <Text style={styles.title}>Diagnóstico Inicial</Text>
+            <Text style={styles.subtitle}>
+              Para adaptar la experiencia a tus capacidades, mediremos tu velocidad y comprensión lectora base en tres pasos rápidos.
+            </Text>
 
-          <View style={styles.stepsCard}>
-            <View style={styles.stepRow}>
-              <View style={[styles.stepDot, { backgroundColor: accent }]}>
-                <Text style={styles.stepDotText}>1</Text>
+            <View style={styles.stepsCard}>
+              <View style={styles.stepRow}>
+                <View style={[styles.stepDot, { backgroundColor: accent }]}>
+                  <Text style={styles.stepDotText}>1</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepTitle}>Revela y lee el texto</Text>
+                  <Text style={styles.stepDesc}>Te presentaremos un texto corto. No corras, lee a tu velocidad cómoda de comprensión.</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stepTitle}>Lee a tu ritmo natural</Text>
-                <Text style={styles.stepDesc}>Te presentaremos un texto corto. No corras, lee a tu velocidad cómoda de comprensión.</Text>
+              <View style={styles.stepRow}>
+                <View style={[styles.stepDot, { backgroundColor: accent }]}>
+                  <Text style={styles.stepDotText}>2</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepTitle}>Responde 3 preguntas</Text>
+                  <Text style={styles.stepDesc}>Evaluaremos tu nivel de retención. Necesitamos al menos 60% de comprensión para validar el test.</Text>
+                </View>
+              </View>
+              <View style={styles.stepRow}>
+                <View style={[styles.stepDot, { backgroundColor: accent }]}>
+                  <Text style={styles.stepDotText}>3</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.stepTitle}>¡Obtén tu nivel base!</Text>
+                  <Text style={styles.stepDesc}>Calibraremos la velocidad base de los ejercicios futuros de acuerdo a tu puntuación.</Text>
+                </View>
               </View>
             </View>
-            <View style={styles.stepRow}>
-              <View style={[styles.stepDot, { backgroundColor: accent }]}>
-                <Text style={styles.stepDotText}>2</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stepTitle}>Responde 3 preguntas</Text>
-                <Text style={styles.stepDesc}>Evaluaremos tu nivel de retención. Necesitamos al menos 60% de comprensión para validar el test.</Text>
-              </View>
-            </View>
-            <View style={styles.stepRow}>
-              <View style={[styles.stepDot, { backgroundColor: accent }]}>
-                <Text style={styles.stepDotText}>3</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.stepTitle}>¡Obtén tu nivel base!</Text>
-                <Text style={styles.stepDesc}>Calibraremos la velocidad base de los ejercicios futuros de acuerdo a tu puntuación.</Text>
-              </View>
-            </View>
+          </ScrollView>
+          <View style={styles.footer}>
+            <Pressable onPress={handleStartReading} style={[styles.ctaBtn, { backgroundColor: accent }]}>
+              <Text style={styles.ctaBtnText}>Comenzar Diagnóstico</Text>
+            </Pressable>
           </View>
-        </ScrollView>
-        <View style={styles.footer}>
-          <Pressable onPress={handleStartReading} style={[styles.ctaBtn, { backgroundColor: accent }]}>
-            <Text style={styles.ctaBtnText}>Comenzar Diagnóstico</Text>
-          </Pressable>
-        </View>
+        </Animated.View>
       </View>
     );
   }
@@ -210,40 +198,49 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
     return (
       <View style={styles.container}>
         <ExerciseTopBar progress={0.3} accent={accent} onQuit={onQuit} title="Paso 1: Lee a Conciencia" />
-        <View style={styles.contentWrap}>
-          <ScrollView contentContainerStyle={styles.scroll}>
-            <View style={styles.header}>
-              <Text style={styles.eyebrow}>Lectura Diagnóstica</Text>
-              <Text style={styles.passageTitle}>{PASSAGE.title}</Text>
-            </View>
-
-            <View style={[styles.tipBanner, { backgroundColor: `${accent}12`, borderColor: `${accent}25` }]}>
-              <Ionicons name="bulb" size={16} color={accent} style={{ marginRight: 6 }} />
-              <Text style={[styles.tipBannerText, { color: '#374151' }]}>
-                Toca cualquier línea para posicionar la regla guía y evitar regresiones.
-              </Text>
-            </View>
-
-            <Pressable onPress={handlePressPassageCard} style={styles.passageCardWrap}>
-              <View style={styles.passageCard}>
-                <Text style={styles.passageText}>{PASSAGE.text}</Text>
+        <Animated.View style={animatedContentStyle}>
+          <View style={styles.contentWrap}>
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+              <View style={styles.header}>
+                <Text style={styles.eyebrow}>Lectura Diagnóstica</Text>
+                <Text style={styles.passageTitle}>{PASSAGE.title}</Text>
               </View>
-              <Animated.View pointerEvents="none" style={[styles.readingRuler, { borderColor: accent, backgroundColor: `${accent}16` }, rulerStyle]}>
-                <View style={[styles.rulerHandleLeft, { backgroundColor: accent }]} />
-                <View style={[styles.rulerHandleRight, { backgroundColor: accent }]} />
-              </Animated.View>
-            </Pressable>
 
-            <Text style={styles.hint}>Toca "Terminé de leer" inmediatamente al acabar la última palabra.</Text>
-            <View style={{ height: 24 }} />
-          </ScrollView>
+              {!isReadingStarted ? (
+                <View style={styles.placeholderCard}>
+                  <Ionicons name="eye-off-outline" size={48} color={accent} style={{ marginBottom: 12 }} />
+                  <Text style={styles.placeholderTitle}>Texto Oculto</Text>
+                  <Text style={styles.placeholderDesc}>
+                    Pulsa el botón de abajo para revelar el texto y comenzar a medir tu velocidad inicial.
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.passageCardWrap}>
+                  <View style={styles.passageCard}>
+                    <Text style={styles.passageText}>{PASSAGE.text}</Text>
+                  </View>
+                </View>
+              )}
 
-          <View style={styles.footer}>
-            <Pressable onPress={handleFinishReading} style={[styles.ctaBtn, { backgroundColor: accent }]}>
-              <Text style={styles.ctaBtnText}>Terminé de leer</Text>
-            </Pressable>
+              {isReadingStarted && (
+                <Text style={styles.hint}>Toca "Terminé de leer" inmediatamente al acabar la última palabra.</Text>
+              )}
+              <View style={{ height: 24 }} />
+            </ScrollView>
+
+            <View style={styles.footer}>
+              {!isReadingStarted ? (
+                <Pressable onPress={handleRevealText} style={[styles.ctaBtn, { backgroundColor: accent }]}>
+                  <Text style={styles.ctaBtnText}>👁️ Revelar Texto e Iniciar</Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={handleFinishReading} style={[styles.ctaBtn, { backgroundColor: '#22C55E' }]}>
+                  <Text style={styles.ctaBtnText}>Terminé de leer ⚡</Text>
+                </Pressable>
+              )}
+            </View>
           </View>
-        </View>
+        </Animated.View>
       </View>
     );
   }
@@ -253,9 +250,9 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
     return (
       <View style={styles.container}>
         <ExerciseTopBar progress={0.3 + (qIdx / PASSAGE.questions.length) * 0.5} accent={accent} onQuit={onQuit} title={`Pregunta ${qIdx + 1}/3`} />
-        <Animated.View style={flipCardStyle}>
+        <Animated.View style={animatedContentStyle}>
           <View style={styles.contentWrap}>
-            <ScrollView contentContainerStyle={styles.scroll}>
+            <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
               <Text style={styles.qLabel}>Pregunta {qIdx + 1} de 3</Text>
               <Text style={styles.qText}>{q.q}</Text>
               <View style={{ marginTop: 20, gap: 10 }}>
@@ -298,50 +295,52 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
   return (
     <View style={styles.container}>
       <ExerciseTopBar progress={1.0} accent={accent} onQuit={onQuit} title="Resultados del Test" />
-      <ScrollView contentContainerStyle={styles.centerScroll}>
-        <View style={styles.mascotWrapper}>
-          <MascotChar which={validated ? 'joy' : 'calm'} size={120} expression={validated ? 'happy' : 'sleepy'} />
-        </View>
-
-        <Text style={styles.title}>{validated ? '¡Diagnóstico Listo!' : 'Test no Concluyente'}</Text>
-        <Text style={styles.subtitle}>
-          {validated 
-            ? 'Hemos medido tu velocidad y comprensión con éxito. Tus configuraciones de lectura han sido actualizadas.'
-            : 'Tu comprensión fue menor al 60%. Es probable que hayas leído con prisa. Mantendremos la velocidad recomendada base de 280 WPM para entrenar tu foco.'
-          }
-        </Text>
-
-        <View style={styles.resultStatsCard}>
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Velocidad</Text>
-            <Text style={[styles.statValue, { color: accent }]}>{validated ? calculatedWpm : 280}</Text>
-            <Text style={styles.statUnit}>WPM</Text>
+      <Animated.View style={animatedContentStyle}>
+        <ScrollView contentContainerStyle={styles.centerScroll} showsVerticalScrollIndicator={false}>
+          <View style={styles.mascotWrapper}>
+            <MascotChar which={validated ? 'joy' : 'calm'} size={120} expression={validated ? 'happy' : 'sleepy'} />
           </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statBox}>
-            <Text style={styles.statLabel}>Comprensión</Text>
-            <Text style={[styles.statValue, { color: validated ? '#22C55E' : '#EF4444' }]}>
-              {Math.round(comprehensionScore * 100)}%
-            </Text>
-            <Text style={styles.statUnit}>{answers.filter(Boolean).length}/3 Respuestas</Text>
-          </View>
-        </View>
 
-        <View style={styles.insightBox}>
-          <Ionicons name="sparkles" size={18} color={accent} style={{ marginRight: 8 }} />
-          <Text style={styles.insightText}>
-            {validated
-              ? `¡Excelente! Empezarás tu entrenamiento lector en el nivel de ${calculatedWpm} WPM. Esto personalizará tu experiencia en cada ejercicio.`
-              : 'Consejo: La velocidad no sirve sin comprensión. Intenta fijar la mirada en cada línea concentrándote plenamente en absorber los conceptos, no solo en acabar rápido.'
+          <Text style={styles.title}>{validated ? '¡Diagnóstico Listo!' : 'Test no Concluyente'}</Text>
+          <Text style={styles.subtitle}>
+            {validated 
+              ? 'Hemos medido tu velocidad y comprensión con éxito. Tus configuraciones de lectura han sido actualizadas.'
+              : 'Tu comprensión fue menor al 60%. Es probable que hayas leído con prisa. Mantendremos la velocidad recomendada base de 280 WPM para entrenar tu foco.'
             }
           </Text>
+
+          <View style={styles.resultStatsCard}>
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Velocidad</Text>
+              <Text style={[styles.statValue, { color: accent }]}>{validated ? calculatedWpm : 280}</Text>
+              <Text style={styles.statUnit}>WPM</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statBox}>
+              <Text style={styles.statLabel}>Comprensión</Text>
+              <Text style={[styles.statValue, { color: validated ? '#22C55E' : '#EF4444' }]}>
+                {Math.round(comprehensionScore * 100)}%
+              </Text>
+              <Text style={styles.statUnit}>{answers.filter(Boolean).length}/3 Respuestas</Text>
+            </View>
+          </View>
+
+          <View style={styles.insightBox}>
+            <Ionicons name="sparkles" size={18} color={accent} style={{ marginRight: 8 }} />
+            <Text style={styles.insightText}>
+              {validated
+                ? `¡Excelente! Empezarás tu entrenamiento lector en el nivel de ${calculatedWpm} WPM. Esto personalizará tu experiencia en cada ejercicio.`
+                : 'Consejo: La velocidad no sirve sin comprensión. Intenta fijar la mirada en cada línea concentrándote plenamente en absorber los conceptos, no solo en acabar rápido.'
+              }
+            </Text>
+          </View>
+        </ScrollView>
+        <View style={styles.footer}>
+          <Pressable onPress={handleCloseResults} style={[styles.ctaBtn, { backgroundColor: accent }]}>
+            <Text style={styles.ctaBtnText}>Continuar Entrenamiento</Text>
+          </Pressable>
         </View>
-      </ScrollView>
-      <View style={styles.footer}>
-        <Pressable onPress={handleCloseResults} style={[styles.ctaBtn, { backgroundColor: accent }]}>
-          <Text style={styles.ctaBtnText}>Continuar Entrenamiento</Text>
-        </Pressable>
-      </View>
+      </Animated.View>
     </View>
   );
 }
@@ -437,24 +436,32 @@ const styles = StyleSheet.create({
     color: COLORS.ink,
     marginTop: 4,
   },
-  tipBanner: {
-    flexDirection: 'row',
+  placeholderCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.4)',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
+    padding: 40,
     alignItems: 'center',
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 16,
+    justifyContent: 'center',
+    minHeight: 240,
+    marginVertical: 10,
   },
-  tipBannerText: {
+  placeholderTitle: {
+    fontFamily: FONTS.heading,
+    fontSize: 18,
+    color: COLORS.ink,
+    marginBottom: 8,
+  },
+  placeholderDesc: {
     fontFamily: FONTS.body,
-    fontSize: 12,
-    lineHeight: 16,
-    flex: 1,
+    fontSize: 13,
+    color: COLORS.muted,
+    textAlign: 'center',
+    lineHeight: 18,
   },
   passageCardWrap: {
-    position: 'relative',
-    overflow: 'hidden',
     borderRadius: 20,
     borderWidth: 1.5,
     borderColor: COLORS.border,
@@ -475,39 +482,17 @@ const styles = StyleSheet.create({
   },
   passageText: {
     fontFamily: FONTS.body,
-    fontSize: 15,
-    lineHeight: 28,
+    fontSize: 16,
+    lineHeight: 30,
     color: '#334155',
-  },
-  readingRuler: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 28,
-    borderTopWidth: 1.5,
-    borderBottomWidth: 1.5,
-    justifyContent: 'center',
-  },
-  rulerHandleLeft: {
-    position: 'absolute',
-    left: 2,
-    width: 4,
-    height: 14,
-    borderRadius: 2,
-  },
-  rulerHandleRight: {
-    position: 'absolute',
-    right: 2,
-    width: 4,
-    height: 14,
-    borderRadius: 2,
   },
   hint: {
     fontFamily: FONTS.body,
-    fontSize: 11,
+    fontSize: 12,
     color: COLORS.muted,
     textAlign: 'center',
-    marginTop: 14,
+    marginTop: 20,
+    lineHeight: 16,
   },
   footer: {
     padding: 16,
