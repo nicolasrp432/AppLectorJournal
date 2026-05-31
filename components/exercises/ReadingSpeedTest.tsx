@@ -59,14 +59,8 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
   const readStart = useRef(Date.now());
   const readTimeRef = useRef(0);
 
-  // Simple, extremely robust, web-safe fade animation values
-  const fadeAnim = useSharedValue(1);
-
   const triggerFadeTransition = (nextPhaseCallback: () => void) => {
-    fadeAnim.value = withTiming(0, { duration: 150 }, () => {
-      nextPhaseCallback();
-      fadeAnim.value = withTiming(1, { duration: 250 });
-    });
+    nextPhaseCallback();
   };
 
   const handleStartReading = () => {
@@ -135,17 +129,13 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
     });
   };
 
-  const animatedContentStyle = useAnimatedStyle(() => ({
-    opacity: fadeAnim.value,
-    flex: 1,
-    width: '100%',
-  }));
+
 
   if (phase === 'intro') {
     return (
       <View style={styles.container}>
         <ExerciseTopBar progress={0} accent={accent} onQuit={onQuit} title="Test de Velocidad" />
-        <Animated.View style={animatedContentStyle}>
+        <View style={styles.contentWrap}>
           <ScrollView contentContainerStyle={styles.centerScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.mascotWrapper}>
               <MascotChar which="swift" size={130} expression="wow" />
@@ -190,7 +180,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
               <Text style={styles.ctaBtnText}>Comenzar Diagnóstico</Text>
             </Pressable>
           </View>
-        </Animated.View>
+        </View>
       </View>
     );
   }
@@ -199,7 +189,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
     return (
       <View style={styles.container}>
         <ExerciseTopBar progress={0.3} accent={accent} onQuit={onQuit} title="Paso 1: Lee a Conciencia" />
-        <Animated.View style={animatedContentStyle}>
+        <View style={styles.contentWrap}>
           <View style={styles.contentWrap}>
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
               <View style={styles.header}>
@@ -241,7 +231,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
               )}
             </View>
           </View>
-        </Animated.View>
+        </View>
       </View>
     );
   }
@@ -251,7 +241,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
     return (
       <View style={styles.container}>
         <ExerciseTopBar progress={0.3 + (qIdx / PASSAGE.questions.length) * 0.5} accent={accent} onQuit={onQuit} title={`Pregunta ${qIdx + 1}/3`} />
-        <Animated.View style={animatedContentStyle}>
+        <View style={styles.contentWrap}>
           <View style={styles.contentWrap}>
             <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
               <Text style={styles.qLabel}>Pregunta {qIdx + 1} de 3</Text>
@@ -286,7 +276,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
               </View>
             </ScrollView>
           </View>
-        </Animated.View>
+        </View>
       </View>
     );
   }
@@ -296,7 +286,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
   return (
     <View style={styles.container}>
       <ExerciseTopBar progress={1.0} accent={accent} onQuit={onQuit} title="Resultados del Test" />
-      <Animated.View style={animatedContentStyle}>
+      <View style={styles.contentWrap}>
         <ScrollView contentContainerStyle={styles.centerScroll} showsVerticalScrollIndicator={false}>
           <View style={styles.mascotWrapper}>
             <MascotChar which={validated ? 'joy' : 'calm'} size={120} expression={validated ? 'happy' : 'sleepy'} />
@@ -341,7 +331,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
             <Text style={styles.ctaBtnText}>Continuar Entrenamiento</Text>
           </Pressable>
         </View>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -353,6 +343,7 @@ const styles = StyleSheet.create({
   },
   contentWrap: {
     flex: 1,
+    width: '100%',
   },
   scroll: {
     padding: 20,
