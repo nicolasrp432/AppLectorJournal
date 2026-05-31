@@ -12,11 +12,11 @@ serve(async (req) => {
 
   try {
     const { messages, context } = await req.json();
-    const rawApiKey = Deno.env.get('GEMINI_API_KEY');
+    const rawApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('EXPO_PUBLIC_GEMINI_API_KEY');
     const apiKey = rawApiKey?.trim().replace(/^["']|["']$/g, "");
 
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "GEMINI_API_KEY no configurada en Supabase." }), {
+      return new Response(JSON.stringify({ error: "GEMINI_API_KEY o EXPO_PUBLIC_GEMINI_API_KEY no configurada en los secretos de Supabase." }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });

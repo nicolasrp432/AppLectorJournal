@@ -303,7 +303,7 @@ export default function PerfilScreen() {
   const competitors = [
     { name: 'Camila', xp: 750, avatar: 'loci' as MascotKey, avatarUrl: null, isUser: false },
     { name: 'Carlos', xp: 620, avatar: 'swift' as MascotKey, avatarUrl: null, isUser: false },
-    { name: 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', avatarUrl: profile.avatar_url, isUser: true },
+    { name: profile.name || 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', avatarUrl: profile.avatar_url, isUser: true },
     { name: 'Mateo', xp: 320, avatar: 'calm' as MascotKey, avatarUrl: null, isUser: false },
     { name: 'Sofía', xp: 210, avatar: 'memo' as MascotKey, avatarUrl: null, isUser: false },
   ].sort((a, b) => b.xp - a.xp);

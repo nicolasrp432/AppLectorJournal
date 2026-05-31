@@ -14,6 +14,7 @@ import { useNodeStore } from '../../store/useNodeStore';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { RadarChart } from '../../components/ui/RadarChart';
+import { WarmupModal } from '../../components/ui/WarmupModal';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
@@ -216,6 +217,7 @@ export default function ProgresoScreen() {
   const completed = useNodeStore(s => s.completed);
   const sessions = useSessionStore(s => s.sessions);
   const hasSessions = sessions.length > 0;
+  const [showWarmupModal, setShowWarmupModal] = React.useState(false);
 
   // Real progress per zone calculations
   const zoneProgress = useMemo(() => {
@@ -421,27 +423,10 @@ export default function ProgresoScreen() {
         {/* Botón Calentamiento Rápido */}
         <Pressable
           onPress={() => {
-            const suggested = selectWarmupExercises(all);
-            if (suggested && suggested.length > 0) {
-              const firstExId = suggested[0];
-              const exMeta = EXERCISES[firstExId];
-              Alert.alert(
-                '⚡ Calentamiento rápido listo',
-                `¡Tu cerebro necesita entrenar la destreza de [${exMeta?.category}] hoy!\n\nIniciando ${exMeta?.title}...`,
-                [
-                  {
-                    text: '¡Vamos!',
-                    onPress: () => router.push({ pathname: `/exercise/${firstExId}` as any, params: { mode: 'free' } })
-                  },
-                  {
-                    text: 'Cancelar',
-                    style: 'cancel'
-                  }
-                ]
-              );
-            } else {
-              Alert.alert('Calentamiento', '¡Tu cerebro está al 100% hoy! No se requieren recomendaciones.');
+            if (Platform.OS !== 'web') {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
             }
+            setShowWarmupModal(true);
           }}
           style={({ pressed }) => [
             styles.warmupBannerCard,
@@ -642,6 +627,12 @@ export default function ProgresoScreen() {
 
         <View style={{ height: 110 }} />
       </ScrollView>
+
+      <WarmupModal
+        visible={showWarmupModal}
+        onClose={() => setShowWarmupModal(false)}
+        allProgress={all}
+      />
     </SafeAreaView>
   );
 }

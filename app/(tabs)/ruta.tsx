@@ -30,6 +30,7 @@ import type { ExerciseId } from '../../types/db';
 import { selectWarmupExercises } from '../../lib/dailyWarmup';
 import { EXERCISES } from '../../constants/exercises';
 import { AIChatbot } from '../../components/ui/AIChatbot';
+import { WarmupModal } from '../../components/ui/WarmupModal';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const W    = Math.min(SCREEN_WIDTH, 520) - 40;
@@ -1371,144 +1372,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   );
 }
 
-// ─── WARMUP INTERACTIVE MODAL COMPONENT ──────────────────────────────────────
-function WarmupModal({
-  visible,
-  onClose,
-  allProgress,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  allProgress: Record<string, any>;
-}) {
-  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
-
-  useEffect(() => {
-    if (visible) {
-      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
-      
-      const backAction = () => {
-        onClose();
-        return true;
-      };
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-      return () => backHandler.remove();
-    } else {
-      sheetTranslateY.value = SCREEN_HEIGHT;
-    }
-  }, [visible]);
-
-  if (!visible) return null;
-
-  const suggested = selectWarmupExercises(allProgress);
-  const firstExId = suggested[0] ?? 'schulte';
-  const exMeta = EXERCISES[firstExId];
-  const otherSuggs = suggested.slice(1);
-
-  const progress = allProgress[firstExId] || { mastery: 0, total_sessions: 0, best_score: 0, current_level: 1 };
-  const masteryPercent = Math.round((progress.mastery ?? 0) * 100);
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslateY.value }],
-  }));
-
-  const handleStart = () => {
-    onClose();
-    if (Platform.OS !== 'web') {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    }
-    router.push({ pathname: `/exercise/${firstExId}` as any, params: { mode: 'free' } });
-  };
-
-  return (
-    <Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-      <View style={styles.modalOverlay}>
-        <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
-        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-
-        <Animated.View style={[styles.warmupBottomSheet, sheetAnimatedStyle]}>
-          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} />
-          
-          <View style={styles.warmupHeaderRow}>
-            <Ionicons name="flash" size={20} color="#F97316" />
-            <Text style={styles.warmupHeaderTitle}>CALENTAMIENTO PERSONALIZADO</Text>
-          </View>
-          
-          <Text style={styles.warmupIntroText}>
-            Mente IA analizó tu progreso cerebral en tiempo real. Hoy te sugerimos fortalecer la destreza de:
-          </Text>
-
-          {/* Exercise card */}
-          <View style={[styles.warmupExCard, { borderColor: `${exMeta?.color || '#3B82F6'}40` }]}>
-            <View style={styles.warmupExHeader}>
-              <View style={[styles.warmupExBadge, { backgroundColor: `${exMeta?.color || '#3B82F6'}15` }]}>
-                <Text style={[styles.warmupExBadgeText, { color: exMeta?.color || '#3B82F6' }]}>{exMeta?.category}</Text>
-              </View>
-              <View style={styles.warmupMetaRow}>
-                <Ionicons name="time-outline" size={13} color="rgba(255,255,255,0.5)" />
-                <Text style={styles.warmupMetaText}>{exMeta?.duration}</Text>
-                <Ionicons name="star-outline" size={13} color="rgba(255,255,255,0.5)" style={{ marginLeft: 6 }} />
-                <Text style={styles.warmupMetaText}>{exMeta?.difficulty}</Text>
-              </View>
-            </View>
-
-            <View style={styles.warmupExBody}>
-              <View style={{ flex: 1, marginRight: 10 }}>
-                <Text style={styles.warmupExTitle}>{exMeta?.title}</Text>
-                <Text style={styles.warmupExDesc}>{exMeta?.description}</Text>
-              </View>
-              <MascotChar which={exMeta?.mascot} size={56} breathing blinking />
-            </View>
-
-            {/* Stats section */}
-            <View style={styles.warmupStatsBox}>
-              <Text style={styles.warmupStatsTitle}>TUS ESTADÍSTICAS EN TIEMPO REAL</Text>
-              
-              <View style={styles.warmupStatRow}>
-                <Text style={styles.warmupStatLabel}>Maestría:</Text>
-                <View style={styles.warmupProgressBg}>
-                  <View style={[styles.warmupProgressFill, { width: `${masteryPercent}%`, backgroundColor: exMeta?.color || '#3B82F6' }]} />
-                </View>
-                <Text style={styles.warmupStatValue}>{masteryPercent}%</Text>
-              </View>
-
-              <View style={styles.warmupStatsGrid}>
-                <View style={styles.warmupGridCol}>
-                  <Text style={styles.warmupGridLabel}>Sesiones</Text>
-                  <Text style={styles.warmupGridValue}>{progress.total_sessions ?? 0}</Text>
-                </View>
-                <View style={styles.warmupGridCol}>
-                  <Text style={styles.warmupGridLabel}>Máx. Puntaje</Text>
-                  <Text style={styles.warmupGridValue}>{progress.best_score ?? 0}</Text>
-                </View>
-                <View style={styles.warmupGridCol}>
-                  <Text style={styles.warmupGridLabel}>Nivel</Text>
-                  <Text style={styles.warmupGridValue}>{progress.current_level ?? 1}</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {otherSuggs.length > 0 && (
-            <Text style={styles.warmupOthersText}>
-              Otras sugerencias: {otherSuggs.map(id => EXERCISES[id]?.title).join(', ')}
-            </Text>
-          )}
-
-          {/* Action buttons */}
-          <View style={styles.warmupActionsRow}>
-            <Pressable style={styles.warmupCancelBtn} onPress={onClose}>
-              <Text style={styles.warmupCancelText}>Quizás luego</Text>
-            </Pressable>
-            <Pressable style={[styles.warmupStartBtn, { backgroundColor: exMeta?.color || '#F97316' }]} onPress={handleStart}>
-              <Text style={styles.warmupStartText}>¡Vamos! ⚡</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-}
+// Note: WarmupModal has been refactored into components/ui/WarmupModal.tsx for shared access
 
 // ─── INTERACTIVE PREVIEW BOTTOM SHEET ──────────────────────────────────────────
 function ExercisePreviewSheet({
