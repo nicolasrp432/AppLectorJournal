@@ -55,7 +55,8 @@ export const useLociStore = create<LociStoreState>()(
           const { data: pData, error: pError } = await supabase
             .from('user_memory_palaces')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(100); // guardrail
 
           if (pError) throw pError;
 
@@ -64,7 +65,8 @@ export const useLociStore = create<LociStoreState>()(
             const { data: mData, error: mError } = await supabase
               .from('loci_memories')
               .select('*')
-              .in('palace_id', pData.map(p => p.id));
+              .in('palace_id', pData.map(p => p.id))
+              .limit(2000); // guardrail
 
             if (mError) throw mError;
 

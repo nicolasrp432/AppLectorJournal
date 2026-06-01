@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient as ExpoLinearGradient } from 'expo-linear-gradient';
+import * as Haptics from 'expo-haptics';
 import { selectWarmupExercises } from '../../lib/dailyWarmup';
 import Svg, { Path, Circle, Defs, LinearGradient, Stop, Line, Text as SvgText } from 'react-native-svg';
 import { useProfileStore } from '../../store/useProfileStore';
@@ -19,7 +20,7 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
 import { levelProgress } from '../../lib/xpEngine';
-import type { ExerciseId } from '../../types/db';
+import type { ExerciseId, Session } from '../../types/db';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -211,13 +212,29 @@ function UniversalBarChart({ data, themeColor }: { data: { day: string; count: n
 export default function ProgresoScreen() {
   const profile = useProfileStore(s => s.profile);
   const all     = useProgressStore(s => s.all);
-  const list    = useSessionStore(s => s.list);
   const themeColor = usePrefsStore(s => s.prefs.theme_color) || COLORS.focus;
 
   const completed = useNodeStore(s => s.completed);
   const sessions = useSessionStore(s => s.sessions);
   const hasSessions = sessions.length > 0;
   const [showWarmupModal, setShowWarmupModal] = React.useState(false);
+
+  // Una sola lista ordenada (desc por fecha) derivada de `sessions`. Antes cada
+  // serie llamaba a list() que copiaba+ordenaba ~200 ítems por separado (hasta 15
+  // veces). Ahora se ordena una vez y todas las series filtran sobre esta base;
+  // además depende de `sessions`, así las estadísticas se actualizan al registrar
+  // una sesión nueva (antes quedaban congeladas hasta remontar la pantalla).
+  const sortedSessions = useMemo(
+    () => [...sessions].sort((a, b) =>
+      new Date(b.finished_at).getTime() - new Date(a.finished_at).getTime()),
+    [sessions],
+  );
+  const inRange = (s: Session, since?: number, until?: number) => {
+    const t = new Date(s.finished_at).getTime();
+    if (since != null && t < since) return false;
+    if (until != null && t >= until) return false;
+    return true;
+  };
 
   // Real progress per zone calculations
   const zoneProgress = useMemo(() => {
@@ -259,8 +276,8 @@ export default function ProgresoScreen() {
 
   const sessions7d = useMemo(() => {
     const since = Date.now() - 7 * 86_400_000;
-    return list({ since });
-  }, [list]);
+    return sortedSessions.filter(s => inRange(s, since));
+  }, [sortedSessions]);
 
   const minutes7d = useMemo(() =>
     sessions7d.reduce((acc, s) => acc + s.time_seconds / 60, 0), [sessions7d]);
@@ -284,14 +301,14 @@ export default function ProgresoScreen() {
       const dayStart = new Date(Date.now() - (6 - i) * 86_400_000);
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(dayStart.getTime() + 86_400_000);
-      const daySessions = list({ since: dayStart.getTime(), until: dayEnd.getTime() });
+      const daySessions = sortedSessions.filter(s => inRange(s, dayStart.getTime(), dayEnd.getTime()));
       const wpmItems = daySessions.filter(s => s.wpm != null);
       const wpm = wpmItems.length
         ? Math.round(wpmItems.reduce((a, s) => a + (s.wpm ?? 0), 0) / wpmItems.length)
         : 0;
       return { day: DAYS[dayStart.getDay()], wpm };
     });
-  }, [list]);
+  }, [sortedSessions]);
 
   // 7-day session count per day (for bar chart)
   const sessionsByDay = useMemo(() => {
@@ -299,16 +316,16 @@ export default function ProgresoScreen() {
       const dayStart = new Date(Date.now() - (6 - i) * 86_400_000);
       dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(dayStart.getTime() + 86_400_000);
-      const count = list({ since: dayStart.getTime(), until: dayEnd.getTime() }).length;
+      const count = sortedSessions.filter(s => inRange(s, dayStart.getTime(), dayEnd.getTime())).length;
       const LABELS = ['D', 'C', 'M', 'X', 'J', 'V', 'S'];
       return { day: LABELS[dayStart.getDay()], count };
     });
-  }, [list]);
+  }, [sortedSessions]);
 
   // 18-week GitHub style horizontal heatmap (126 days, 18 weeks × 7 days)
   const githubHeatmap = useMemo(() => {
     const since = Date.now() - 130 * 86_400_000;
-    const allSessions = list({ since });
+    const allSessions = sortedSessions.filter(s => inRange(s, since));
     const sessionMap: Record<string, number> = {};
     for (const s of allSessions) {
       const day = s.finished_at.split('T')[0];
@@ -338,7 +355,7 @@ export default function ProgresoScreen() {
       weeks.push(weekDays);
     }
     return weeks;
-  }, [list]);
+  }, [sortedSessions]);
 
   if (!profile) return null;
 

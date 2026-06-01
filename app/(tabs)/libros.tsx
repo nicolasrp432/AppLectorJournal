@@ -6,11 +6,13 @@ import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { supabase } from '../../lib/supabase';
 import { useLibraryStore } from '../../store/useLibraryStore';
+import { useProfileStore } from '../../store/useProfileStore';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { PushButton } from '../../components/ui/PushButton';
 import { CATALOG_CONTENT } from '../../constants/catalogContent';
+import { countWords } from '../../lib/text';
 import type { LibraryItem } from '../../types/db';
 
 const COVER_COLORS = [COLORS.focus, COLORS.calm, COLORS.swift, COLORS.joy, COLORS.loci, COLORS.memo];
@@ -22,6 +24,10 @@ export default function LibrosScreen() {
   const [showAdd, setShowAdd] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const { list, insert }      = useLibraryStore();
+  const hasMore               = useLibraryStore(s => s.hasMore);
+  const isLoadingMore         = useLibraryStore(s => s.isLoadingMore);
+  const fetchMore             = useLibraryStore(s => s.fetchMore);
+  const userId                = useProfileStore(s => s.profile?.id);
   const books                 = list();
 
   const handleCatalogPress = async (item: CatalogItem) => {
@@ -43,7 +49,7 @@ export default function LibrosScreen() {
         title: item.title,
         author: item.author ?? null,
         content,
-        words: content.split(/\s+/).filter(Boolean).length,
+        words: countWords(content),
         progress: 0,
         last_read_at: null,
         cover_color: item.cover_color,
@@ -93,6 +99,17 @@ export default function LibrosScreen() {
                 onPress={() => router.push({ pathname: '/reader/[id]' as any, params: { id: b.id } })}
               />
             ))
+        )}
+        {tab === 'mybooks' && hasMore && userId && userId !== 'local' && books.length > 0 && (
+          <Pressable
+            style={styles.loadMore}
+            onPress={() => fetchMore(userId)}
+            disabled={isLoadingMore}
+          >
+            {isLoadingMore
+              ? <ActivityIndicator size="small" color={COLORS.focus} />
+              : <Text style={styles.loadMoreText}>Cargar más</Text>}
+          </Pressable>
         )}
         {tab === 'catalog' && CATALOG.map(b => {
           const inLibrary = books.some(lb => lb.source === 'catalog' && lb.title === b.title);
@@ -232,7 +249,7 @@ function AddBookModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: I
     if (!title.trim()) return;
     await onAdd({
       kind: 'text', title, author: author || null, content,
-      words: content.split(/\s+/).filter(Boolean).length,
+      words: countWords(content),
       progress: 0, last_read_at: null,
       cover_color: COVER_COLORS[Math.floor(Math.random() * COVER_COLORS.length)],
       source: 'custom',
@@ -343,6 +360,8 @@ const styles = StyleSheet.create({
   emptyState:   { alignItems: 'center', paddingTop: 60, gap: 8 },
   emptyText:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
   emptyHint:    { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
+  loadMore:     { marginTop: 8, paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: COLORS.border },
+  loadMoreText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.focus },
   modal:      { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' } as any,
   modalSheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
   modalTitle: { fontFamily: FONTS.heading, fontSize: 20, color: COLORS.ink, marginBottom: 20 },

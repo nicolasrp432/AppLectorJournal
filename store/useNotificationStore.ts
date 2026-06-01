@@ -21,7 +21,10 @@ export interface NotificationItem {
 interface NotificationState {
   notifications: NotificationItem[];
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
   fetchNotifications: () => Promise<void>;
+  fetchMore: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   claimReward: (id: string) => Promise<void>;
   addLocalNotification: (notification: Omit<NotificationItem, 'id' | 'created_at' | 'claimed' | 'read'>) => void;
@@ -29,18 +32,24 @@ interface NotificationState {
   reset: () => void;
 }
 
+// Tamaño de página: la bandeja crece sin límite con el tiempo, así que sólo
+// traemos las más recientes y cargamos el resto bajo demanda ("Cargar más").
+const PAGE_SIZE = 30;
+
 export const useNotificationStore = create<NotificationState>()(
   persist(
     (set, get) => ({
       notifications: [],
       isLoading: false,
+      isLoadingMore: false,
+      hasMore: true,
 
       unreadCount: () => {
         return get().notifications.filter(n => !n.read).length;
       },
 
       reset: () => {
-        set({ notifications: [], isLoading: false });
+        set({ notifications: [], isLoading: false, isLoadingMore: false, hasMore: true });
       },
 
       fetchNotifications: async () => {
@@ -72,9 +81,11 @@ export const useNotificationStore = create<NotificationState>()(
           const { data, error } = await supabase
             .from('notifications')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .range(0, PAGE_SIZE - 1);
 
           if (!error && data) {
+            set({ hasMore: data.length === PAGE_SIZE });
             if (data.length === 0) {
               // Si ya existe la notificación de bienvenida localmente, no la volvemos a crear para no sobreescribir su estado de reclamada/leída
               const alreadyHasWelcome = get().notifications.some(n => 
@@ -122,6 +133,44 @@ export const useNotificationStore = create<NotificationState>()(
           console.warn('Failed to fetch notifications from Supabase:', err);
         } finally {
           set({ isLoading: false });
+        }
+      },
+
+      fetchMore: async () => {
+        const profile = useProfileStore.getState().profile;
+        if (!profile || profile.id === 'local') return;
+        if (get().isLoadingMore || !get().hasMore) return;
+
+        const current = get().notifications;
+        if (current.length === 0) return;
+        // Cursor keyset: la nota más antigua ya cargada. Robusto frente a
+        // notificaciones locales (no depende de un offset numérico).
+        const oldest = current.reduce(
+          (min, n) => (n.created_at < min ? n.created_at : min),
+          current[0].created_at,
+        );
+
+        set({ isLoadingMore: true });
+        try {
+          const { data, error } = await supabase
+            .from('notifications')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .lt('created_at', oldest)
+            .range(0, PAGE_SIZE - 1);
+
+          if (!error && data) {
+            const existingIds = new Set(current.map(n => n.id));
+            const fresh = (data as NotificationItem[]).filter(n => !existingIds.has(n.id));
+            set({
+              notifications: [...current, ...fresh],
+              hasMore: data.length === PAGE_SIZE,
+            });
+          }
+        } catch (err) {
+          console.warn('Failed to fetch more notifications:', err);
+        } finally {
+          set({ isLoadingMore: false });
         }
       },
 

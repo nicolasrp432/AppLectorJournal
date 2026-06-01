@@ -13,6 +13,8 @@ import { useProfileStore } from '../../store/useProfileStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
 import { useQuizCacheStore, QuizQuestion } from '../../store/useQuizCacheStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { simpleHash } from '../../lib/text';
+import { dedupe } from '../../lib/taskQueue';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -25,19 +27,9 @@ type ReadMode = 'rsvp' | 'scroll';
 
 const ACCENT = COLORS.swift;
 
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return `h_${Math.abs(hash)}`;
-}
-
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { get, update } = useLibraryStore();
+  const { get, update, ensureContent } = useLibraryStore();
   const { addXP } = useProfileStore();
   const prefs = usePrefsStore(s => s.prefs);
   const defaultWpm = prefs?.wpm_default;
@@ -91,6 +83,12 @@ export default function ReaderScreen() {
     () => (book?.content ? book.content.split(/\s+/).filter(Boolean) : []),
     [book?.content],
   );
+
+  // La lista de biblioteca ya no incluye `content` (puede ser un libro entero);
+  // se carga bajo demanda al abrir el lector. Si ya está en memoria, es no-op.
+  useEffect(() => {
+    if (id) ensureContent(id);
+  }, [id]);
 
   // Resume RSVP from saved progress position
   const resumeWordIdx = React.useMemo(
@@ -159,10 +157,12 @@ export default function ReaderScreen() {
           return;
         }
 
-        const { data, error } = await invokeEdgeFunction<{ questions: any[] }>('ai-questions', {
-          text: slice,
-          count: 3,
-        });
+        // dedupe: si el mismo slice ya está generándose, comparte la promesa en
+        // vez de invocar Gemini dos veces.
+        const { data, error } = await dedupe(
+          `ai-questions:${book.id}:${sliceHash}`,
+          () => invokeEdgeFunction<{ questions: any[] }>('ai-questions', { text: slice, count: 3 }),
+        );
 
         if (error) throw error;
         if (data && data.questions && data.questions.length > 0) {

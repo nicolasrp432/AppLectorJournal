@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { enqueueMutation } from '../lib/taskQueue';
 
 interface NodeState {
   completed: string[];
@@ -29,10 +30,14 @@ export const useNodeStore = create<NodeState>()(
 
         const { data } = await supabase.auth.getSession();
         if (data.session) {
-          await supabase.from('node_completions').upsert({
-            user_id: data.session.user.id,
-            node_id: nodeId,
-            completed_at: new Date().toISOString(),
+          await enqueueMutation({
+            table: 'node_completions',
+            type: 'upsert',
+            payload: {
+              user_id: data.session.user.id,
+              node_id: nodeId,
+              completed_at: new Date().toISOString(),
+            },
           });
         }
       },

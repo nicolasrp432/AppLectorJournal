@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { enqueueMutation } from '../lib/taskQueue';
 import { xpToLevel } from '../lib/xpEngine';
 import type { Profile, MascotKey } from '../types/db';
 import { REWARDS } from '../constants/rewards';
@@ -131,7 +132,12 @@ export const useProfileStore = create<ProfileState>()(
         set({ profile: updated });
         
         if (current.id !== 'local') {
-          await supabase.from('profiles').update({ xp: newXP, level: newLevel }).eq('id', current.id);
+          await enqueueMutation({
+            table: 'profiles',
+            type: 'update',
+            payload: { xp: newXP, level: newLevel },
+            match: { id: current.id },
+          });
         }
         return { newXP, newLevel };
       },
@@ -142,7 +148,12 @@ export const useProfileStore = create<ProfileState>()(
         const updated = { ...current, ...patch };
         set({ profile: updated });
         if (current.id !== 'local') {
-          await supabase.from('profiles').update(patch).eq('id', current.id);
+          await enqueueMutation({
+            table: 'profiles',
+            type: 'update',
+            payload: patch,
+            match: { id: current.id },
+          });
         }
       },
 

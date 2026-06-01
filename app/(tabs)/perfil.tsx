@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Switch,
   TextInput, ActivityIndicator, Image, Alert, Modal, Platform,
@@ -153,15 +153,31 @@ export default function PerfilScreen() {
 
   if (!profile) return null;
 
-  // Real Calculated Stats
-  const totalMinutes = Math.round(sessions.reduce((s, x) => s + (x.time_seconds || 0), 0) / 60);
-  const wpmSessions = sessions.filter(s => s.wpm).map(s => s.wpm as number);
-  const maxWpm = wpmSessions.length ? Math.round(Math.max(...wpmSessions)) : 0;
-  const booksFinished = libraryItems.filter(b => b.progress >= 0.99).length;
-  const progressValues = Object.values(progress);
-  const masteryAvg = progressValues.length ? (progressValues.reduce((s, p) => s + (p?.mastery ?? 0), 0) / progressValues.length) : 0;
+  // Real Calculated Stats — memoizadas para no recalcular en cada render
+  const totalMinutes = useMemo(
+    () => Math.round(sessions.reduce((s, x) => s + (x.time_seconds || 0), 0) / 60),
+    [sessions],
+  );
+  const wpmSessions = useMemo(
+    () => sessions.filter(s => s.wpm).map(s => s.wpm as number),
+    [sessions],
+  );
+  const maxWpm = useMemo(
+    () => (wpmSessions.length ? Math.round(Math.max(...wpmSessions)) : 0),
+    [wpmSessions],
+  );
+  const booksFinished = useMemo(
+    () => libraryItems.filter(b => b.progress >= 0.99).length,
+    [libraryItems],
+  );
+  const masteryAvg = useMemo(() => {
+    const progressValues = Object.values(progress);
+    return progressValues.length
+      ? progressValues.reduce((s, p) => s + (p?.mastery ?? 0), 0) / progressValues.length
+      : 0;
+  }, [progress]);
 
-  const ACHIEVEMENTS: Achievement[] = [
+  const ACHIEVEMENTS: Achievement[] = useMemo(() => [
     { id: 'streak7',    title: 'Racha 7',      icon: 'flame',           lib: 'Ionicons',              desc: '7 días seguidos', color: '#EF4444', cond: profile.streak >= 7 },
     { id: 'firstbook',  title: 'Primer libro', icon: 'library',         lib: 'Ionicons',              desc: 'Lee tu primer libro', color: '#3B82F6', cond: booksFinished >= 1 },
     { id: 'wpm300',     title: '300 WPM',      icon: 'flash',           lib: 'Ionicons',              desc: 'Alcanza 300 WPM', color: '#F97316', cond: maxWpm >= 300 },
@@ -171,7 +187,7 @@ export default function PerfilScreen() {
     { id: 'sessions50', title: '50 sesiones',  icon: 'radio-button-on', lib: 'Ionicons',              desc: '50 ejercicios', color: '#EAB308', cond: sessions.length >= 50 },
     { id: 'schulte7',   title: 'Schulte 7×7',  icon: 'grid',            lib: 'Ionicons',              desc: 'Cuadrícula 7×7', color: '#16A34A', cond: (progress.schulte?.current_level ?? 0) >= 5 },
     { id: 'wpm500',     title: '500 WPM',      icon: 'rocket',          lib: 'Ionicons',              desc: 'Alcanza 500 WPM', color: '#DC2626', cond: maxWpm >= 500 },
-  ];
+  ], [profile.streak, profile.level, booksFinished, maxWpm, progress, sessions.length]);
 
   const handlePickAvatar = async () => {
     setAvatarMenuVisible(false);
@@ -288,27 +304,25 @@ export default function PerfilScreen() {
     return { name: 'Liga Bronce', icon: 'trophy', color: '#B45309', colorBg: '#FFFBEB' };
   };
 
-  const getWeeklyXP = () => {
+  const weeklyXP = useMemo(() => {
     const oneWeekAgo = new Date();
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
     return sessions
       .filter(s => new Date(s.finished_at) >= oneWeekAgo)
       .reduce((sum, s) => sum + (s.xp_earned ?? 0), 0);
-  };
-
-  const weeklyXP = getWeeklyXP();
+  }, [sessions]);
   const league = getLeagueInfo(profile.level);
 
   // Dynamic ranking of competitors
-  const competitors = [
+  const competitors = useMemo(() => [
     { name: 'Camila', xp: 750, avatar: 'loci' as MascotKey, avatarUrl: null, isUser: false },
     { name: 'Carlos', xp: 620, avatar: 'swift' as MascotKey, avatarUrl: null, isUser: false },
     { name: profile.name || 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', avatarUrl: profile.avatar_url, isUser: true },
     { name: 'Mateo', xp: 320, avatar: 'calm' as MascotKey, avatarUrl: null, isUser: false },
     { name: 'Sofía', xp: 210, avatar: 'memo' as MascotKey, avatarUrl: null, isUser: false },
-  ].sort((a, b) => b.xp - a.xp);
+  ].sort((a, b) => b.xp - a.xp), [profile.name, profile.avatar, profile.avatar_url, weeklyXP]);
 
-  const userRank = competitors.findIndex(c => c.isUser) + 1;
+  const userRank = useMemo(() => competitors.findIndex(c => c.isUser) + 1, [competitors]);
 
   return (
     <SafeAreaView style={styles.safe}>

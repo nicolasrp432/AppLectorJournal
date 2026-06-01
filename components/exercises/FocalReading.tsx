@@ -14,6 +14,8 @@ import { pickPassage } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { simpleHash } from '../../lib/text';
+import { dedupe } from '../../lib/taskQueue';
 
 type Mode = 'rsvp' | 'guide' | 'chunk';
 type Phase = 'config' | 'reading' | 'quiz';
@@ -82,12 +84,15 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
     let active = true;
     async function analyzeText() {
       setIsLoadingAI(true);
+      const sliceHash = simpleHash(passage.text);
       try {
-        // Try to fetch from persistent cache first
+        // Try to fetch from persistent cache first — por hash del texto analizado,
+        // para que distintos pasajes del mismo ítem no compartan el mismo análisis.
         const { data: cachedData, error: cacheError } = await supabase
           .from('reading_analyses')
           .select('difficulty, explanation, suggested_wpm')
           .eq('library_item_id', passage.id)
+          .eq('text_slice_hash', sliceHash)
           .maybeSingle();
 
         if (!cacheError && cachedData && active) {
@@ -104,10 +109,12 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
           return;
         }
 
-        // Invoke Edge Function if not cached via safe utility to bypass local session JWT errors (403)
-        const { data, error } = await invokeEdgeFunction<{ difficulty: string; explanation: string; suggestedWpm: number }>('ai-analyze-reading', {
-          text: passage.text,
-        });
+        // Invoke Edge Function if not cached via safe utility to bypass local session JWT errors (403).
+        // dedupe evita doble invocación si el efecto se re-dispara antes de persistir.
+        const { data, error } = await dedupe(
+          `ai-analyze:${sliceHash}`,
+          () => invokeEdgeFunction<{ difficulty: string; explanation: string; suggestedWpm: number }>('ai-analyze-reading', { text: passage.text }),
+        );
 
         if (error || !data) {
           throw error || new Error('Respuesta de Edge Function vacía');
@@ -117,9 +124,10 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
           if (data.suggestedWpm) {
             setWpm(data.suggestedWpm);
           }
-          // Persist the result in database for future sessions
+          // Persist the result in database for future sessions (caché por hash).
           await supabase.from('reading_analyses').insert({
             library_item_id: passage.id,
+            text_slice_hash: sliceHash,
             difficulty: data.difficulty || 'medio',
             suggested_wpm: data.suggestedWpm || 280,
             explanation: data.explanation || 'Análisis de lectura generado por IA.'

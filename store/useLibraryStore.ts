@@ -2,7 +2,16 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { enqueueMutation } from '../lib/taskQueue';
 import type { LibraryItem } from '../types/db';
+
+// Columnas "ligeras" para listar la biblioteca SIN traer `content` (que puede ser
+// un libro entero). El contenido se carga bajo demanda al abrir el lector.
+const LIST_COLUMNS =
+  'id,user_id,kind,title,author,words,progress,last_read_at,cover_color,source,created_at';
+
+// Primera página de la biblioteca; el resto se trae con fetchMore ("Cargar más").
+const PAGE_SIZE = 50;
 
 const DEFAULT_LIBRARY: LibraryItem[] = [
   { id: 'l1', user_id: 'local', kind: 'book',  title: 'El cerebro lector',          author: 'S. Dehaene',  content: null, words: 95000,  progress: 0.34, last_read_at: null, cover_color: '#3B82F6', source: 'catalog', created_at: '' },
@@ -13,12 +22,16 @@ const DEFAULT_LIBRARY: LibraryItem[] = [
 
 interface LibraryState {
   items: LibraryItem[];
+  hasMore: boolean;
+  isLoadingMore: boolean;
   list: () => LibraryItem[];
   get: (id: string) => LibraryItem | undefined;
   insert: (item: Omit<LibraryItem, 'id' | 'user_id' | 'created_at'>) => Promise<LibraryItem>;
   update: (id: string, patch: Partial<LibraryItem>) => Promise<void>;
   remove: (id: string) => Promise<void>;
   fetchAll: (userId: string) => Promise<void>;
+  fetchMore: (userId: string) => Promise<void>;
+  ensureContent: (id: string) => Promise<string | null>;
   reset: () => void;
 }
 
@@ -26,7 +39,9 @@ export const useLibraryStore = create<LibraryState>()(
   persist(
     (set, get) => ({
       items: DEFAULT_LIBRARY,
-      reset: () => set({ items: DEFAULT_LIBRARY }),
+      hasMore: true,
+      isLoadingMore: false,
+      reset: () => set({ items: DEFAULT_LIBRARY, hasMore: true, isLoadingMore: false }),
 
       list: () => get().items,
 
@@ -42,7 +57,11 @@ export const useLibraryStore = create<LibraryState>()(
         set(s => ({ items: [row, ...s.items] }));
         const { data: session } = await supabase.auth.getSession();
         if (session.session) {
-          await supabase.from('library_items').insert({ ...row, user_id: session.session.user.id });
+          await enqueueMutation({
+            table: 'library_items',
+            type: 'insert',
+            payload: { ...row, user_id: session.session.user.id },
+          });
         }
         return row;
       },
@@ -51,18 +70,95 @@ export const useLibraryStore = create<LibraryState>()(
         set(s => ({ items: s.items.map(b => b.id === id ? { ...b, ...patch } : b) }));
         const { data: session } = await supabase.auth.getSession();
         if (session.session) {
-          await supabase.from('library_items').update(patch).eq('id', id);
+          await enqueueMutation({
+            table: 'library_items',
+            type: 'update',
+            payload: patch,
+            match: { id },
+          });
         }
       },
 
       remove: async (id: string) => {
         set(s => ({ items: s.items.filter(b => b.id !== id) }));
-        await supabase.from('library_items').delete().eq('id', id);
+        const { data: session } = await supabase.auth.getSession();
+        if (session.session) {
+          await enqueueMutation({
+            table: 'library_items',
+            type: 'delete',
+            match: { id },
+          });
+        }
       },
 
       fetchAll: async (userId: string) => {
-        const { data } = await supabase.from('library_items').select('*').eq('user_id', userId);
-        if (data) set({ items: data as LibraryItem[] });
+        // Primera página, lista ligera (sin `content`), más recientes primero.
+        // Preservamos el `content` que ya tengamos en memoria/AsyncStorage para no
+        // perder la lectura offline ni re-descargar libros.
+        const { data } = await supabase
+          .from('library_items')
+          .select(LIST_COLUMNS)
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .range(0, PAGE_SIZE - 1);
+        if (data) {
+          const prev = new Map(get().items.map(b => [b.id, b]));
+          set({
+            items: (data as LibraryItem[]).map(row => ({
+              ...row,
+              content: prev.get(row.id)?.content ?? null,
+            })),
+            hasMore: data.length === PAGE_SIZE,
+          });
+        }
+      },
+
+      fetchMore: async (userId: string) => {
+        if (get().isLoadingMore || !get().hasMore) return;
+        const dated = get().items.filter(b => b.created_at);
+        if (dated.length === 0) return;
+        const oldest = dated.reduce(
+          (min, b) => (b.created_at < min ? b.created_at : min),
+          dated[0].created_at,
+        );
+
+        set({ isLoadingMore: true });
+        try {
+          const { data } = await supabase
+            .from('library_items')
+            .select(LIST_COLUMNS)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .lt('created_at', oldest)
+            .range(0, PAGE_SIZE - 1);
+          if (data) {
+            const existingIds = new Set(get().items.map(b => b.id));
+            const fresh = (data as LibraryItem[])
+              .filter(row => !existingIds.has(row.id))
+              .map(row => ({ ...row, content: null }));
+            set({
+              items: [...get().items, ...fresh],
+              hasMore: data.length === PAGE_SIZE,
+            });
+          }
+        } finally {
+          set({ isLoadingMore: false });
+        }
+      },
+
+      ensureContent: async (id: string) => {
+        const item = get().items.find(b => b.id === id);
+        if (item && item.content != null) return item.content;
+        const { data } = await supabase
+          .from('library_items')
+          .select('content')
+          .eq('id', id)
+          .maybeSingle();
+        const content = (data as { content: string | null } | null)?.content ?? null;
+        if (content != null) {
+          set(s => ({ items: s.items.map(b => b.id === id ? { ...b, content } : b) }));
+        }
+        return content;
       },
     }),
     { name: 'lectorapp-library', storage: createJSONStorage(() => AsyncStorage) },

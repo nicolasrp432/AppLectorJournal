@@ -21,9 +21,12 @@ interface Props {
 export function NotificationCenter({ visible, onClose }: Props) {
   const notifications = useNotificationStore(s => s.notifications);
   const fetchNotifications = useNotificationStore(s => s.fetchNotifications);
+  const fetchMore = useNotificationStore(s => s.fetchMore);
   const markAsRead = useNotificationStore(s => s.markAsRead);
   const claimReward = useNotificationStore(s => s.claimReward);
   const isLoading = useNotificationStore(s => s.isLoading);
+  const isLoadingMore = useNotificationStore(s => s.isLoadingMore);
+  const hasMore = useNotificationStore(s => s.hasMore);
   const dailyMission = useDailyMissionStore(s => s.mission);
 
   // Animation values
@@ -182,6 +185,18 @@ export function NotificationCenter({ visible, onClose }: Props) {
           ) : (
             <ScrollView contentContainerStyle={styles.listContent}>
               {notifications.map(renderNotificationCard)}
+              {hasMore && (
+                <Pressable
+                  style={styles.loadMoreBtn}
+                  onPress={() => fetchMore()}
+                  disabled={isLoadingMore}
+                  hitSlop={8}
+                >
+                  {isLoadingMore
+                    ? <ActivityIndicator size="small" color={COLORS.focus} />
+                    : <Text style={styles.loadMoreText}>Cargar más</Text>}
+                </Pressable>
+              )}
             </ScrollView>
           )}
         </Animated.View>
@@ -276,6 +291,21 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     gap: 12,
+  },
+  loadMoreBtn: {
+    marginTop: 4,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  loadMoreText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 13,
+    color: COLORS.focus,
   },
   card: {
     backgroundColor: '#FFF',

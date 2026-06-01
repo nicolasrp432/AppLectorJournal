@@ -233,7 +233,55 @@ CREATE INDEX IF NOT EXISTS idx_loci_memories_palace ON public.loci_memories(pala
 
 | Fase | Contenido | Estado |
 |------|-----------|--------|
-| **0** | `lib/cache.ts`, `lib/taskQueue.ts`, arranque SWR diferido | ✅ Este PR |
-| **1** | §6.A (memoización perfil), §6.B (parsing async), §6.C (progreso 1 pasada), §6.D (dedup IA) | Pendiente |
-| **2** | §6.E (caché IA por hash), §6.F (cola de escrituras en stores), §6.G (selects parciales) | Pendiente |
-| **3** | §6.H (índice), paginación con `.range()` | Pendiente |
+| **0** | `lib/cache.ts`, `lib/taskQueue.ts`, arranque SWR diferido | ✅ Implementada |
+| **1** | §6.A (memoización perfil), §6.B (`countWords`), §6.C (progreso 1 pasada), §6.D (dedup IA) | ✅ Implementada |
+| **2** | §6.E (caché IA por hash), §6.F (cola de escrituras en stores), §6.G (selects parciales), §6.H (índice) | ✅ Implementada |
+| **3** | Paginación/guardrails en notifications/library + límites en decks/flashcards/loci | ✅ Implementada |
+
+### Detalle Fase 3 (implementado)
+- **Feeds globales con paginación real** (crecen sin tope con el tiempo):
+  - **notifications** (`useNotificationStore`): primera página de 30 con `.range()`, `fetchMore`
+    keyset por `created_at` (robusto ante notas locales) + `hasMore`/`isLoadingMore`. UI: botón
+    **"Cargar más"** en `NotificationCenter`.
+  - **library** (`useLibraryStore`): primera página de 50 (orden `created_at` desc) + `fetchMore`
+    keyset, **merge-preserve** del `content` ya cacheado. UI: botón "Cargar más" en `libros.tsx`
+    (solo usuarios autenticados).
+- **Colecciones *scoped* con guardrail** (acotadas por el contenido del usuario; un infinite-scroll
+  rompería vistas que necesitan el set completo, p.ej. el repaso SRS): `.limit()` generoso —
+  `decks` (200), `flashcards` por mazo (1000), `loci` palacios (100) / memorias (2000). Garantiza
+  que ninguna query descargue un histórico ilimitado, sin cambiar la UX de esas vistas.
+
+> Nota de diseño: la paginación es **incremental con merge** (nunca reemplaza destruyendo lo ya
+> cargado), para no romper el modelo offline-first ni los lookups por id (`library.get(id)`).
+
+### Detalle Fase 2 (implementado)
+- **§6.F — Escrituras en segundo plano (offline-first).** Las mutaciones remotas de los stores
+  `profile` (addXP, updateProfile), `library` (insert/update/remove), `sessions` (insert),
+  `progress` (upsert), `nodes` (completeNode) y `prefs` (upsert) pasaron de `await supabase…` a
+  `enqueueMutation(…)`. El `set` optimista local se mantiene; la escritura remota se vuelve
+  persistente, con reintento y resistente a cierres de app / falta de red. (Se dejaron sin migrar
+  los writes que necesitan el id devuelto por el servidor: `flashcards`, `loci`, y el flujo
+  multi-paso de `rewards`.)
+- **§6.G — `content` bajo demanda en la biblioteca.** `library.fetchAll` ahora trae columnas
+  ligeras (sin `content`, que puede ser un libro entero) y **preserva** el `content` que ya esté en
+  memoria/AsyncStorage para no perder lectura offline ni re-descargar. Nuevo `library.ensureContent(id)`
+  carga el texto al abrir el lector (`reader/[id].tsx`), que ya tolera `content` nulo.
+- **§6.E + §6.H — Migración `007_reading_analyses_hash.sql`** (⚠️ **requiere aplicarse**):
+  `reading_analyses` pasa a cachear por `(library_item_id, text_slice_hash)` y se le añade política
+  de **INSERT pública** (antes RLS bloqueaba las escrituras → la caché nunca se poblaba).
+  `FocalReading.tsx` ahora lee/escribe por hash. Incluye el índice `idx_loci_memories_palace` (§6.H).
+  El código degrada con elegancia (try/catch) si la migración aún no se aplicó.
+
+### Detalle Fase 1 (implementado)
+- **§6.A** — `perfil.tsx`: `totalMinutes`, `wpmSessions`, `maxWpm`, `booksFinished`, `masteryAvg`,
+  `ACHIEVEMENTS`, `weeklyXP`, `competitors`, `userRank` envueltos en `useMemo`. Ya no se recalculan
+  (ni se re-ordena el ranking) en cada render.
+- **§6.B** — `lib/text.ts` con `countWords` (una sola pasada, sin array intermedio de N palabras) y
+  `simpleHash` compartido. Aplicado en `libros.tsx` (alta de catálogo y documento).
+- **§6.C** — `progreso.tsx`: una sola lista ordenada (`sortedSessions`, dep `[sessions]`); todas las
+  series (`sessions7d`, `wpmTrend`, `sessionsByDay`, `githubHeatmap`) filtran sobre ella en vez de
+  llamar `list()` (que copiaba+ordenaba ~200 ítems hasta 15 veces). **Bonus:** corrige un bug latente
+  — antes las estadísticas no se actualizaban al registrar una sesión (dep `[list]` era estable).
+- **§6.D** — `dedupe()` en las invocaciones IA de `reader/[id].tsx`, `ComprehensionEx.tsx` y
+  `FocalReading.tsx`: llamadas idénticas en vuelo comparten una sola promesa (no se paga Gemini dos veces).
+- **Extra** — corregido crash latente en `progreso.tsx`: `Haptics` se usaba sin importar.
