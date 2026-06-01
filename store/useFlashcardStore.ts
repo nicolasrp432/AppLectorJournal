@@ -231,7 +231,8 @@ export const useFlashcardStore = create<FlashcardState>()(
           const { data, error } = await supabase
             .from('decks')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .limit(200); // guardrail: evita traer un histórico ilimitado
 
           if (!error && data) {
             // Merge local starter decks with Supabase decks if desired
@@ -276,7 +277,8 @@ export const useFlashcardStore = create<FlashcardState>()(
             .from('flashcards')
             .select('*')
             .eq('deck_id', deckId)
-            .order('created_at', { ascending: true });
+            .order('created_at', { ascending: true })
+            .limit(1000); // guardrail: mazos enormes no descargan sin límite
 
           if (!error && data) {
             const cards = data.map(c => ({

@@ -236,7 +236,23 @@ CREATE INDEX IF NOT EXISTS idx_loci_memories_palace ON public.loci_memories(pala
 | **0** | `lib/cache.ts`, `lib/taskQueue.ts`, arranque SWR diferido | ✅ Implementada |
 | **1** | §6.A (memoización perfil), §6.B (`countWords`), §6.C (progreso 1 pasada), §6.D (dedup IA) | ✅ Implementada |
 | **2** | §6.E (caché IA por hash), §6.F (cola de escrituras en stores), §6.G (selects parciales), §6.H (índice) | ✅ Implementada |
-| **3** | Paginación con `.range()` en library/notifications/flashcards/loci | Pendiente |
+| **3** | Paginación/guardrails en notifications/library + límites en decks/flashcards/loci | ✅ Implementada |
+
+### Detalle Fase 3 (implementado)
+- **Feeds globales con paginación real** (crecen sin tope con el tiempo):
+  - **notifications** (`useNotificationStore`): primera página de 30 con `.range()`, `fetchMore`
+    keyset por `created_at` (robusto ante notas locales) + `hasMore`/`isLoadingMore`. UI: botón
+    **"Cargar más"** en `NotificationCenter`.
+  - **library** (`useLibraryStore`): primera página de 50 (orden `created_at` desc) + `fetchMore`
+    keyset, **merge-preserve** del `content` ya cacheado. UI: botón "Cargar más" en `libros.tsx`
+    (solo usuarios autenticados).
+- **Colecciones *scoped* con guardrail** (acotadas por el contenido del usuario; un infinite-scroll
+  rompería vistas que necesitan el set completo, p.ej. el repaso SRS): `.limit()` generoso —
+  `decks` (200), `flashcards` por mazo (1000), `loci` palacios (100) / memorias (2000). Garantiza
+  que ninguna query descargue un histórico ilimitado, sin cambiar la UX de esas vistas.
+
+> Nota de diseño: la paginación es **incremental con merge** (nunca reemplaza destruyendo lo ya
+> cargado), para no romper el modelo offline-first ni los lookups por id (`library.get(id)`).
 
 ### Detalle Fase 2 (implementado)
 - **§6.F — Escrituras en segundo plano (offline-first).** Las mutaciones remotas de los stores
