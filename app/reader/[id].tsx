@@ -13,6 +13,8 @@ import { useProfileStore } from '../../store/useProfileStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
 import { useQuizCacheStore, QuizQuestion } from '../../store/useQuizCacheStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { simpleHash } from '../../lib/text';
+import { dedupe } from '../../lib/taskQueue';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -24,16 +26,6 @@ type ReaderPhase = 'setup' | 'reading' | 'quiz' | 'done';
 type ReadMode = 'rsvp' | 'scroll';
 
 const ACCENT = COLORS.swift;
-
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash |= 0; // Convert to 32bit integer
-  }
-  return `h_${Math.abs(hash)}`;
-}
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -159,10 +151,12 @@ export default function ReaderScreen() {
           return;
         }
 
-        const { data, error } = await invokeEdgeFunction<{ questions: any[] }>('ai-questions', {
-          text: slice,
-          count: 3,
-        });
+        // dedupe: si el mismo slice ya está generándose, comparte la promesa en
+        // vez de invocar Gemini dos veces.
+        const { data, error } = await dedupe(
+          `ai-questions:${book.id}:${sliceHash}`,
+          () => invokeEdgeFunction<{ questions: any[] }>('ai-questions', { text: slice, count: 3 }),
+        );
 
         if (error) throw error;
         if (data && data.questions && data.questions.length > 0) {

@@ -233,7 +233,21 @@ CREATE INDEX IF NOT EXISTS idx_loci_memories_palace ON public.loci_memories(pala
 
 | Fase | Contenido | Estado |
 |------|-----------|--------|
-| **0** | `lib/cache.ts`, `lib/taskQueue.ts`, arranque SWR diferido | ✅ Este PR |
-| **1** | §6.A (memoización perfil), §6.B (parsing async), §6.C (progreso 1 pasada), §6.D (dedup IA) | Pendiente |
+| **0** | `lib/cache.ts`, `lib/taskQueue.ts`, arranque SWR diferido | ✅ Implementada |
+| **1** | §6.A (memoización perfil), §6.B (`countWords`), §6.C (progreso 1 pasada), §6.D (dedup IA) | ✅ Implementada |
 | **2** | §6.E (caché IA por hash), §6.F (cola de escrituras en stores), §6.G (selects parciales) | Pendiente |
 | **3** | §6.H (índice), paginación con `.range()` | Pendiente |
+
+### Detalle Fase 1 (implementado)
+- **§6.A** — `perfil.tsx`: `totalMinutes`, `wpmSessions`, `maxWpm`, `booksFinished`, `masteryAvg`,
+  `ACHIEVEMENTS`, `weeklyXP`, `competitors`, `userRank` envueltos en `useMemo`. Ya no se recalculan
+  (ni se re-ordena el ranking) en cada render.
+- **§6.B** — `lib/text.ts` con `countWords` (una sola pasada, sin array intermedio de N palabras) y
+  `simpleHash` compartido. Aplicado en `libros.tsx` (alta de catálogo y documento).
+- **§6.C** — `progreso.tsx`: una sola lista ordenada (`sortedSessions`, dep `[sessions]`); todas las
+  series (`sessions7d`, `wpmTrend`, `sessionsByDay`, `githubHeatmap`) filtran sobre ella en vez de
+  llamar `list()` (que copiaba+ordenaba ~200 ítems hasta 15 veces). **Bonus:** corrige un bug latente
+  — antes las estadísticas no se actualizaban al registrar una sesión (dep `[list]` era estable).
+- **§6.D** — `dedupe()` en las invocaciones IA de `reader/[id].tsx`, `ComprehensionEx.tsx` y
+  `FocalReading.tsx`: llamadas idénticas en vuelo comparten una sola promesa (no se paga Gemini dos veces).
+- **Extra** — corregido crash latente en `progreso.tsx`: `Haptics` se usaba sin importar.

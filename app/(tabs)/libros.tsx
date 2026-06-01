@@ -11,6 +11,7 @@ import { FONTS } from '../../constants/typography';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { PushButton } from '../../components/ui/PushButton';
 import { CATALOG_CONTENT } from '../../constants/catalogContent';
+import { countWords } from '../../lib/text';
 import type { LibraryItem } from '../../types/db';
 
 const COVER_COLORS = [COLORS.focus, COLORS.calm, COLORS.swift, COLORS.joy, COLORS.loci, COLORS.memo];
@@ -43,7 +44,7 @@ export default function LibrosScreen() {
         title: item.title,
         author: item.author ?? null,
         content,
-        words: content.split(/\s+/).filter(Boolean).length,
+        words: countWords(content),
         progress: 0,
         last_read_at: null,
         cover_color: item.cover_color,
@@ -232,7 +233,7 @@ function AddBookModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: I
     if (!title.trim()) return;
     await onAdd({
       kind: 'text', title, author: author || null, content,
-      words: content.split(/\s+/).filter(Boolean).length,
+      words: countWords(content),
       progress: 0, last_read_at: null,
       cover_color: COVER_COLORS[Math.floor(Math.random() * COVER_COLORS.length)],
       source: 'custom',

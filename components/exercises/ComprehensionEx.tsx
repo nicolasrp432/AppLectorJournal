@@ -14,6 +14,8 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useRewardsStore } from '../../store/useRewardsStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { simpleHash } from '../../lib/text';
+import { dedupe } from '../../lib/taskQueue';
 
 type Phase = 'read' | 'quiz';
 
@@ -54,10 +56,10 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
     async function loadAIQuestions() {
       setIsLoadingAI(true);
       try {
-        const { data, error } = await invokeEdgeFunction<{ questions: any[] }>('ai-questions', {
-          text: basePassage.text,
-          count: 3,
-        });
+        const { data, error } = await dedupe(
+          `ai-questions:${simpleHash(basePassage.text)}`,
+          () => invokeEdgeFunction<{ questions: any[] }>('ai-questions', { text: basePassage.text, count: 3 }),
+        );
 
         if (error || !data) {
           throw error || new Error('Respuesta de Edge Function vacía');
