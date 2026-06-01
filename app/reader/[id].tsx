@@ -29,7 +29,7 @@ const ACCENT = COLORS.swift;
 
 export default function ReaderScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { get, update } = useLibraryStore();
+  const { get, update, ensureContent } = useLibraryStore();
   const { addXP } = useProfileStore();
   const prefs = usePrefsStore(s => s.prefs);
   const defaultWpm = prefs?.wpm_default;
@@ -83,6 +83,12 @@ export default function ReaderScreen() {
     () => (book?.content ? book.content.split(/\s+/).filter(Boolean) : []),
     [book?.content],
   );
+
+  // La lista de biblioteca ya no incluye `content` (puede ser un libro entero);
+  // se carga bajo demanda al abrir el lector. Si ya está en memoria, es no-op.
+  useEffect(() => {
+    if (id) ensureContent(id);
+  }, [id]);
 
   // Resume RSVP from saved progress position
   const resumeWordIdx = React.useMemo(

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { enqueueMutation } from '../lib/taskQueue';
 import type { ExerciseProgress, ExerciseId } from '../types/db';
 
 type ProgressMap = Partial<Record<ExerciseId, ExerciseProgress>>;
@@ -35,7 +36,12 @@ export const useProgressStore = create<ProgressState>()(
         set(s => ({ all: { ...s.all, [exId]: updated } }));
         const { data: session } = await supabase.auth.getSession();
         if (session.session) {
-          await supabase.from('exercise_progress').upsert({ ...updated, user_id: session.session.user.id });
+          // Escritura en segundo plano: persistente, con reintento y offline-first.
+          await enqueueMutation({
+            table: 'exercise_progress',
+            type: 'upsert',
+            payload: { ...updated, user_id: session.session.user.id },
+          });
         }
       },
 

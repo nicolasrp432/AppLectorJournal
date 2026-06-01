@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { enqueueMutation } from '../lib/taskQueue';
 import type { UserPrefs } from '../types/db';
 
 const DEFAULT_PREFS: UserPrefs = {
@@ -39,7 +40,11 @@ export const usePrefsStore = create<PrefsState>()(
         set({ prefs: updated });
         const { data: session } = await supabase.auth.getSession();
         if (session.session) {
-          await supabase.from('user_prefs').upsert({ ...updated, user_id: session.session.user.id });
+          await enqueueMutation({
+            table: 'user_prefs',
+            type: 'upsert',
+            payload: { ...updated, user_id: session.session.user.id },
+          });
         }
       },
 

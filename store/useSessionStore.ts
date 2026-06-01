@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { enqueueMutation } from '../lib/taskQueue';
 import type { Session, ExerciseId } from '../types/db';
 import { useDailyMissionStore } from './useDailyMissionStore';
 
@@ -62,7 +63,11 @@ export const useSessionStore = create<SessionState>()(
 
         const { data: authSession } = await supabase.auth.getSession();
         if (authSession.session) {
-          await supabase.from('sessions').insert({ ...row, user_id: authSession.session.user.id });
+          await enqueueMutation({
+            table: 'sessions',
+            type: 'insert',
+            payload: { ...row, user_id: authSession.session.user.id },
+          });
         }
         return row;
       },
