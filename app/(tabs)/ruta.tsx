@@ -535,6 +535,16 @@ export default function RutaScreen() {
   const [showAIChat, setShowAIChat] = React.useState(false);
   const [unlockingZoneTitle, setUnlockingZoneTitle] = React.useState<string | null>(null);
   const [showWarmupModal, setShowWarmupModal] = React.useState(false);
+  const [lockedToast, setLockedToast] = React.useState<string | null>(null);
+  const lockedToastTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Feedback al pulsar un nodo aún bloqueado (antes no pasaba nada: el Pressable
+  // estaba disabled y en web no hay háptica → parecía roto).
+  const handleLockedPress = (_node: ZoneNode) => {
+    setLockedToast('🔒 Completa el reto anterior para desbloquearlo');
+    if (lockedToastTimer.current) clearTimeout(lockedToastTimer.current);
+    lockedToastTimer.current = setTimeout(() => setLockedToast(null), 2500);
+  };
 
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollOffset = useScrollViewOffset(scrollRef);
@@ -701,6 +711,7 @@ export default function RutaScreen() {
             onAnimationEnd={() => setUnlockingZoneTitle(null)}
             onPressChest={handlePressChest}
             onPressExercise={(node) => setActiveExerciseNode(node)}
+            onLockedPress={handleLockedPress}
           />
         ))}
 
@@ -789,13 +800,30 @@ export default function RutaScreen() {
         onClose={() => setShowWarmupModal(false)}
         allProgress={all}
       />
+
+      {/* Toast de nodo bloqueado */}
+      {lockedToast && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute', bottom: 96, left: 24, right: 24,
+            backgroundColor: 'rgba(15,23,42,0.96)', borderRadius: 14,
+            paddingVertical: 12, paddingHorizontal: 18, alignItems: 'center',
+            borderWidth: 1, borderColor: 'rgba(251,191,36,0.4)',
+          }}
+        >
+          <Text style={{ fontFamily: FONTS.headingSemi, fontSize: 13, color: '#fff', textAlign: 'center' }}>
+            {lockedToast}
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
 
 // ─── ZONE SECTION WITH GENTLE SHAKE LOCK & LOCK OVERLAY ─────────────────────────
 function ZoneSection({
-  zone, completed, scrollOffset, zoneForceUnlocked, unlockingZoneTitle, onAnimationEnd, onPressChest, onPressExercise,
+  zone, completed, scrollOffset, zoneForceUnlocked, unlockingZoneTitle, onAnimationEnd, onPressChest, onPressExercise, onLockedPress,
 }: {
   zone: typeof ZONES[0];
   completed: string[];
@@ -805,6 +833,7 @@ function ZoneSection({
   onAnimationEnd: () => void;
   onPressChest: (node: ZoneNode) => void;
   onPressExercise: (node: ZoneNode) => void;
+  onLockedPress: (node: ZoneNode) => void;
 }) {
   const trailPath = buildTrail(zone.nodes);
   const svgH = zone.nodes.length * ROW + 110;
@@ -1008,7 +1037,7 @@ function ZoneSection({
           zone collapses/expands (height 0 ↔ svgH). */}
       <Animated.View style={animatedContentStyle}>
           <View style={[styles.trailContainer, { height: svgH }]}>
-            <Svg width={W} height={svgH} style={{ position: 'absolute', top: 0, left: 0 }}>
+            <Svg width={W} height={svgH} pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0 }}>
               {/* Subtle baseline locked trail */}
               <Path d={trailPath} stroke="rgba(255,255,255,0.06)" strokeWidth={4} fill="none" strokeDasharray="6 4" />
 
@@ -1103,6 +1132,7 @@ function ZoneSection({
                   isCompleted={isCompleted}
                   onPressChest={onPressChest}
                   onPressExercise={onPressExercise}
+                  onLockedPress={onLockedPress}
                 />
               );
             })}
@@ -1140,13 +1170,15 @@ function ZoneSection({
 
 // ─── NODE BUTTON WITH SPRING SCALE ON COMPLETE ──────────────────────────────────
 function NodeButton({
-  node, x, y, current, isCompleted, onPressChest, onPressExercise,
+  node, x, y, current, isCompleted, onPressChest, onPressExercise, onLockedPress,
 }: {
   node: ZoneNode; x: number; y: number; current: boolean; isCompleted: boolean;
   onPressChest: (node: ZoneNode) => void;
   onPressExercise: (node: ZoneNode) => void;
+  onLockedPress: (node: ZoneNode) => void;
 }) {
   const scale = useSharedValue(1);
+  const shakeX = useSharedValue(0);
   const haloScale   = useSharedValue(1);
   const haloOpacity = useSharedValue(0.24);
 
@@ -1173,7 +1205,7 @@ function NodeButton({
   }));
 
   const nodeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
+    transform: [{ scale: scale.value }, { translateX: shakeX.value }],
   }));
 
   const checkAnimatedStyle = useAnimatedStyle(() => ({
@@ -1183,6 +1215,15 @@ function NodeButton({
   const onPress = () => {
     if (node.locked) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {});
+      // Feedback visible: shake del nodo (en web no hay háptica) + aviso a la
+      // pantalla para mostrar un toast explicativo.
+      shakeX.value = withSequence(
+        withTiming(-6, { duration: 50 }),
+        withTiming(6, { duration: 50 }),
+        withTiming(-4, { duration: 50 }),
+        withTiming(0, { duration: 50 }),
+      );
+      onLockedPress(node);
       return;
     }
     if (node.kind === 'lesson') {
@@ -1238,11 +1279,10 @@ function NodeButton({
 
   return (
     <Pressable
-      style={{ position: 'absolute', left: x - RADIUS, top: y - RADIUS }}
+      style={{ position: 'absolute', left: x - RADIUS, top: y - RADIUS, zIndex: 5 }}
       onPressIn={() => { scale.value = withTiming(0.9, { duration: 80 }); }}
       onPressOut={() => { scale.value = withSpring(1, { damping: 6, stiffness: 300 }); }}
       onPress={onPress}
-      disabled={node.locked}
     >
       {/* Pulse halo for current node */}
       {current && (
