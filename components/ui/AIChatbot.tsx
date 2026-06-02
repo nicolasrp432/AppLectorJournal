@@ -341,14 +341,14 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
       } catch (fallbackErr: any) {
         console.warn('Fallback failed too:', fallbackErr);
         const errMessage = fallbackErr?.message || '';
-        const isKeyExpired = errMessage.includes('expired') || errMessage.includes('API key') || errMessage.includes('API_KEY_INVALID');
+        const isKeyIssue = /not configured|no configurada|expired|API key|API_KEY_INVALID|GEMINI_API_KEY/i.test(errMessage);
         setMessages((prev) => [
           ...prev,
           {
             id: Math.random().toString(),
             role: 'assistant',
-            text: isKeyExpired
-              ? '🔑 Error de Configuración: La clave API de Gemini ha expirado. Por favor, actualiza la variable GEMINI_API_KEY en tu entorno o en los secretos de Supabase con una clave válida de Google AI Studio para reactivar mis sinapsis cognitivas. 🧠⚡'
+            text: isKeyIssue
+              ? '🔑 Error de configuración: falta o no es válida la clave de Gemini. Configúrala como secreto de Supabase (GEMINI_API_KEY, para las Edge Functions) y/o como variable del cliente (EXPO_PUBLIC_GEMINI_API_KEY en el entorno de despliegue) con una clave válida de Google AI Studio. 🧠⚡'
               : '¡Hola! Estoy experimentando una micro-desconexión en mis sinapsis digitales. Revisa tu conexión a internet e inténtalo de nuevo en unos momentos. 🧠⚡',
           },
         ]);
@@ -440,7 +440,7 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
             multiline={false}
             maxLength={180}
             onSubmitEditing={() => handleSend(input)}
-            disabled={loading}
+            editable={!loading}
           />
           <Pressable
             onPress={() => handleSend(input)}
