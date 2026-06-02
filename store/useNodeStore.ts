@@ -47,8 +47,14 @@ export const useNodeStore = create<NodeState>()(
           .from('node_completions')
           .select('node_id')
           .eq('user_id', userId);
-        if (data && data.length > 0) {
-          set({ completed: data.map((r: { node_id: string }) => r.node_id) });
+        if (data) {
+          // Merge server state with locally-persisted completions instead of
+          // overwriting. A node completed offline lives only in the mutation
+          // queue until it syncs; replacing would drop it and re-lock the next
+          // node (e.g. tapping it "does nothing"). Union keeps local progress.
+          const serverIds = data.map((r: { node_id: string }) => r.node_id);
+          const merged = Array.from(new Set([...get().completed, ...serverIds]));
+          set({ completed: merged });
         }
       },
     }),
