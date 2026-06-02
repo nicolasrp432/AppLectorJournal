@@ -488,6 +488,7 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
   const scale = useSharedValue(0.5);
   const opacity = useSharedValue(0);
   const [imageLoading, setImageLoading] = useState(true);
+  const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
     scale.value = withSpring(1, { damping: 8, stiffness: 120 });
@@ -498,6 +499,10 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
     transform: [{ scale: scale.value }],
     opacity: opacity.value,
   }));
+
+  // Show the remote image only while it hasn't failed; otherwise fall back to
+  // the room emoji so a blocked/offline URL never leaves a perpetual spinner.
+  const showImage = !!imageUri && !imageFailed;
 
   return (
     <Animated.View style={[animatedStyle, styles.storyCard, { borderColor: aspect.border }]}>
@@ -519,7 +524,7 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
           </View>
         ) : (
           <View style={styles.storyCardContent}>
-            {imageUri && (
+            {showImage && (
               <View style={styles.imageContainer}>
                 <Image
                   source={{ uri: imageUri }}
@@ -527,6 +532,7 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
                   resizeMode="cover"
                   onLoadStart={() => setImageLoading(true)}
                   onLoadEnd={() => setImageLoading(false)}
+                  onError={() => { setImageFailed(true); setImageLoading(false); }}
                 />
                 {imageLoading && (
                   <View style={[StyleSheet.absoluteFillObject, styles.imageLoaderContainer]}>
@@ -537,7 +543,7 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
             )}
 
             <View style={styles.storyCardContentRow}>
-              {!imageUri && <Text style={styles.storyCardEmoji}>{aspect.emoji}</Text>}
+              {!showImage && <Text style={styles.storyCardEmoji}>{aspect.emoji}</Text>}
               <View style={styles.storyCardTextCol}>
                 <Text style={[styles.storyCardText, { color: aspect.textColor }]}>{text}</Text>
                 <Text style={styles.storyCardCaption}>Consolida esta absurda escena en tu mente antes de que termine el tiempo.</Text>
