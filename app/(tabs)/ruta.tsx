@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import {
-  View, Text, Pressable, StyleSheet, Dimensions, Modal, BackHandler, Alert, ScrollView, Platform
+  View, Text, Pressable, StyleSheet, Dimensions, Modal, BackHandler, Alert, Platform
 } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -885,19 +885,19 @@ function ZoneSection({
 
   const initialCollapsed = !zoneForceUnlocked || isZoneCompleted;
   const [collapsed, setCollapsed] = React.useState(initialCollapsed);
-  const heightAnim = useSharedValue(initialCollapsed ? 0 : Math.min(380, svgH));
+  const heightAnim = useSharedValue(initialCollapsed ? 0 : svgH);
 
   useEffect(() => {
     if (isUnlockingNow) {
       setCollapsed(false);
-      heightAnim.value = withTiming(Math.min(380, svgH), { duration: 1000 });
+      heightAnim.value = withTiming(svgH, { duration: 1000 });
     }
   }, [isUnlockingNow]);
   // React to asynchronous loading of node completion data in real-time
   useEffect(() => {
     const isCompleted = !zoneForceUnlocked || isZoneCompleted;
     setCollapsed(isCompleted);
-    heightAnim.value = withTiming(isCompleted ? 0 : Math.min(380, svgH), { duration: 300 });
+    heightAnim.value = withTiming(isCompleted ? 0 : svgH, { duration: 300 });
   }, [isZoneCompleted, zoneForceUnlocked]);
 
 
@@ -907,7 +907,7 @@ function ZoneSection({
     }
     const nextCollapsed = !collapsed;
     setCollapsed(nextCollapsed);
-    heightAnim.value = withTiming(nextCollapsed ? 0 : Math.min(380, svgH), { duration: 300 });
+    heightAnim.value = withTiming(nextCollapsed ? 0 : svgH, { duration: 300 });
   };
 
   const animatedContentStyle = useAnimatedStyle(() => ({
@@ -1002,14 +1002,11 @@ function ZoneSection({
         )}
       </Pressable>
 
-      {/* SVG trail + nodes */}
+      {/* SVG trail + nodes — single full-height layer (no inner scroll) so every
+          node is tappable at any outer-scroll position. The page's outer
+          ScrollView handles scrolling; overflow:'hidden' only clips while the
+          zone collapses/expands (height 0 ↔ svgH). */}
       <Animated.View style={animatedContentStyle}>
-        <ScrollView
-          style={{ height: '100%', width: '100%' }}
-          contentContainerStyle={{ height: svgH }}
-          nestedScrollEnabled={true}
-          showsVerticalScrollIndicator={true}
-        >
           <View style={[styles.trailContainer, { height: svgH }]}>
             <Svg width={W} height={svgH} style={{ position: 'absolute', top: 0, left: 0 }}>
               {/* Subtle baseline locked trail */}
@@ -1110,7 +1107,6 @@ function ZoneSection({
               );
             })}
           </View>
-        </ScrollView>
       </Animated.View>
 
       {/* Absolute Shaking Lock Overlay */}
