@@ -418,7 +418,15 @@ function BookFormModal({
       }
     } catch (err: any) {
       console.warn(err);
-      setErrorMsg(err.message || 'Error al procesar el archivo. Intenta de nuevo.');
+      // "Failed to fetch" / errores de red al llamar a process-pdf suelen
+      // significar que la función no está desplegada o falló CORS.
+      const msg = String(err?.message || '');
+      const isNetwork = /failed to fetch|networkerror|load failed/i.test(msg);
+      setErrorMsg(
+        isNetwork
+          ? 'No se pudo procesar el PDF (el servicio no está disponible ahora mismo). Sube un .txt o pega el texto directamente.'
+          : (msg || 'Error al procesar el archivo. Intenta de nuevo.'),
+      );
     } finally {
       setIsLoading(false);
     }
