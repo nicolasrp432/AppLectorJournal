@@ -423,7 +423,10 @@ export function CharShape({
   const flatMouthStyle = useAnimatedStyle(() => ({ opacity: mouthFlatOpacity.value }));
 
   return (
-    <Pressable onPress={handlePress} style={{ width: w, height: h }}>
+    // pointerEvents="none": la mascota es puramente decorativa. Antes era un
+    // <Pressable> (saltito al tocar) que en web CAPTURABA el clic e impedía que
+    // llegara al Pressable padre (p.ej. el nodo del mapa no abría).
+    <View style={{ width: w, height: h }} pointerEvents="none">
       <View style={{ width: w, height: h, position: 'relative' }}>
         
         {/* Shadow absolute (at bottom of character) */}
@@ -545,7 +548,7 @@ export function CharShape({
         </Animated.View>
 
       </View>
-    </Pressable>
+    </View>
   );
 }
 
