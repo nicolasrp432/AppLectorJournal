@@ -353,7 +353,7 @@ export default function ExerciseScreen() {
         content = <ComprehensionExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
         break;
       case 'boss':
-        content = <BossExercise onFinish={handleFinish} onQuit={quit} />;
+        content = <BossExercise level={pinnedLevel ?? 1} onFinish={handleFinish} onQuit={quit} />;
         break;
       case 'freereading':
         content = <FreeReadingExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;

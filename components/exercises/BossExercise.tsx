@@ -9,6 +9,7 @@ import Animated, {
   withDelay,
   withRepeat,
   runOnJS,
+  Easing,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,17 +20,20 @@ import { MascotChar } from '../ui/MascotChar';
 const BOSS_ACCENT = '#DC2626';
 
 interface Props {
+  level?: number;
   onFinish: (result: { score: number; defeated: boolean; time: number; rounds: number }) => void;
   onQuit: () => void;
 }
 
-type Phase = 'intro' | 'playing' | 'round-end';
+// Telegraphed turn-based duel: the boss announces (telegraph) what it will
+// attack with, then the player responds, then the hit resolves.
+type Phase = 'intro' | 'telegraph' | 'playing' | 'round-end';
 
 const CHALLENGES = [
-  { type: 'speed',         label: 'Velocidad' },
-  { type: 'memory',        label: 'Memoria' },
-  { type: 'comprehension', label: 'Comprensión' },
-];
+  { type: 'speed',         label: 'Velocidad',    icon: 'flash',        tell: 'El jefe lanza un golpe veloz. ¡Reacciona a tiempo!' },
+  { type: 'memory',        label: 'Memoria',      icon: 'eye',          tell: 'El jefe oculta una secuencia. ¡Memorízala!' },
+  { type: 'comprehension', label: 'Comprensión',  icon: 'book',         tell: 'El jefe te plantea un enigma. ¡Léelo y responde!' },
+] as const;
 
 // Spark Particle component for background fire effect
 function FireSpark({ size, delay, left }: { size: number; delay: number; left: number }) {
@@ -90,23 +94,22 @@ function FloatingDamageLabel({ text, color, x, y, onComplete }: DamageLabelProps
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    progress.value = withTiming(1, { duration: 1000 }, () => {
-      onComplete();
+    progress.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }, () => {
+      runOnJS(onComplete)();
     });
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => {
     const t = progress.value;
-    const translateY = -180 * t + 80 * t * t; // Wider RPG parabolic arc
-    const translateX = 40 * t * (x > 150 ? 1 : -0.5); // float outwards
-    const scale = t < 0.15 ? withSpring(1.5, { damping: 6 }) : withTiming(1 - t, { duration: 800 });
-    const opacity = 1 - t;
+    const translateY = -90 * t;                 // smooth straight rise
+    const scale = 1 + 0.25 * Math.sin(Math.min(t, 0.5) * Math.PI); // soft pop, settles
+    const opacity = 1 - t * t;                   // lingers, then fades
 
     return {
       position: 'absolute',
       left: x,
       top: y,
-      transform: [{ translateX }, { translateY }, { scale }],
+      transform: [{ translateY }, { scale }],
       opacity,
       zIndex: 99,
     };
@@ -119,7 +122,24 @@ function FloatingDamageLabel({ text, color, x, y, onComplete }: DamageLabelProps
   );
 }
 
-export function BossExercise({ onFinish, onQuit }: Props) {
+// Pulsing wrapper that telegraphs the incoming attack with a calm, eased beat.
+function TelegraphPulse({ children }: { children: React.ReactNode }) {
+  const scale = useSharedValue(1);
+  useEffect(() => {
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.12, { duration: 620, easing: Easing.inOut(Easing.quad) }),
+        withTiming(1, { duration: 620, easing: Easing.inOut(Easing.quad) }),
+      ),
+      -1,
+      true,
+    );
+  }, []);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  return <Animated.View style={style}>{children}</Animated.View>;
+}
+
+export function BossExercise({ level = 1, onFinish, onQuit }: Props) {
   const [cIdx, setCIdx] = useState(0);
   const [scores, setScores] = useState<number[]>([]);
   const [bossHP, setBossHP] = useState(100);
@@ -162,40 +182,31 @@ export function BossExercise({ onFinish, onQuit }: Props) {
         withSpring(0, { damping: 10 })
       );
 
-      // 3. Sword slash visual
-      slashScale.value = 0.5;
-      slashOpacity.value = 0.9;
-      slashScale.value = withSequence(withTiming(1.1, { duration: 150 }), withTiming(1.3, { duration: 100 }));
-      slashOpacity.value = withSequence(withTiming(0.9, { duration: 150 }), withTiming(0, { duration: 100 }));
+      // 3. Sword slash visual (single eased sweep, no double-snap)
+      slashScale.value = 0.6;
+      slashOpacity.value = 0.85;
+      slashScale.value = withTiming(1.25, { duration: 260, easing: Easing.out(Easing.cubic) });
+      slashOpacity.value = withTiming(0, { duration: 320, easing: Easing.in(Easing.quad) });
 
-      // 4. Boss rapid shake & Flash red
+      // 4. Boss recoil: a single soft knock-back + red tint (no jittery shake)
       bossShake.value = withSequence(
-        withTiming(-18, { duration: 40 }),
-        withTiming(16, { duration: 40 }),
-        withTiming(-12, { duration: 40 }),
-        withTiming(8, { duration: 40 }),
-        withTiming(-4, { duration: 40 }),
-        withTiming(0, { duration: 40 })
+        withTiming(14, { duration: 130, easing: Easing.out(Easing.cubic) }),
+        withTiming(0, { duration: 260, easing: Easing.inOut(Easing.quad) }),
       );
       bossFlashRed.value = withSequence(
-        withTiming(1, { duration: 80 }),
-        withTiming(0, { duration: 250 })
+        withTiming(0.9, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 300, easing: Easing.in(Easing.quad) }),
       );
 
-      // 5. Floating text & Screen Flash for Critical hits (>= 8 damage)
+      // 5. Floating damage text — clear cause→effect, no screen flash strobe.
       const crit = val >= 8;
       triggerDamage(crit ? `¡CRÍTICO! -${val} HP` : `-${val} HP`, crit ? '#F59E0B' : '#EF4444');
-
-      if (crit) {
-        screenFlash.value = 0.8;
-        screenFlash.value = withTiming(0, { duration: 400 });
-      }
     } else {
-      // Mistake! Boss counterattacks
-      shieldScale.value = 0.6;
+      // Mistake! Boss blocks — gentle shield pulse.
+      shieldScale.value = 0.7;
       shieldOpacity.value = 0.8;
-      shieldScale.value = withSpring(1.1, { damping: 5 });
-      shieldOpacity.value = withTiming(0, { duration: 500 });
+      shieldScale.value = withTiming(1.1, { duration: 260, easing: Easing.out(Easing.cubic) });
+      shieldOpacity.value = withTiming(0, { duration: 460, easing: Easing.in(Easing.quad) });
 
       // Floating miss/block label
       triggerDamage('¡BLOQUEADO!', '#3B82F6', true);
@@ -220,7 +231,7 @@ export function BossExercise({ onFinish, onQuit }: Props) {
       onFinish({ score: totalScore, defeated: bossHP === 0, time: (Date.now() - startTime.current) / 1000, rounds: scores.length });
     } else {
       setCIdx(i => i + 1);
-      setPhase('playing');
+      setPhase('telegraph');
       setRoundResult(null);
     }
   };
@@ -260,11 +271,9 @@ export function BossExercise({ onFinish, onQuit }: Props) {
       <View style={styles.arenaContainer}>
         {/* Fire sparks rising backdrop */}
         <LinearGradient colors={['#3F0712', '#111827']} style={StyleSheet.absoluteFillObject} />
-        <FireSpark size={6} delay={0} left={30} />
-        <FireSpark size={8} delay={400} left={80} />
-        <FireSpark size={5} delay={900} left={150} />
-        <FireSpark size={10} delay={1500} left={220} />
-        <FireSpark size={7} delay={2000} left={290} />
+        <FireSpark size={6} delay={0} left={40} />
+        <FireSpark size={7} delay={1000} left={160} />
+        <FireSpark size={6} delay={2000} left={280} />
 
         {/* Flash White screen overlay when critical damage */}
         <Animated.View
@@ -374,8 +383,32 @@ export function BossExercise({ onFinish, onQuit }: Props) {
           </View>
         </View>
         <View style={styles.footer}>
-          <Pressable onPress={() => setPhase('playing')} style={styles.battleBtn}>
+          <Pressable onPress={() => setPhase('telegraph')} style={styles.battleBtn}>
             <Text style={styles.battleBtnText}>¡A LA BATALLA!</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
+  if (phase === 'telegraph') {
+    const ch = CHALLENGES[cIdx];
+    return (
+      <View style={[styles.container, { backgroundColor: '#111827' }]}>
+        <CombatArena />
+        <View style={styles.telegraphCenter}>
+          <Text style={styles.telegraphRound}>Ronda {cIdx + 1}/{CHALLENGES.length}</Text>
+          <TelegraphPulse>
+            <View style={styles.telegraphIconRing}>
+              <Ionicons name={ch.icon as any} size={40} color={BOSS_ACCENT} />
+            </View>
+          </TelegraphPulse>
+          <Text style={styles.telegraphSkill}>{ch.label}</Text>
+          <Text style={styles.telegraphTell}>{ch.tell}</Text>
+        </View>
+        <View style={styles.footer}>
+          <Pressable onPress={() => setPhase('playing')} style={styles.battleBtn}>
+            <Text style={styles.battleBtnText}>RESPONDER</Text>
           </Pressable>
         </View>
       </View>
@@ -410,10 +443,10 @@ export function BossExercise({ onFinish, onQuit }: Props) {
       <CombatArena />
       <View style={{ flex: 1 }}>
         {current.type === 'speed' && (
-          <BossSpeedRound onFinish={handleRoundFinish} onAction={handleAction} />
+          <BossSpeedRound level={level} onFinish={handleRoundFinish} onAction={handleAction} />
         )}
         {current.type === 'memory' && (
-          <BossMemoryRound onFinish={handleRoundFinish} onAction={handleAction} />
+          <BossMemoryRound level={level} onFinish={handleRoundFinish} onAction={handleAction} />
         )}
         {current.type === 'comprehension' && (
           <BossComprehensionRound onFinish={handleRoundFinish} onAction={handleAction} />
@@ -425,9 +458,11 @@ export function BossExercise({ onFinish, onQuit }: Props) {
 
 // ─── Speed Challenge Sub-round ───────────────────────────────────────────────
 function BossSpeedRound({
+  level = 1,
   onFinish,
   onAction,
 }: {
+  level?: number;
   onFinish: (score: number) => void;
   onAction: (correct: boolean, damage?: number) => void;
 }) {
@@ -435,7 +470,10 @@ function BossSpeedRound({
   const [idx, setIdx] = useState(0);
   const [pos, setPos] = useState({ x: 50, y: 50 });
   const timerProgress = useSharedValue(1);
-  
+
+  // Higher zone bosses give less time to react.
+  const reactMs = Math.max(900, 1700 - level * 200);
+
   const start = useRef(Date.now());
   const wordStart = useRef(Date.now());
 
@@ -466,7 +504,7 @@ function BossSpeedRound({
     wordStart.current = Date.now();
 
     timerProgress.value = 1;
-    timerProgress.value = withTiming(0, { duration: 1500 }, (finished) => {
+    timerProgress.value = withTiming(0, { duration: reactMs, easing: Easing.linear }, (finished) => {
       if (finished) {
         runOnJS(handleTimeout)();
       }
@@ -490,7 +528,7 @@ function BossSpeedRound({
 
   return (
     <View style={[bossStyles.roundContainer, { backgroundColor: '#0B0F19' }]}>
-      <Text style={bossStyles.roundHint}>REACTION TAP: TOCA EL TARGET ANTES DE 1.5S · {idx + 1}/{words.length}</Text>
+      <Text style={bossStyles.roundHint}>REACCIONA: TOCA LA PALABRA ANTES DE QUE SE AGOTE · {idx + 1}/{words.length}</Text>
       <View style={[bossStyles.arenaBox, { width: containerW, height: containerH }]}>
         <Pressable
           onPress={handleTap}
@@ -514,13 +552,17 @@ function BossSpeedRound({
 
 // ─── Memory Challenge Sub-round ───────────────────────────────────────────────
 function BossMemoryRound({
+  level = 1,
   onFinish,
   onAction,
 }: {
+  level?: number;
   onFinish: (score: number) => void;
   onAction: (correct: boolean, damage?: number) => void;
 }) {
-  const [digits] = useState(() => Array.from({ length: 6 }, () => Math.floor(Math.random() * 10)));
+  // Higher zone bosses hide a longer sequence.
+  const digitCount = Math.min(8, 4 + level);
+  const [digits] = useState(() => Array.from({ length: digitCount }, () => Math.floor(Math.random() * 10)));
   const [phase, setPhase] = useState<'show' | 'input'>('show');
   const [input, setInput] = useState<number[]>([]);
   const [streak, setStreak] = useState(0);
@@ -911,6 +953,48 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 14,
     color: '#D1D5DB',
+  },
+  telegraphCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    padding: 24,
+  },
+  telegraphRound: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 11,
+    color: '#FCA5A5',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
+  },
+  telegraphIconRing: {
+    width: 92,
+    height: 92,
+    borderRadius: 46,
+    borderWidth: 2.5,
+    borderColor: BOSS_ACCENT,
+    backgroundColor: 'rgba(220,38,38,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: BOSS_ACCENT,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 18,
+  },
+  telegraphSkill: {
+    fontFamily: FONTS.heading,
+    fontSize: 30,
+    color: '#fff',
+    marginTop: 4,
+  },
+  telegraphTell: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: '#D1D5DB',
+    textAlign: 'center',
+    paddingHorizontal: 16,
+    lineHeight: 20,
   },
 });
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, withRepeat, withSequence, Easing,
 } from 'react-native-reanimated';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
@@ -334,41 +334,67 @@ const compStyles = StyleSheet.create({
   optText:   { fontFamily: FONTS.body, fontSize: 10, color: COLORS.ink },
 });
 
-// ── Boss: 3 skill icons + draining progress bar ───────────────────────────────
+// ── Boss: telegraphed turn-based duel (telegraph → responder → golpe) ──────────
 
-const BOSS_SKILLS = ['👁', '🧠', '⚡'];
+const BOSS_SKILLS = [
+  { icon: '⚡', label: 'Velocidad' },
+  { icon: '👁', label: 'Memoria' },
+  { icon: '📖', label: 'Comprensión' },
+];
 
 function DemoBoss({ accent }: { accent: string }) {
   const [round, setRound] = useState(0);
-  const barWidth = useSharedValue(1);
+  const [telegraph, setTelegraph] = useState(true); // true = avisa, false = golpe
+  const hp = useSharedValue(1);
+  const ring = useSharedValue(1);
 
   useEffect(() => {
-    barWidth.value = withTiming(0, { duration: 900 });
     const id = setInterval(() => {
-      setRound(r => (r + 1) % 3);
-      barWidth.value = 1;
-      barWidth.value = withTiming(0, { duration: 900 });
-    }, 1000);
+      setTelegraph(t => {
+        if (t) return false;             // telegraph → golpe
+        setRound(r => (r + 1) % 3);       // golpe resuelto → siguiente aviso
+        return true;
+      });
+    }, 1100);
     return () => clearInterval(id);
   }, []);
 
-  const barFillStyle = useAnimatedStyle(() => ({ width: `${barWidth.value * 100}%` as any }));
+  // Telegraph pulses the ring; a hit drains a chunk of the boss HP.
+  useEffect(() => {
+    if (telegraph) {
+      ring.value = withRepeat(
+        withSequence(
+          withTiming(1.12, { duration: 460, easing: Easing.inOut(Easing.quad) }),
+          withTiming(1, { duration: 460, easing: Easing.inOut(Easing.quad) }),
+        ), -1, true);
+    } else {
+      ring.value = withTiming(1, { duration: 150 });
+      hp.value = withTiming(Math.max(0, hp.value - 0.34), { duration: 420, easing: Easing.out(Easing.cubic) });
+    }
+  }, [telegraph]);
+
+  const ringStyle = useAnimatedStyle(() => ({ transform: [{ scale: ring.value }] }));
+  const hpStyle = useAnimatedStyle(() => ({ width: `${hp.value * 100}%` as any }));
+
+  const skill = BOSS_SKILLS[round];
 
   return (
     <View style={demoStyles.center}>
-      <Text style={[demoStyles.phaseLabel, { color: accent }]}>Ronda {round + 1}/3</Text>
-      <View style={bossStyles.skills}>
-        {BOSS_SKILLS.map((sk, i) => (
-          <View
-            key={i}
-            style={[bossStyles.skill, i === round && { borderColor: accent, backgroundColor: accent + '15' }]}
-          >
-            <Text style={{ fontSize: 20 }}>{sk}</Text>
-          </View>
-        ))}
-      </View>
+      <Text style={[demoStyles.phaseLabel, { color: telegraph ? accent : '#10B981' }]}>
+        {telegraph ? 'El jefe ataca…' : '¡Responde! Golpe'}
+      </Text>
+      <Animated.View
+        style={[
+          bossStyles.ring,
+          { borderColor: telegraph ? accent : '#10B981', backgroundColor: (telegraph ? accent : '#10B981') + '15' },
+          ringStyle,
+        ]}
+      >
+        <Text style={{ fontSize: 26 }}>{telegraph ? skill.icon : '✓'}</Text>
+      </Animated.View>
+      <Text style={bossStyles.skillLabel}>{skill.label}</Text>
       <View style={bossStyles.barTrack}>
-        <Animated.View style={[bossStyles.barFill, { backgroundColor: accent }, barFillStyle]} />
+        <Animated.View style={[bossStyles.barFill, { backgroundColor: '#EF4444' }, hpStyle]} />
       </View>
     </View>
   );
@@ -500,10 +526,10 @@ const focusCircleStyles = StyleSheet.create({
 });
 
 const bossStyles = StyleSheet.create({
-  skills:   { flexDirection: 'row', gap: 10, marginBottom: 12 },
-  skill:    { width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: COLORS.border, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
-  barTrack: { width: 160, height: 10, borderRadius: 5, backgroundColor: COLORS.surface, overflow: 'hidden' },
-  barFill:  { height: 10, borderRadius: 5 },
+  ring:       { width: 60, height: 60, borderRadius: 30, borderWidth: 2.5, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  skillLabel: { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.ink, marginBottom: 12 },
+  barTrack:   { width: 160, height: 10, borderRadius: 5, backgroundColor: COLORS.surface, overflow: 'hidden' },
+  barFill:    { height: 10, borderRadius: 5 },
 });
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
