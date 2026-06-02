@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming,
+  useSharedValue, useAnimatedStyle, withSpring, withTiming, Easing,
 } from 'react-native-reanimated';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
@@ -31,53 +31,87 @@ export function ExerciseDemo({ kind, accent = '#22C55E', height = 180 }: Exercis
   );
 }
 
-// ── Schulte: 3×3 grid cycles through cells ────────────────────────────────────
+// ── Schulte: numbers scattered, tapped in ascending order 1→9 ─────────────────
+
+// Fixed scrambled layout: number shown at each of the 9 grid cells.
+const SCHULTE_LAYOUT = [3, 7, 1, 9, 5, 2, 8, 4, 6];
+const CELL_PITCH = 36; // 33px cell + 3px gap
 
 function DemoSchulte({ accent }: { accent: string }) {
-  const TOTAL = 9;
-  const [active, setActive] = useState(0);
-  const ORDER = [4, 0, 8, 2, 6, 1, 5, 3, 7];
+  // `next` is the number we should tap now (1..9), advancing in order.
+  const [next, setNext] = useState(1);
+  const pointerX = useSharedValue(0);
+  const pointerY = useSharedValue(0);
 
   useEffect(() => {
-    const id = setInterval(() => setActive(a => (a + 1) % TOTAL), 550);
+    const id = setInterval(() => setNext(n => (n % 9) + 1), 650);
     return () => clearInterval(id);
   }, []);
 
+  // Move the finger smoothly to the cell holding the next number.
+  const activeIdx = SCHULTE_LAYOUT.indexOf(next);
+  useEffect(() => {
+    const col = activeIdx % 3;
+    const row = Math.floor(activeIdx / 3);
+    const ease = { duration: 320, easing: Easing.out(Easing.cubic) };
+    pointerX.value = withTiming(col * CELL_PITCH, ease);
+    pointerY.value = withTiming(row * CELL_PITCH, ease);
+  }, [activeIdx]);
+
+  const pointerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: pointerX.value }, { translateY: pointerY.value }],
+  }));
+
   return (
     <View style={demoStyles.center}>
-      <View style={schulteStyles.eyeHint}>
-        <View style={[schulteStyles.eyeDot, { backgroundColor: accent }]} />
-        <Text style={schulteStyles.eyeLabel}>Ojo fijo aquí</Text>
+      <View style={schulteStyles.orderHint}>
+        <Text style={schulteStyles.orderLabel}>Toca en orden</Text>
+        <View style={[schulteStyles.orderBadge, { backgroundColor: accent }]}>
+          <Text style={schulteStyles.orderBadgeText}>1</Text>
+        </View>
+        <Text style={schulteStyles.orderArrow}>→</Text>
+        <View style={[schulteStyles.orderBadge, { backgroundColor: accent }]}>
+          <Text style={schulteStyles.orderBadgeText}>9</Text>
+        </View>
       </View>
       <View style={schulteStyles.grid}>
-        {ORDER.map((num, i) => {
-          const isActive = i === active;
+        {SCHULTE_LAYOUT.map((num, i) => {
+          const done = num < next;        // already tapped
+          const isNext = num === next;    // tap this one now
           return (
             <View
               key={i}
               style={[
                 schulteStyles.cell,
-                isActive && { backgroundColor: accent, borderColor: accent },
+                done && { backgroundColor: '#10B981', borderColor: '#059669' },
+                isNext && { backgroundColor: accent, borderColor: accent },
               ]}
             >
-              <Text style={[schulteStyles.cellText, isActive && { color: '#fff' }]}>
-                {num + 1}
+              <Text style={[
+                schulteStyles.cellText,
+                (done || isNext) && { color: '#fff' },
+              ]}>
+                {done ? '✓' : num}
               </Text>
             </View>
           );
         })}
+        <Animated.Text style={[schulteStyles.pointer, pointerStyle]}>👆</Animated.Text>
       </View>
     </View>
   );
 }
 
 const schulteStyles = StyleSheet.create({
-  eyeHint:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  eyeDot:   { width: 10, height: 10, borderRadius: 5 },
-  eyeLabel: { fontFamily: FONTS.headingSemi, fontSize: 9, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1 },
-  grid:     { flexDirection: 'row', flexWrap: 'wrap', width: 108, gap: 3 },
-  cell:     { width: 33, height: 33, borderRadius: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  cellText: { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
+  orderHint:      { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 10 },
+  orderLabel:     { fontFamily: FONTS.headingSemi, fontSize: 9, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1 },
+  orderBadge:     { width: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  orderBadgeText: { fontFamily: FONTS.heading, fontSize: 10, color: '#fff' },
+  orderArrow:     { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted },
+  grid:           { flexDirection: 'row', flexWrap: 'wrap', width: 108, gap: 3, position: 'relative' },
+  cell:           { width: 33, height: 33, borderRadius: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
+  cellText:       { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
+  pointer:        { position: 'absolute', left: 18, top: 16, fontSize: 18 },
 });
 
 // ── RSVP: words flash one by one ──────────────────────────────────────────────
@@ -355,14 +389,15 @@ function DemoReadingTest({ accent }: { accent: string }) {
       });
     }, 400);
 
-    scanY.value = withTiming(1, { duration: 1800 }, () => {
+    const scan = { duration: 1800, easing: Easing.inOut(Easing.quad) };
+    scanY.value = withTiming(1, scan, () => {
       scanY.value = 0;
-      scanY.value = withTiming(1, { duration: 1800 });
+      scanY.value = withTiming(1, scan);
     });
 
     const scanInterval = setInterval(() => {
       scanY.value = 0;
-      scanY.value = withTiming(1, { duration: 1800 });
+      scanY.value = withTiming(1, scan);
     }, 2000);
 
     return () => {
@@ -420,21 +455,22 @@ function DemoFocusCircle({ accent }: { accent: string }) {
   const opacity = useSharedValue(0.3);
 
   useEffect(() => {
-    scale.value = withTiming(1.2, { duration: 2000 }, () => {
-      scale.value = withTiming(0.4, { duration: 2000 });
+    const breathe = { duration: 2000, easing: Easing.inOut(Easing.ease) };
+    scale.value = withTiming(1.2, breathe, () => {
+      scale.value = withTiming(0.4, breathe);
     });
-    opacity.value = withTiming(0.8, { duration: 2000 }, () => {
-      opacity.value = withTiming(0.3, { duration: 2000 });
+    opacity.value = withTiming(0.8, breathe, () => {
+      opacity.value = withTiming(0.3, breathe);
     });
 
     const interval = setInterval(() => {
       scale.value = 0.4;
-      scale.value = withTiming(1.2, { duration: 2000 }, () => {
-        scale.value = withTiming(0.4, { duration: 2000 });
+      scale.value = withTiming(1.2, breathe, () => {
+        scale.value = withTiming(0.4, breathe);
       });
       opacity.value = 0.3;
-      opacity.value = withTiming(0.8, { duration: 2000 }, () => {
-        opacity.value = withTiming(0.3, { duration: 2000 });
+      opacity.value = withTiming(0.8, breathe, () => {
+        opacity.value = withTiming(0.3, breathe);
       });
     }, 4000);
 

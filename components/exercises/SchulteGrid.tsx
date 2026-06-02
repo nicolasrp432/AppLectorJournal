@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSequence, withTiming, withSpring, withRepeat, interpolateColor,
+  useSharedValue, useAnimatedStyle, withSequence, withTiming, Easing,
 } from 'react-native-reanimated';
 import { ExerciseTopBar } from './ExerciseTopBar';
 import { COLORS } from '../../constants/colors';
@@ -40,24 +40,14 @@ export function SchulteGrid({
   const [next, setNext] = useState(inverse ? total : 1);
   const [elapsed, setElapsed] = useState(0);
   const [errors, setErrors] = useState(0);
-  const [shakeId, setShakeId] = useState<number | null>(null);
+  const [wrongId, setWrongId] = useState<number | null>(null);
+  const [correctStreak, setCorrectStreak] = useState(0);
   const startTime = useRef(Date.now());
 
-  // Fever Mode Tracking
-  const lastCorrectTaps = useRef<number[]>([]);
-  const [feverActive, setFeverActive] = useState(false);
-
-  // Perfect Streak Tracking
-  const [correctStreak, setCorrectStreak] = useState(0);
+  // Soft, single-purpose feedback values
+  const flashOpacity = useSharedValue(0);
   const streakToastY = useSharedValue(-100);
   const streakToastOpacity = useSharedValue(0);
-
-  // Reanimated values for general game effects
-  const bgAnim = useSharedValue(0);
-  const flashOpacity = useSharedValue(0);
-  const gridShake = useSharedValue(0);
-  const feverScale = useSharedValue(0);
-  const feverRotation = useSharedValue(0);
 
   // Timer benchmark calculation (e.g. 5x5 is 50s)
   const benchmark = size === 3 ? 15 : size === 4 ? 30 : size === 5 ? 50 : 80;
@@ -67,77 +57,26 @@ export function SchulteGrid({
     return () => clearInterval(t);
   }, []);
 
-  // Background breathing animation
-  useEffect(() => {
-    bgAnim.value = withRepeat(
-      withTiming(1, { duration: 8000 }),
-      -1,
-      true
-    );
-  }, []);
-
-  // Fever Mode monitor (deactivates if no correct tap in 1.2s)
-  useEffect(() => {
-    if (!feverActive) return;
-    const interval = setInterval(() => {
-      const lastTap = lastCorrectTaps.current[lastCorrectTaps.current.length - 1];
-      if (lastTap && Date.now() - lastTap > 1200) {
-        setFeverActive(false);
-      }
-    }, 100);
-    return () => clearInterval(interval);
-  }, [feverActive]);
-
-  // Fever Badge scaling and rotation animations
-  useEffect(() => {
-    if (feverActive) {
-      feverScale.value = withSpring(1, { damping: 10, stiffness: 120 });
-      feverRotation.value = withRepeat(
-        withSequence(
-          withTiming(-6, { duration: 90 }),
-          withTiming(6, { duration: 90 })
-        ),
-        -1,
-        true
-      );
-    } else {
-      feverScale.value = withTiming(0, { duration: 150 });
-      feverRotation.value = withTiming(0, { duration: 150 });
-    }
-  }, [feverActive]);
-
   const triggerStreakToast = () => {
-    streakToastY.value = withTiming(20, { duration: 400 });
-    streakToastOpacity.value = withTiming(1, { duration: 400 });
-
+    const ease = { duration: 420, easing: Easing.out(Easing.cubic) };
+    streakToastY.value = withTiming(20, ease);
+    streakToastOpacity.value = withTiming(1, ease);
     setTimeout(() => {
-      streakToastY.value = withTiming(-100, { duration: 450 });
-      streakToastOpacity.value = withTiming(0, { duration: 450 });
-    }, 2000);
+      streakToastY.value = withTiming(-100, ease);
+      streakToastOpacity.value = withTiming(0, ease);
+    }, 1800);
   };
 
   const handleTap = (n: number) => {
     if (n === next) {
-      const now = Date.now();
-      const newTaps = [...lastCorrectTaps.current, now].slice(-3);
-      lastCorrectTaps.current = newTaps;
-
-      // Increment Streak
       setCorrectStreak(prev => {
         const nextStreak = prev + 1;
         if (nextStreak === 10) {
+          haptics.success();
           triggerStreakToast();
         }
         return nextStreak;
       });
-
-      // Check if 3 taps made in less than 1.2s
-      if (newTaps.length === 3 && now - newTaps[0] <= 1200) {
-        if (!feverActive) {
-          haptics.success(); // Extra punchy feel
-        }
-        setFeverActive(true);
-      }
 
       const isLast = inverse ? next === 1 : next === total;
       if (isLast) {
@@ -149,27 +88,16 @@ export function SchulteGrid({
     } else {
       haptics.error();
       setErrors(e => e + 1);
-      setShakeId(n);
-      setFeverActive(false); // Break fever mode
-      lastCorrectTaps.current = []; // Clear fever history
-      setCorrectStreak(0); // Reset streak
+      setWrongId(n);
+      setCorrectStreak(0);
 
-      // Error effects: whole grid shakes + red flash
-      gridShake.value = withSequence(
-        withTiming(-10, { duration: 60 }),
-        withTiming(10, { duration: 60 }),
-        withTiming(-7, { duration: 60 }),
-        withTiming(7, { duration: 60 }),
-        withTiming(-4, { duration: 60 }),
-        withTiming(0, { duration: 60 })
-      );
-
+      // Soft red screen tint — no jarring shake.
       flashOpacity.value = withSequence(
-        withTiming(0.18, { duration: 80 }),
-        withTiming(0, { duration: 250 })
+        withTiming(0.1, { duration: 120, easing: Easing.out(Easing.quad) }),
+        withTiming(0, { duration: 320, easing: Easing.in(Easing.quad) }),
       );
 
-      setTimeout(() => setShakeId(null), 300);
+      setTimeout(() => setWrongId(null), 360);
     }
   };
 
@@ -177,35 +105,8 @@ export function SchulteGrid({
   const fontSize = size === 3 ? 34 : size === 4 ? 28 : size === 5 ? 24 : size === 6 ? 20 : 16;
   const gridWidth = size * cellSize + (size - 1) * 8 + 28;
 
-  // Background styling
-  const animatedBgStyle = useAnimatedStyle(() => {
-    const backgroundColor = interpolateColor(
-      bgAnim.value,
-      [0, 1],
-      ['#FAF9FF', '#F0F7FF'] // Breathe between soft violet and soft blue
-    );
-    return { backgroundColor };
-  });
-
   const animatedFlashStyle = useAnimatedStyle(() => ({
     opacity: flashOpacity.value,
-  }));
-
-  const animatedGridStyle = useAnimatedStyle(() => {
-    const scale = feverActive ? withSpring(1.03, { damping: 10 }) : withSpring(1, { damping: 10 });
-    return {
-      transform: [{ translateX: gridShake.value }, { scale }],
-      borderColor: feverActive ? '#EC4899' : COLORS.border,
-      borderWidth: feverActive ? 2 : 0,
-      shadowColor: feverActive ? '#EC4899' : '#000',
-      shadowOpacity: feverActive ? 0.25 : 0.04,
-      shadowRadius: feverActive ? 25 : 20,
-    };
-  });
-
-  const feverBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: feverScale.value }, { rotate: `${feverRotation.value}deg` }],
-    opacity: feverScale.value,
   }));
 
   const animatedStreakToastStyle = useAnimatedStyle(() => ({
@@ -220,7 +121,7 @@ export function SchulteGrid({
     const halfSize = size / 2;
     const nextRow = Math.floor(nextIndex / size);
     const nextCol = nextIndex % size;
-    
+
     if (nextRow < halfSize && nextCol < halfSize) activeQuadrant = 0;
     else if (nextRow < halfSize && nextCol >= halfSize) activeQuadrant = 1;
     else if (nextRow >= halfSize && nextCol < halfSize) activeQuadrant = 2;
@@ -232,8 +133,8 @@ export function SchulteGrid({
   const progressText = inverse ? `${total - next}/${total}` : `${next - 1}/${total}`;
 
   return (
-    <Animated.View style={[styles.container, animatedBgStyle]}>
-      {/* Red screen flash for incorrect inputs */}
+    <View style={styles.container}>
+      {/* Soft red screen tint for incorrect inputs */}
       <Animated.View style={[styles.flashOverlay, animatedFlashStyle]} pointerEvents="none" />
 
       {/* Perfect Streak Toast */}
@@ -251,17 +152,12 @@ export function SchulteGrid({
 
       <View style={styles.targetRow}>
         <Text style={styles.targetLabel}>Busca</Text>
-        <View style={styles.targetNumberWrapper}>
-          <Text style={[styles.targetNumber, { color: accent }]}>{next}</Text>
-          <Animated.View style={[styles.feverBadge, feverBadgeStyle]}>
-            <Text style={styles.feverBadgeText}>🔥 FEVER</Text>
-          </Animated.View>
-        </View>
+        <Text style={[styles.targetNumber, { color: accent }]}>{next}</Text>
       </View>
 
       <View style={styles.gridWrapper}>
         <CircularTimer elapsed={elapsed} benchmark={benchmark} size={gridWidth + 24} strokeWidth={6}>
-          <Animated.View style={[styles.gridCard, { gap: 8 }, animatedGridStyle]}>
+          <View style={[styles.gridCard, { gap: 8 }]}>
             {Array.from({ length: size }, (_, row) => (
               <View key={row} style={{ flexDirection: 'row', gap: 8 }}>
                 {numbers.slice(row * size, (row + 1) * size).map((n) => (
@@ -269,12 +165,10 @@ export function SchulteGrid({
                     key={n}
                     n={n}
                     done={inverse ? n > next : n < next}
-                    shaking={shakeId === n}
+                    wrong={wrongId === n}
                     size={cellSize}
                     fontSize={fontSize}
-                    accent={accent}
                     onPress={() => handleTap(n)}
-                    feverActive={feverActive}
                   />
                 ))}
               </View>
@@ -292,150 +186,49 @@ export function SchulteGrid({
                 </View>
               </View>
             )}
-          </Animated.View>
+          </View>
         </CircularTimer>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
-function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActive }: {
-  n: number; done: boolean; shaking: boolean; size: number; fontSize: number; accent: string; onPress: () => void; feverActive: boolean;
+function GridCell({ n, done, wrong, size, fontSize, onPress }: {
+  n: number; done: boolean; wrong: boolean; size: number; fontSize: number; onPress: () => void;
 }) {
-  const tx = useSharedValue(0);
   const scale = useSharedValue(1);
+  const opacity = useSharedValue(1);
 
-  // Shockwave radial ripple Reanimated values
-  const rippleScale = useSharedValue(0);
-  const rippleOpacity = useSharedValue(0);
-
-  // Particle explosion Reanimated values
-  const p1x = useSharedValue(0); const p1y = useSharedValue(0);
-  const p2x = useSharedValue(0); const p2y = useSharedValue(0);
-  const p3x = useSharedValue(0); const p3y = useSharedValue(0);
-  const p4x = useSharedValue(0); const p4y = useSharedValue(0);
-  const pOpacity = useSharedValue(0);
-
-  // Dynamic cell border color rotation in Fever Mode
-  const borderPulse = useSharedValue(0);
-
-  useEffect(() => {
-    if (shaking) {
-      tx.value = withSequence(
-        withTiming(-12, { duration: 50 }),
-        withTiming(12, { duration: 50 }),
-        withTiming(-8, { duration: 50 }),
-        withTiming(8, { duration: 50 }),
-        withTiming(-4, { duration: 50 }),
-        withTiming(0, { duration: 50 }),
-      );
-    }
-  }, [shaking]);
-
-  useEffect(() => {
-    if (feverActive) {
-      borderPulse.value = withRepeat(
-        withTiming(1, { duration: 800 }),
-        -1,
-        true
-      );
-    } else {
-      borderPulse.value = withTiming(0, { duration: 200 });
-    }
-  }, [feverActive]);
-
-  const triggerTapEffects = () => {
-    // Elastic scale bounce to 0
-    scale.value = withSequence(
-      withSpring(0.8, { damping: 10, stiffness: 300 }),
-      withTiming(0, { duration: 200 })
-    );
-
-    // Shockwave ripple
-    rippleScale.value = 0.3;
-    rippleOpacity.value = 0.8;
-    rippleScale.value = withTiming(1.8, { duration: 380 });
-    rippleOpacity.value = withTiming(0, { duration: 380 });
-
-    // Shoot particle stars
-    pOpacity.value = 1;
-    p1x.value = 0; p1y.value = 0;
-    p2x.value = 0; p2y.value = 0;
-    p3x.value = 0; p3y.value = 0;
-    p4x.value = 0; p4y.value = 0;
-
-    const dist = size * 0.7;
-    p1x.value = withSpring(-dist, { damping: 10 });
-    p1y.value = withSpring(-dist, { damping: 10 });
-    p2x.value = withSpring(dist, { damping: 10 });
-    p2y.value = withSpring(-dist, { damping: 10 });
-    p3x.value = withSpring(-dist, { damping: 10 });
-    p3y.value = withSpring(dist, { damping: 10 });
-    p4x.value = withSpring(dist, { damping: 10 });
-    p4y.value = withSpring(dist, { damping: 10 });
-
-    pOpacity.value = withTiming(0, { duration: 380 });
-  };
-
+  // Correct tap → smooth fade + gentle scale-down so the number "settles" away.
   useEffect(() => {
     if (done) {
-      triggerTapEffects();
+      opacity.value = withTiming(0, { duration: 220, easing: Easing.out(Easing.quad) });
+      scale.value = withTiming(0.9, { duration: 220, easing: Easing.out(Easing.quad) });
     } else {
+      opacity.value = withTiming(1, { duration: 150 });
       scale.value = withTiming(1, { duration: 150 });
     }
   }, [done]);
 
-  const animatedCellProps = useAnimatedStyle(() => {
-    const bColor = feverActive
-      ? interpolateColor(borderPulse.value, [0, 1], ['#06B6D4', '#EC4899']) // Cyan to Pink
-      : shaking 
-        ? '#EF4444' 
-        : 'transparent';
+  // Wrong tap → soft scale pulse (no harsh shake).
+  useEffect(() => {
+    if (wrong) {
+      scale.value = withSequence(
+        withTiming(1.06, { duration: 110, easing: Easing.out(Easing.quad) }),
+        withTiming(1, { duration: 160, easing: Easing.inOut(Easing.quad) }),
+      );
+    }
+  }, [wrong]);
 
-    return {
-      transform: [{ translateX: tx.value }, { scale: scale.value }],
-      borderColor: bColor,
-      borderWidth: (feverActive || shaking) ? 2 : 0,
-      shadowColor: feverActive ? '#06B6D4' : 'transparent',
-      shadowOpacity: feverActive ? 0.3 : 0,
-      shadowRadius: feverActive ? 8 : 0,
-    };
-  });
-
-  const rippleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: rippleScale.value }],
-    opacity: rippleOpacity.value,
+  const animatedCellProps = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+    opacity: opacity.value,
+    borderColor: wrong ? '#EF4444' : 'transparent',
+    borderWidth: wrong ? 2 : 0,
   }));
-
-  // Particles positioning and styling
-  const pStyle1 = useAnimatedStyle(() => ({ transform: [{ translateX: p1x.value }, { translateY: p1y.value }], opacity: pOpacity.value }));
-  const pStyle2 = useAnimatedStyle(() => ({ transform: [{ translateX: p2x.value }, { translateY: p2y.value }], opacity: pOpacity.value }));
-  const pStyle3 = useAnimatedStyle(() => ({ transform: [{ translateX: p3x.value }, { translateY: p3y.value }], opacity: pOpacity.value }));
-  const pStyle4 = useAnimatedStyle(() => ({ transform: [{ translateX: p4x.value }, { translateY: p4y.value }], opacity: pOpacity.value }));
 
   return (
     <Animated.View style={[styles.cellWrapper, animatedCellProps]}>
-      {/* Dynamic shockwave background overlay */}
-      <Animated.View
-        style={[
-          styles.cellRipple,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: feverActive ? 'rgba(236,72,153,0.3)' : `${accent}35`,
-          },
-          rippleStyle,
-        ]}
-        pointerEvents="none"
-      />
-
-      {/* Explosive radial particles */}
-      <Animated.View style={[styles.starParticle, pStyle1, { backgroundColor: feverActive ? '#EC4899' : accent }]} pointerEvents="none" />
-      <Animated.View style={[styles.starParticle, pStyle2, { backgroundColor: feverActive ? '#06B6D4' : accent }]} pointerEvents="none" />
-      <Animated.View style={[styles.starParticle, pStyle3, { backgroundColor: feverActive ? '#3B82F6' : accent }]} pointerEvents="none" />
-      <Animated.View style={[styles.starParticle, pStyle4, { backgroundColor: feverActive ? '#EC4899' : accent }]} pointerEvents="none" />
-
       <Pressable
         onPress={onPress}
         disabled={done}
@@ -445,27 +238,11 @@ function GridCell({ n, done, shaking, size, fontSize, accent, onPress, feverActi
             width: size,
             height: size,
             borderRadius: 12,
-            backgroundColor: shaking 
-              ? '#FEE2E2' 
-              : done 
-                ? 'transparent' 
-                : COLORS.white,
+            backgroundColor: wrong ? '#FEE2E2' : done ? 'transparent' : COLORS.white,
           },
         ]}
       >
-        <Text
-          style={[
-            styles.cellText,
-            {
-              fontSize,
-              color: done 
-                ? 'transparent' // Completely vanished
-                : feverActive 
-                  ? '#4B5563' 
-                  : COLORS.ink,
-            },
-          ]}
-        >
+        <Text style={[styles.cellText, { fontSize, color: done ? 'transparent' : COLORS.ink }]}>
           {n}
         </Text>
       </Pressable>
@@ -477,7 +254,7 @@ function QuadrantGlow({ active, accent }: { active: boolean; accent: string }) {
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    opacity.value = withTiming(active ? 0.12 : 0, { duration: 300 });
+    opacity.value = withTiming(active ? 0.12 : 0, { duration: 300, easing: Easing.inOut(Easing.quad) });
   }, [active]);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -543,15 +320,10 @@ const styles = StyleSheet.create({
   pillLabel:   { fontFamily: FONTS.headingSemi, fontSize: 9, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
   targetRow:   { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
   targetLabel: { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1.5 },
-  targetNumberWrapper: { flexDirection: 'row', alignItems: 'center', position: 'relative' },
   targetNumber:{ fontFamily: FONTS.heading, fontSize: 56, lineHeight: 64 },
-  feverBadge:  { position: 'absolute', right: -70, top: 12, backgroundColor: '#EC4899', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 8, transform: [{ rotate: '5deg' }] },
-  feverBadgeText: { fontFamily: FONTS.heading, fontSize: 10, color: '#fff', letterSpacing: 0.5 },
   gridWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   gridCard:    { backgroundColor: COLORS.white, borderRadius: 24, padding: 14 },
   cellWrapper: { borderRadius: 12, position: 'relative', alignItems: 'center', justifyContent: 'center' },
   cell:        { alignItems: 'center', justifyContent: 'center' },
-  cellRipple:  { position: 'absolute', zIndex: 1 },
-  starParticle:{ position: 'absolute', width: 6, height: 6, borderRadius: 3, zIndex: 2 },
   cellText:    { fontFamily: FONTS.heading },
 });
