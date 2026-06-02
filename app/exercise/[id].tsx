@@ -326,7 +326,8 @@ export default function ExerciseScreen() {
         content = <FocusCircle accent={accent} onFinish={handleFinish} onQuit={quit} />;
         break;
       case 'schulte': {
-        const currentLevel = getProgress('schulte').current_level;
+        // Un nodo con nivel fijo manda; si no, usa el nivel adaptativo guardado.
+        const currentLevel = pinnedLevel ?? getProgress('schulte').current_level;
         content = (
           <SchulteGrid
             size={schulteSize}
