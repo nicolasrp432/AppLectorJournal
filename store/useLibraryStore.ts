@@ -8,16 +8,16 @@ import type { LibraryItem } from '../types/db';
 // Columnas "ligeras" para listar la biblioteca SIN traer `content` (que puede ser
 // un libro entero). El contenido se carga bajo demanda al abrir el lector.
 const LIST_COLUMNS =
-  'id,user_id,kind,title,author,words,progress,last_read_at,cover_color,source,created_at';
+  'id,user_id,kind,title,author,words,progress,last_read_at,cover_color,cover_url,source,created_at';
 
 // Primera página de la biblioteca; el resto se trae con fetchMore ("Cargar más").
 const PAGE_SIZE = 50;
 
 const DEFAULT_LIBRARY: LibraryItem[] = [
-  { id: 'l1', user_id: 'local', kind: 'book',  title: 'El cerebro lector',          author: 'S. Dehaene',  content: null, words: 95000,  progress: 0.34, last_read_at: null, cover_color: '#3B82F6', source: 'catalog', created_at: '' },
-  { id: 'l2', user_id: 'local', kind: 'book',  title: 'Atomic Habits',              author: 'J. Clear',    content: null, words: 70000,  progress: 0.78, last_read_at: null, cover_color: '#22C55E', source: 'catalog', created_at: '' },
-  { id: 'l3', user_id: 'local', kind: 'book',  title: 'Sapiens',                    author: 'Y. N. Harari', content: null, words: 130000, progress: 0.12, last_read_at: null, cover_color: '#F97316', source: 'catalog', created_at: '' },
-  { id: 'l4', user_id: 'local', kind: 'text',  title: 'Ensayo: Atención sostenida', author: 'Investigación 2024', content: null, words: 850, progress: 0, last_read_at: null, cover_color: '#8B5CF6', source: 'custom', created_at: '' },
+  { id: 'l1', user_id: 'local', kind: 'book',  title: 'El cerebro lector',          author: 'S. Dehaene',  content: null, words: 95000,  progress: 0.34, last_read_at: null, cover_color: '#3B82F6', cover_url: null, source: 'catalog', created_at: '' },
+  { id: 'l2', user_id: 'local', kind: 'book',  title: 'Atomic Habits',              author: 'J. Clear',    content: null, words: 70000,  progress: 0.78, last_read_at: null, cover_color: '#22C55E', cover_url: null, source: 'catalog', created_at: '' },
+  { id: 'l3', user_id: 'local', kind: 'book',  title: 'Sapiens',                    author: 'Y. N. Harari', content: null, words: 130000, progress: 0.12, last_read_at: null, cover_color: '#F97316', cover_url: null, source: 'catalog', created_at: '' },
+  { id: 'l4', user_id: 'local', kind: 'text',  title: 'Ensayo: Atención sostenida', author: 'Investigación 2024', content: null, words: 850, progress: 0, last_read_at: null, cover_color: '#8B5CF6', cover_url: null, source: 'custom', created_at: '' },
 ];
 
 interface LibraryState {
