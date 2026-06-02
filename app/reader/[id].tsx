@@ -15,6 +15,7 @@ import { useQuizCacheStore, QuizQuestion } from '../../store/useQuizCacheStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 import { simpleHash } from '../../lib/text';
 import { dedupe } from '../../lib/taskQueue';
+import { ensureQuizForText, quizSliceFromContent } from '../../lib/quiz';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -28,7 +29,7 @@ type ReadMode = 'rsvp' | 'scroll';
 const ACCENT = COLORS.swift;
 
 export default function ReaderScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, mode: entryMode } = useLocalSearchParams<{ id: string; mode?: string }>();
   const { get, update, ensureContent } = useLibraryStore();
   const { addXP } = useProfileStore();
   const prefs = usePrefsStore(s => s.prefs);
@@ -90,6 +91,27 @@ export default function ReaderScreen() {
     if (id) ensureContent(id);
   }, [id]);
 
+  // Modo solo-quiz: lanzar el quiz de comprensión sin leer primero (desde la
+  // biblioteca, ?mode=quiz). Espera a que el contenido esté cargado.
+  const quizOnlyStarted = useRef(false);
+  useEffect(() => {
+    if (entryMode !== 'quiz' || quizOnlyStarted.current || !book?.content) return;
+    quizOnlyStarted.current = true;
+    (async () => {
+      setLoadingQuiz(true);
+      setPhase('quiz');
+      try {
+        const qs = await ensureQuizForText(book.id, quizSliceFromContent(book.content), 3);
+        if (qs.length > 0) { setActiveQuiz(qs); setQIdx(0); setQuizScore(0); }
+        else { setPhase('setup'); }
+      } catch {
+        setPhase('setup');
+      } finally {
+        setLoadingQuiz(false);
+      }
+    })();
+  }, [entryMode, book?.content]);
+
   // Resume RSVP from saved progress position
   const resumeWordIdx = React.useMemo(
     () => Math.floor((book?.progress ?? 0) * words.length),
@@ -140,38 +162,16 @@ export default function ReaderScreen() {
     }
 
     if (book && sliceWords >= 40) {
-      const sliceHash = simpleHash(slice);
       setLoadingQuiz(true);
       setPhase('quiz');
-
       try {
-        const quizCacheStore = useQuizCacheStore.getState();
-        await quizCacheStore.fetchQuizzes(book.id);
-        const cached = quizCacheStore.getQuiz(book.id, sliceHash);
-
-        if (cached && cached.questions && cached.questions.length > 0) {
-          setActiveQuiz(cached.questions);
-          setQIdx(0);
-          setQuizScore(0);
-          setLoadingQuiz(false);
-          return;
-        }
-
-        // dedupe: si el mismo slice ya está generándose, comparte la promesa en
-        // vez de invocar Gemini dos veces.
-        const { data, error } = await dedupe(
-          `ai-questions:${book.id}:${sliceHash}`,
-          () => invokeEdgeFunction<{ questions: any[] }>('ai-questions', { text: slice, count: 3 }),
-        );
-
-        if (error) throw error;
-        if (data && data.questions && data.questions.length > 0) {
-          await quizCacheStore.insertQuiz(book.id, sliceHash, data.questions);
-          setActiveQuiz(data.questions);
+        const qs = await ensureQuizForText(book.id, slice, 3);
+        if (qs.length > 0) {
+          setActiveQuiz(qs);
           setQIdx(0);
           setQuizScore(0);
         } else {
-          throw new Error('No se pudieron generar preguntas de comprensión.');
+          completeSessionXP(progress, 0);
         }
       } catch (err: any) {
         console.warn('AI Quiz generation failed, bypassing to done phase:', err);

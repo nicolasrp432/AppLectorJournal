@@ -54,6 +54,7 @@ export interface LibraryItem {
   progress: number;
   last_read_at: string | null;
   cover_color: string;
+  cover_url: string | null;
   source: 'catalog' | 'custom' | 'imported';
   created_at: string;
 }
