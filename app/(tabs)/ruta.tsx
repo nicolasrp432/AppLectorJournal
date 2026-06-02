@@ -70,7 +70,7 @@ const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey
       { id: 'z1_comp',    kind: 'exercise', side: 'right',  label: 'Comprensión',    color: COLORS.joy,   exId: 'comprehension', level: 1 },
       { id: 'z1_comp2',   kind: 'exercise', side: 'left',   label: 'Comprensión+',   color: COLORS.joy,   exId: 'comprehension', level: 2 },
       { id: 'z1_reading2',kind: 'exercise', side: 'right',  label: 'Lectura 300',    color: COLORS.swift, exId: 'reading', level: 3 },
-      { id: 'z1_boss',    kind: 'boss',     side: 'center', label: 'Jefe de Zona',   color: COLORS.boss,  exId: 'boss' },
+      { id: 'z1_boss',    kind: 'boss',     side: 'center', label: 'Jefe de Zona',   color: COLORS.boss,  exId: 'boss', level: 1 },
     ],
   },
   {
@@ -86,7 +86,7 @@ const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey
       { id: 'z2_loci',   kind: 'exercise', side: 'left',   label: 'Loci 5',        color: COLORS.loci,  exId: 'loci', level: 1 },
       { id: 'z2_loci2',  kind: 'exercise', side: 'right',  label: 'Loci 6',        color: COLORS.loci,  exId: 'loci', level: 2 },
       { id: 'z2_loci3',  kind: 'exercise', side: 'left',   label: 'Loci 7',        color: COLORS.loci,  exId: 'loci', level: 3 },
-      { id: 'z2_boss',   kind: 'boss',     side: 'center', label: 'Jefe de Zona',  color: COLORS.boss,  exId: 'boss' },
+      { id: 'z2_boss',   kind: 'boss',     side: 'center', label: 'Jefe de Zona',  color: COLORS.boss,  exId: 'boss', level: 2 },
     ],
   },
   {
@@ -101,7 +101,7 @@ const ZONES: { title: string; subtitle: string; color: string; mascot: MascotKey
       { id: 'z3_f2',     kind: 'exercise', side: 'left',   label: '500 WPM',        color: COLORS.swift, exId: 'reading', level: 5 },
       { id: 'z3_comp3',  kind: 'exercise', side: 'right',  label: 'Comprensión',    color: COLORS.joy,   exId: 'comprehension', level: 3 },
       { id: 'z3_f3',     kind: 'exercise', side: 'left',   label: 'Lectura Veloz',  color: COLORS.swift, exId: 'reading', level: 5 },
-      { id: 'z3_boss',   kind: 'boss',     side: 'center', label: 'Jefe de Zona',   color: COLORS.boss,  exId: 'boss' },
+      { id: 'z3_boss',   kind: 'boss',     side: 'center', label: 'Jefe de Zona',   color: COLORS.boss,  exId: 'boss', level: 3 },
     ],
   },
 ];
