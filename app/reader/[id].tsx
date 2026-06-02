@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, Pressable, ScrollView, StyleSheet,
   NativeSyntheticEvent, NativeScrollEvent, ActivityIndicator,
+  FlatList, Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -24,9 +25,15 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 
 type ReaderPhase = 'setup' | 'reading' | 'quiz' | 'done';
-type ReadMode = 'rsvp' | 'scroll';
+type ReadMode = 'rsvp' | 'scroll' | 'page';
 
 const ACCENT = COLORS.swift;
+// RSVP (palabra a palabra) se limita para textos largos: leer un libro entero
+// así no es agradable y conviene proteger el rendimiento. Para libros está el
+// modo "Páginas".
+const RSVP_LIMIT = 2500;
+const PAGE_WORDS = 280; // palabras por página en el modo paginado
+const { width: PAGE_W } = Dimensions.get('window');
 
 export default function ReaderScreen() {
   const { id, mode: entryMode } = useLocalSearchParams<{ id: string; mode?: string }>();
@@ -65,6 +72,8 @@ export default function ReaderScreen() {
   const [wordIdx, setWordIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [scrollPct, setScrollPct] = useState(0);
+  const [pageIdx, setPageIdx] = useState(0);
+  const pageListRef = useRef<FlatList>(null);
   const [showBanner, setShowBanner] = useState(false);
   const [xpEarned, setXpEarned] = useState(0);
 
@@ -84,6 +93,26 @@ export default function ReaderScreen() {
     () => (book?.content ? book.content.split(/\s+/).filter(Boolean) : []),
     [book?.content],
   );
+
+  // RSVP limitado para textos largos (no rompe nada con libros enormes).
+  const rsvpWords = React.useMemo(() => words.slice(0, RSVP_LIMIT), [words]);
+
+  // Páginas para el modo "libro" (página a página).
+  const pages = React.useMemo(() => {
+    const out: string[] = [];
+    for (let i = 0; i < words.length; i += PAGE_WORDS) {
+      out.push(words.slice(i, i + PAGE_WORDS).join(' '));
+    }
+    return out.length ? out : [''];
+  }, [words]);
+
+  // Progreso unificado para los tres modos (0..1).
+  const computeProgress = () =>
+    mode === 'scroll'
+      ? scrollPct
+      : mode === 'page'
+        ? (pages.length > 0 ? Math.min(1, (pageIdx + 1) / pages.length) : 0)
+        : (rsvpWords.length > 0 ? Math.min(1, wordIdx / rsvpWords.length) : 0);
 
   // La lista de biblioteca ya no incluye `content` (puede ser un libro entero);
   // se carga bajo demanda al abrir el lector. Si ya está en memoria, es no-op.
@@ -123,14 +152,14 @@ export default function ReaderScreen() {
   // RSVP engine
   useEffect(() => {
     if (!playing || mode !== 'rsvp' || phase !== 'reading') return;
-    if (wordIdx >= words.length) {
+    if (wordIdx >= rsvpWords.length) {
       setPlaying(false);
       finishSession();
       return;
     }
     const t = setTimeout(() => setWordIdx(i => i + 1), msPerWord);
     return () => clearTimeout(t);
-  }, [wordIdx, playing, msPerWord, mode, words.length, phase]);
+  }, [wordIdx, playing, msPerWord, mode, rsvpWords.length, phase]);
 
   const getReadSlice = () => {
     if (!book?.content) return '';
@@ -138,18 +167,19 @@ export default function ReaderScreen() {
       const end = Math.floor(scrollPct * book.content.length);
       const start = Math.max(0, end - 3000); // last 3000 characters
       return book.content.substring(start, end).trim();
+    } else if (mode === 'page') {
+      const readWords = (pageIdx + 1) * PAGE_WORDS;
+      const start = Math.max(0, readWords - 500);
+      return words.slice(start, readWords).join(' ').trim();
     } else {
-      const totalWords = words.length;
-      const currentWordCount = Math.min(wordIdx, totalWords);
+      const currentWordCount = Math.min(wordIdx, rsvpWords.length);
       const start = Math.max(0, currentWordCount - 500);
-      return words.slice(start, currentWordCount).join(' ').trim();
+      return rsvpWords.slice(start, currentWordCount).join(' ').trim();
     }
   };
 
   const finishSession = async () => {
-    const progress = mode === 'scroll'
-      ? scrollPct
-      : (words.length > 0 ? Math.min(1, wordIdx / words.length) : 0);
+    const progress = computeProgress();
 
     const slice = getReadSlice();
     const sliceWords = slice.split(/\s+/).filter(Boolean).length;
@@ -212,10 +242,7 @@ export default function ReaderScreen() {
 
       if (qIdx + 1 >= activeQuiz.length) {
         const finalScore = quizScore + (isCorrect ? 1 : 0);
-        const progress = mode === 'scroll'
-          ? scrollPct
-          : (words.length > 0 ? Math.min(1, wordIdx / words.length) : 0);
-        completeSessionXP(progress, finalScore);
+        completeSessionXP(computeProgress(), finalScore);
       } else {
         setQIdx(idx => idx + 1);
       }
@@ -223,9 +250,7 @@ export default function ReaderScreen() {
   };
 
   const handleBack = () => {
-    const progress = mode === 'scroll'
-      ? scrollPct
-      : (words.length > 0 ? Math.min(1, wordIdx / words.length) : 0);
+    const progress = computeProgress();
     if (book?.id) {
       update(book.id, {
         progress,
@@ -239,8 +264,15 @@ export default function ReaderScreen() {
     startRef.current = Date.now();
     setWordIdx(resumeWordIdx);
     setScrollPct(book?.progress ?? 0);
+    setPageIdx(Math.min(pages.length - 1, Math.floor((book?.progress ?? 0) * pages.length)));
     setPhase('reading');
     if (mode === 'rsvp') setPlaying(true);
+  };
+
+  const goPage = (i: number) => {
+    const clamped = Math.max(0, Math.min(pages.length - 1, i));
+    setPageIdx(clamped);
+    pageListRef.current?.scrollToIndex({ index: clamped, animated: true });
   };
 
   const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -301,6 +333,7 @@ export default function ReaderScreen() {
               <View style={styles.modeRow}>
                 {([
                   { k: 'rsvp' as ReadMode,  label: 'RSVP',   desc: 'Palabra a palabra' },
+                  { k: 'page' as ReadMode,  label: 'Páginas', desc: 'Página a página' },
                   { k: 'scroll' as ReadMode, label: 'Scroll', desc: 'Texto completo' },
                 ]).map(m => (
                   <Pressable
@@ -313,6 +346,13 @@ export default function ReaderScreen() {
                   </Pressable>
                 ))}
               </View>
+
+              {words.length > RSVP_LIMIT && (
+                <Text style={styles.longTextHint}>
+                  Texto largo ({words.length.toLocaleString()} palabras). Para leerlo
+                  completo usa “Páginas”; “RSVP” se limita a {RSVP_LIMIT.toLocaleString()} palabras.
+                </Text>
+              )}
 
               {/* WPM stepper (only for RSVP) */}
               {mode === 'rsvp' && (
@@ -374,8 +414,8 @@ export default function ReaderScreen() {
 
   // ── Reading phase (RSVP) ─────────────────────────────────────────────────────
   if (phase === 'reading' && mode === 'rsvp') {
-    const currentWord = words[Math.min(wordIdx, words.length - 1)] ?? '';
-    const progress = words.length > 0 ? wordIdx / words.length : 0;
+    const currentWord = rsvpWords[Math.min(wordIdx, rsvpWords.length - 1)] ?? '';
+    const progress = rsvpWords.length > 0 ? wordIdx / rsvpWords.length : 0;
 
     return (
       <View style={styles.safe}>
@@ -403,7 +443,7 @@ export default function ReaderScreen() {
             </View>
             <View style={[styles.focusLine, { backgroundColor: ACCENT }]} />
           </View>
-          <Text style={styles.rsvpCounter}>{wordIdx}/{words.length}</Text>
+          <Text style={styles.rsvpCounter}>{wordIdx}/{rsvpWords.length}</Text>
         </View>
 
         {/* Controls */}
@@ -431,6 +471,89 @@ export default function ReaderScreen() {
               <Text style={[styles.wpmValue, { color: ACCENT }]}>{wpm}</Text>
               <Text style={styles.wpmUnit}>WPM</Text>
             </View>
+          </View>
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  // ── Reading phase (páginas, tipo libro) ──────────────────────────────────────
+  if (phase === 'reading' && mode === 'page') {
+    return (
+      <View style={styles.safe}>
+        <SafeAreaView edges={['top']} style={{ backgroundColor: COLORS.canvas }}>
+          <View style={styles.topBar}>
+            <Pressable onPress={handleBack} style={styles.backBtn} hitSlop={8}>
+              <Ionicons name="arrow-back" size={20} color={COLORS.ink} />
+            </Pressable>
+            <View style={{ flex: 1, paddingHorizontal: 12 }}>
+              <ProgressBar value={(pageIdx + 1) / pages.length} color={ACCENT} height={6} />
+            </View>
+            <Text style={styles.progressText}>{pageIdx + 1}/{pages.length}</Text>
+          </View>
+        </SafeAreaView>
+
+        <FlatList
+          ref={pageListRef}
+          style={{ flex: 1 }}
+          data={pages}
+          keyExtractor={(_, i) => String(i)}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={pageIdx}
+          getItemLayout={(_, i) => ({ length: PAGE_W, offset: PAGE_W * i, index: i })}
+          onScrollToIndexFailed={() => {}}
+          onMomentumScrollEnd={(e) => {
+            const i = Math.round(e.nativeEvent.contentOffset.x / PAGE_W);
+            if (i !== pageIdx) setPageIdx(Math.max(0, Math.min(pages.length - 1, i)));
+          }}
+          renderItem={({ item, index }) => (
+            <ScrollView
+              style={{ width: PAGE_W }}
+              contentContainerStyle={styles.pageContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {index === 0 && (
+                <>
+                  <Text style={styles.bookTitle}>{book.title}</Text>
+                  {book.author && <Text style={styles.bookAuthor}>{book.author}</Text>}
+                  <View style={styles.divider} />
+                </>
+              )}
+              <Text style={[styles.scrollText, { fontFamily: fontBg, fontSize, lineHeight, letterSpacing }]}>
+                {item}
+              </Text>
+              <View style={{ height: 24 }} />
+            </ScrollView>
+          )}
+        />
+
+        <SafeAreaView edges={['bottom']} style={{ backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.surface }}>
+          <View style={styles.pageNav}>
+            <Pressable
+              onPress={() => goPage(pageIdx - 1)}
+              disabled={pageIdx === 0}
+              style={[styles.pageNavBtn, pageIdx === 0 && { opacity: 0.35 }]}
+            >
+              <Ionicons name="chevron-back" size={22} color={COLORS.ink} />
+            </Pressable>
+
+            {pageIdx >= pages.length - 1 ? (
+              <View style={{ flex: 1 }}>
+                <PushButton color={ACCENT} onPress={finishSession}>Terminé de leer</PushButton>
+              </View>
+            ) : (
+              <Text style={styles.pageNavLabel}>Página {pageIdx + 1} de {pages.length}</Text>
+            )}
+
+            <Pressable
+              onPress={() => goPage(pageIdx + 1)}
+              disabled={pageIdx >= pages.length - 1}
+              style={[styles.pageNavBtn, pageIdx >= pages.length - 1 && { opacity: 0.35 }]}
+            >
+              <Ionicons name="chevron-forward" size={22} color={COLORS.ink} />
+            </Pressable>
           </View>
         </SafeAreaView>
       </View>
@@ -552,9 +675,7 @@ export default function ReaderScreen() {
   }
 
   // ── Done phase ───────────────────────────────────────────────────────────────
-  const readPct = mode === 'scroll'
-    ? Math.round(scrollPct * 100)
-    : (words.length > 0 ? Math.round(Math.min(1, wordIdx / words.length) * 100) : 0);
+  const readPct = Math.round(computeProgress() * 100);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -570,9 +691,10 @@ export default function ReaderScreen() {
           <StatCard label="Leído" value={`${readPct}%`} color={ACCENT} />
           <StatCard
             label="Palabras"
-            value={(mode === 'scroll'
-              ? Math.round(scrollPct * words.length)
-              : Math.min(wordIdx, words.length)
+            value={Math.round(
+              mode === 'scroll' ? scrollPct * words.length
+              : mode === 'page' ? Math.min(words.length, (pageIdx + 1) * PAGE_WORDS)
+              : Math.min(wordIdx, rsvpWords.length)
             ).toLocaleString()}
             color="#3B82F6"
           />
@@ -655,6 +777,11 @@ const styles = StyleSheet.create({
   scrollReadContent:{ padding: 24 },
   divider:          { height: 1, backgroundColor: COLORS.border, marginVertical: 20 },
   scrollText:       { fontFamily: FONTS.bodyLight, fontSize: 16, lineHeight: 28, color: '#1F2937' },
+  pageContent:      { padding: 24, paddingBottom: 16 },
+  pageNav:          { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingVertical: 12 },
+  pageNavBtn:       { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.surface },
+  pageNavLabel:     { flex: 1, textAlign: 'center', fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.muted },
+  longTextHint:     { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, marginTop: -2, marginBottom: 12, lineHeight: 17 },
 
   // Done
   doneScroll:       { padding: 24, alignItems: 'center' },
