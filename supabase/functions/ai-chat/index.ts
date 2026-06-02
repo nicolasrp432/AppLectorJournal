@@ -67,28 +67,26 @@ Instrucciones de respuesta y personalidad:
          }
        );
        if (!response.ok) {
-         throw new Error(`Model ${model} returned status ${response.status}`);
+         // Surface the real Gemini error body so the 500 is diagnosable
+         // (clave inválida / API no habilitada / modelo no disponible).
+         const detail = await response.text().catch(() => '');
+         throw new Error(`Model ${model} returned status ${response.status}: ${detail.slice(0, 300)}`);
        }
        return response;
      };
 
+     // Modelos vigentes (los gemini-1.5 están retirados). Se prueba en orden
+     // y se cae al siguiente si falla.
+     const MODELS = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-2.5-pro'];
      let response;
      let lastError;
-     try {
-       response = await tryModel('gemini-1.5-flash');
-     } catch (firstErr: any) {
-       lastError = firstErr;
-       console.warn('ai-chat edge: gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', firstErr);
+     for (const model of MODELS) {
        try {
-         response = await tryModel('gemini-2.0-flash');
-       } catch (secErr: any) {
-         lastError = secErr;
-         console.warn('ai-chat edge: gemini-2.0-flash failed, trying gemini-1.5-pro fallback:', secErr);
-         try {
-           response = await tryModel('gemini-1.5-pro');
-         } catch (thirdErr: any) {
-           lastError = thirdErr;
-         }
+         response = await tryModel(model);
+         break;
+       } catch (err: any) {
+         lastError = err;
+         console.warn(`ai-chat edge: ${model} failed, trying next fallback:`, err?.message || err);
        }
      }
 
