@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence,
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, Easing,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { ExerciseTopBar } from './ExerciseTopBar';
@@ -203,11 +203,12 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
     opacity.value = withTiming(1, { duration: 250 });
     rotateY.value = withSpring(0, { damping: 12, stiffness: 90 });
     
-    // Float loop
+    // Gentle float loop (eased so it glides instead of snapping at the ends)
+    const floatEase = Easing.inOut(Easing.sin);
     translateY.value = withRepeat(
       withSequence(
-        withTiming(-12, { duration: 1600 }),
-        withTiming(12, { duration: 1600 })
+        withTiming(-10, { duration: 1600, easing: floatEase }),
+        withTiming(10, { duration: 1600, easing: floatEase })
       ),
       -1,
       true
@@ -216,8 +217,8 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
     // Minor rotation float
     rotation.value = withRepeat(
       withSequence(
-        withTiming(-3, { duration: 1800 }),
-        withTiming(3, { duration: 1800 })
+        withTiming(-2.5, { duration: 1800, easing: floatEase }),
+        withTiming(2.5, { duration: 1800, easing: floatEase })
       ),
       -1,
       true
