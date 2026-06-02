@@ -17,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 import { AIChatbot } from '../../components/ui/AIChatbot';
 
 import { EXERCISES } from '../../constants/exercises';
+import { getLevel } from '../../constants/difficulty';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { adaptLevel } from '../../lib/adaptLevel';
@@ -70,8 +71,13 @@ interface BuiltResult {
 }
 
 export default function ExerciseScreen() {
-  const { id, nodeId, palaceId } = useLocalSearchParams<{ id: string; nodeId?: string; palaceId?: string }>();
+  const { id, nodeId, palaceId, level } = useLocalSearchParams<{ id: string; nodeId?: string; palaceId?: string; level?: string }>();
   const exerciseId = (id ?? 'schulte') as ExerciseId;
+  // Nivel fijo pasado por el nodo de la ruta (dificultad creciente). Si no viene,
+  // los ejercicios usan sus valores por defecto / el nivel adaptativo.
+  const pinnedLevel = level != null && level !== ''
+    ? Math.max(1, parseInt(String(level), 10) || 1)
+    : undefined;
   const exercise = EXERCISES[exerciseId];
   const [showAIChat, setShowAIChat] = useState(false);
   const touchStartY = useRef(0);
@@ -117,13 +123,19 @@ export default function ExerciseScreen() {
     fetchDailySessionsCount();
   }, []);
 
-  // Customizable parametric states for exercises
-  const [schulteSize, setSchulteSize] = useState<number>(5);
-  const [wordSpanCount, setWordSpanCount] = useState<number>(6);
-  const [wordSpanInterval, setWordSpanInterval] = useState<number>(1100);
-  const [lociCount, setLociCount] = useState<number>(5);
+  // Customizable parametric states for exercises. Cuando el nodo fija un nivel,
+  // se inicializan desde la tabla de dificultad (constants/difficulty.ts).
+  const [schulteSize, setSchulteSize] = useState<number>(
+    pinnedLevel ? getLevel('schulte', pinnedLevel).size : 5);
+  const [wordSpanCount, setWordSpanCount] = useState<number>(
+    pinnedLevel ? getLevel('wordspan', pinnedLevel).count : 6);
+  const [wordSpanInterval, setWordSpanInterval] = useState<number>(
+    pinnedLevel ? getLevel('wordspan', pinnedLevel).show_ms : 1100);
+  const [lociCount, setLociCount] = useState<number>(
+    pinnedLevel ? getLevel('loci', pinnedLevel).count : 5);
   const [lociStudyTime, setLociStudyTime] = useState<number>(4000);
-  const [readingWpm, setReadingWpm] = useState<number>(280);
+  const [readingWpm, setReadingWpm] = useState<number>(
+    pinnedLevel ? getLevel('reading', pinnedLevel).wpm : 280);
   const [readingMode, setReadingMode] = useState<'rsvp' | 'guide' | 'chunk'>('rsvp');
 
   if (!exercise) {
@@ -158,10 +170,15 @@ export default function ExerciseScreen() {
     const clampedScore = Math.max(0, Math.min(1, score as number));
 
     const adapt = adaptLevel(dbExerciseId, clampedScore, prog.current_level);
+    // Si el nodo fijó un nivel y se superó, el progreso refleja ese logro
+    // (nunca baja por debajo del nivel pinneado alcanzado).
+    const effectiveLevel = built.passed && pinnedLevel
+      ? Math.max(adapt.newLevel, pinnedLevel)
+      : adapt.newLevel;
 
     await insertSession({
       exercise_id: dbExerciseId as ExerciseId,
-      level: prog.current_level,
+      level: pinnedLevel ?? prog.current_level,
       started_at: null,
       finished_at: new Date().toISOString(),
       score: clampedScore,
@@ -173,7 +190,7 @@ export default function ExerciseScreen() {
     });
 
     await updateProgress(dbExerciseId as ExerciseId, {
-      current_level: adapt.newLevel,
+      current_level: effectiveLevel,
       best_score: Math.max(prog.best_score, clampedScore),
       last_score: clampedScore,
       total_sessions: prog.total_sessions + 1,

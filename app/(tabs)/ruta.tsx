@@ -49,6 +49,8 @@ interface ZoneNode {
   side:    NodeSide;
   label:   string;
   exId?:   ExerciseId;
+  /** Nivel de dificultad fijo del nodo (1..n). Si se omite, usa el nivel adaptativo. */
+  level?:  number;
   color:   string;
   locked?: boolean;
 }
@@ -1418,7 +1420,9 @@ function ExercisePreviewSheet({
   const handleStart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     onClose();
-    router.push(`/exercise/${node.exId}?nodeId=${node.id}` as Parameters<typeof router.push>[0]);
+    // El nodo puede fijar un nivel de dificultad; si no, el router usa el adaptativo.
+    const levelParam = node.level != null ? `&level=${node.level}` : '';
+    router.push(`/exercise/${node.exId}?nodeId=${node.id}${levelParam}` as Parameters<typeof router.push>[0]);
   };
 
   const getRecordLabel = () => {
