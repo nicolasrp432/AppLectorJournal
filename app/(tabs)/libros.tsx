@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -335,6 +339,35 @@ function BookFormModal({
   const [isLoading, setIsLoading] = useState(false);
   const [coverBusy, setCoverBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  // Secciones colapsadas por defecto para reducir la altura del sheet.
+  const [coverOpen, setCoverOpen]   = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
+
+  // Bottom sheet arrastrable: entra deslizando hacia arriba y se cierra
+  // deslizando hacia abajo, por la X, por tap en el fondo o botón atrás.
+  const SHEET_MAX = Math.min(SCREEN_HEIGHT * 0.9, 760);
+  const translateY = useSharedValue(SCREEN_HEIGHT);
+  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+
+  const handleClose = React.useCallback(() => {
+    translateY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (finished) => {
+      if (finished) runOnJS(onClose)();
+    });
+  }, [onClose]);
+
+  React.useEffect(() => {
+    translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
+  }, []);
+
+  const dragGesture = Gesture.Pan()
+    .onUpdate((e) => { translateY.value = Math.max(0, e.translationY); })
+    .onEnd((e) => {
+      if (e.translationY > 120 || e.velocityY > 800) {
+        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (f) => { if (f) runOnJS(onClose)(); });
+      } else {
+        translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
+      }
+    });
 
   // Si editamos y aún no está el contenido en memoria, cárgalo.
   React.useEffect(() => {
@@ -427,87 +460,150 @@ function BookFormModal({
   };
 
   return (
-    <View style={styles.modal}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}>
-        <View style={styles.modalSheet}>
-          <Text style={styles.modalTitle}>{isEdit ? 'Editar texto' : 'Agregar libro o documento'}</Text>
+    <Modal transparent visible animationType="fade" onRequestClose={handleClose}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={{ flex: 1, justifyContent: 'flex-end' }}
+      >
+        <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
 
-          {/* Portada */}
-          <View style={styles.coverRow}>
-            <View style={[styles.coverPreview, { backgroundColor: coverColor }]}>
-              {coverBusy
-                ? <ActivityIndicator color="#fff" />
-                : coverUrl
-                  ? <Image source={{ uri: coverUrl }} style={styles.coverImg} resizeMode="cover" />
-                  : <Text style={styles.coverInitial}>{(title[0] || '?').toUpperCase()}</Text>}
+        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX }, sheetStyle]}>
+          {/* Handle arrastrable (deslizar abajo para cerrar) */}
+          <GestureDetector gesture={dragGesture}>
+            <View style={styles.dragZone}>
+              <View style={styles.dragHandle} />
             </View>
-            <View style={{ flex: 1, gap: 8 }}>
-              <Pressable onPress={handlePickImage} style={styles.coverBtn}>
-                <Ionicons name="image-outline" size={16} color={COLORS.focus} />
-                <Text style={styles.coverBtnText}>Elegir imagen</Text>
-              </Pressable>
-              <Pressable onPress={handleSearchCover} style={styles.coverBtn}>
-                <Ionicons name="search-outline" size={16} color={COLORS.focus} />
-                <Text style={styles.coverBtnText}>Buscar por título</Text>
-              </Pressable>
-              {coverUrl && (
-                <Pressable onPress={() => setCoverUrl(null)} style={styles.coverBtn}>
-                  <Ionicons name="close-circle-outline" size={16} color={COLORS.muted} />
-                  <Text style={[styles.coverBtnText, { color: COLORS.muted }]}>Quitar portada</Text>
-                </Pressable>
-              )}
-            </View>
+          </GestureDetector>
+
+          {/* Cabecera con X */}
+          <View style={styles.formHeader}>
+            <Text style={styles.modalTitle}>{isEdit ? 'Editar texto' : 'Agregar libro o documento'}</Text>
+            <Pressable onPress={handleClose} hitSlop={10} style={styles.closeBtn}>
+              <Ionicons name="close" size={22} color={COLORS.muted} />
+            </Pressable>
           </View>
 
-          <Pressable onPress={handlePickFile} disabled={isLoading} style={[styles.uploadBtn, isLoading && { opacity: 0.7 }]}>
-            <Ionicons name="document-attach-outline" size={20} color={COLORS.focus} />
-            <Text style={styles.uploadBtnText}>Subir archivo (PDF o TXT)</Text>
-          </Pressable>
+          <ScrollView
+            style={{ flexGrow: 0 }}
+            contentContainerStyle={{ paddingBottom: 8 }}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Campos principales siempre visibles */}
+            <Text style={styles.fieldLabel}>Título *</Text>
+            <TextInput
+              style={styles.input}
+              value={title}
+              onChangeText={setTitle}
+              placeholder="Nombre del libro o documento"
+              placeholderTextColor={COLORS.subtle}
+            />
+            <View style={{ height: 12 }} />
+            <Text style={styles.fieldLabel}>Autor / Origen</Text>
+            <TextInput
+              style={styles.input}
+              value={author}
+              onChangeText={setAuthor}
+              placeholder="Opcional"
+              placeholderTextColor={COLORS.subtle}
+            />
+            <View style={{ height: 12 }} />
+            <Text style={styles.fieldLabel}>Texto o contenido</Text>
+            <TextInput
+              style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
+              value={content}
+              onChangeText={setContent}
+              placeholder="Pega aquí el contenido o súbelo en “Subir archivo”…"
+              placeholderTextColor={COLORS.subtle}
+              multiline
+            />
+            <View style={{ height: 14 }} />
 
-          {isLoading && (
-            <View style={styles.uploadingContainer}>
-              <ActivityIndicator color={COLORS.focus} size="small" />
-              <Text style={styles.uploadingText}>Procesando con Inteligencia Artificial...</Text>
-            </View>
-          )}
-          {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
-
-          {[
-            { label: 'Título *', value: title, setter: setTitle, placeholder: 'Nombre del libro o documento' },
-            { label: 'Autor / Origen', value: author, setter: setAuthor, placeholder: 'Opcional' },
-            { label: 'URL de portada', value: coverUrl ?? '', setter: (v: string) => setCoverUrl(v || null), placeholder: 'https://… (opcional)' },
-          ].map(f => (
-            <View key={f.label} style={{ marginBottom: 12 }}>
-              <Text style={styles.fieldLabel}>{f.label}</Text>
+            {/* Sección colapsable: Portada */}
+            <Collapsible title="Portada" icon="image-outline" open={coverOpen} onToggle={() => setCoverOpen(o => !o)}>
+              <View style={styles.coverRow}>
+                <View style={[styles.coverPreview, { backgroundColor: coverColor }]}>
+                  {coverBusy
+                    ? <ActivityIndicator color="#fff" />
+                    : coverUrl
+                      ? <Image source={{ uri: coverUrl }} style={styles.coverImg} resizeMode="cover" />
+                      : <Text style={styles.coverInitial}>{(title[0] || '?').toUpperCase()}</Text>}
+                </View>
+                <View style={{ flex: 1, gap: 8 }}>
+                  <Pressable onPress={handlePickImage} style={styles.coverBtn}>
+                    <Ionicons name="image-outline" size={16} color={COLORS.focus} />
+                    <Text style={styles.coverBtnText}>Elegir imagen</Text>
+                  </Pressable>
+                  <Pressable onPress={handleSearchCover} style={styles.coverBtn}>
+                    <Ionicons name="search-outline" size={16} color={COLORS.focus} />
+                    <Text style={styles.coverBtnText}>Buscar por título</Text>
+                  </Pressable>
+                  {coverUrl && (
+                    <Pressable onPress={() => setCoverUrl(null)} style={styles.coverBtn}>
+                      <Ionicons name="close-circle-outline" size={16} color={COLORS.muted} />
+                      <Text style={[styles.coverBtnText, { color: COLORS.muted }]}>Quitar portada</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+              <Text style={[styles.fieldLabel, { marginTop: 4 }]}>URL de portada</Text>
               <TextInput
                 style={styles.input}
-                value={f.value}
-                onChangeText={f.setter}
-                placeholder={f.placeholder}
+                value={coverUrl ?? ''}
+                onChangeText={(v) => setCoverUrl(v || null)}
+                placeholder="https://… (opcional)"
                 placeholderTextColor={COLORS.subtle}
                 autoCapitalize="none"
               />
-            </View>
-          ))}
-          <Text style={styles.fieldLabel}>Texto o contenido</Text>
-          <TextInput
-            style={[styles.input, { height: 100, textAlignVertical: 'top' }]}
-            value={content}
-            onChangeText={setContent}
-            placeholder="Pega aquí el contenido o súbelo usando el botón de arriba…"
-            placeholderTextColor={COLORS.subtle}
-            multiline
-          />
-          <View style={{ height: 16 }} />
-          <PushButton color={COLORS.focus} onPress={handleSubmit} disabled={isLoading || !title.trim()}>
-            {isEdit ? 'Guardar cambios' : 'Agregar a biblioteca'}
-          </PushButton>
-          <View style={{ height: 8 }} />
-          <Pressable onPress={onClose} style={{ alignItems: 'center', paddingVertical: 8 }}>
-            <Text style={{ fontFamily: FONTS.body, color: COLORS.muted }}>Cancelar</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+            </Collapsible>
+
+            {/* Sección colapsable: Subir archivo */}
+            <Collapsible title="Subir archivo (PDF o TXT)" icon="document-attach-outline" open={uploadOpen} onToggle={() => setUploadOpen(o => !o)}>
+              <Pressable onPress={handlePickFile} disabled={isLoading} style={[styles.uploadBtn, isLoading && { opacity: 0.7 }]}>
+                <Ionicons name="document-attach-outline" size={20} color={COLORS.focus} />
+                <Text style={styles.uploadBtnText}>Elegir archivo</Text>
+              </Pressable>
+              {isLoading && (
+                <View style={styles.uploadingContainer}>
+                  <ActivityIndicator color={COLORS.focus} size="small" />
+                  <Text style={styles.uploadingText}>Procesando con Inteligencia Artificial...</Text>
+                </View>
+              )}
+            </Collapsible>
+
+            {errorMsg ? <Text style={styles.errorText}>{errorMsg}</Text> : null}
+
+            <View style={{ height: 8 }} />
+            <PushButton color={COLORS.focus} onPress={handleSubmit} disabled={isLoading || !title.trim()}>
+              {isEdit ? 'Guardar cambios' : 'Agregar a biblioteca'}
+            </PushButton>
+            <View style={{ height: 8 }} />
+            <Pressable onPress={handleClose} style={{ alignItems: 'center', paddingVertical: 8 }}>
+              <Text style={{ fontFamily: FONTS.body, color: COLORS.muted }}>Cancelar</Text>
+            </Pressable>
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+// Sección colapsable (toggle) para acortar el formulario.
+function Collapsible({ title, icon, open, onToggle, children }: {
+  title: string;
+  icon: any;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <View style={styles.collapsible}>
+      <Pressable onPress={onToggle} style={styles.collapsibleHeader}>
+        <Ionicons name={icon} size={18} color={COLORS.focus} />
+        <Text style={styles.collapsibleTitle}>{title}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={18} color={COLORS.muted} style={{ marginLeft: 'auto' }} />
+      </Pressable>
+      {open && <View style={styles.collapsibleBody}>{children}</View>}
     </View>
   );
 }
@@ -570,9 +666,16 @@ const styles = StyleSheet.create({
   sheetItemText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.ink },
 
   // Modal form
-  modal:      { position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' } as any,
-  modalSheet: { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 24, paddingBottom: 40 },
-  modalTitle: { fontFamily: FONTS.heading, fontSize: 20, color: COLORS.ink, marginBottom: 16 },
+  modalTitle: { fontFamily: FONTS.heading, fontSize: 20, color: COLORS.ink },
+  formSheet:  { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 28 },
+  dragZone:   { alignItems: 'center', paddingVertical: 8 },
+  dragHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.15)' },
+  formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
+  closeBtn:   { padding: 4 },
+  collapsible:       { borderWidth: 1, borderColor: COLORS.border, borderRadius: 14, marginBottom: 12, overflow: 'hidden' },
+  collapsibleHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 14 },
+  collapsibleTitle:  { fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.ink },
+  collapsibleBody:   { paddingHorizontal: 14, paddingBottom: 14, gap: 8 },
   coverRow:   { flexDirection: 'row', gap: 14, marginBottom: 16, alignItems: 'center' },
   coverPreview: { width: 72, height: 96, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   coverBtn:   { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: COLORS.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10 },
