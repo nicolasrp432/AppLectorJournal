@@ -9,6 +9,22 @@ import type { LibraryItem } from '../types/db';
 // un libro entero). El contenido se carga bajo demanda al abrir el lector.
 const LIST_COLUMNS =
   'id,user_id,kind,title,author,words,progress,last_read_at,cover_color,cover_url,source,created_at';
+// Sin `cover_url`, para entornos donde aún no se aplicó la migración 008 (la
+// columna no existe). Evita que el listado falle con 400 en bucle.
+const LIST_COLUMNS_BASE =
+  'id,user_id,kind,title,author,words,progress,last_read_at,cover_color,source,created_at';
+
+// Ejecuta el SELECT con cover_url y, si la columna no existe todavía, reintenta
+// sin ella. Devuelve las filas o null.
+async function selectLibraryPage(
+  build: (cols: string) => PromiseLike<{ data: any; error: any }>,
+): Promise<LibraryItem[] | null> {
+  let res = await build(LIST_COLUMNS);
+  if (res.error && /cover_url/i.test(res.error.message || '')) {
+    res = await build(LIST_COLUMNS_BASE);
+  }
+  return (res.data as LibraryItem[]) ?? null;
+}
 
 // Primera página de la biblioteca; el resto se trae con fetchMore ("Cargar más").
 const PAGE_SIZE = 50;
@@ -95,12 +111,14 @@ export const useLibraryStore = create<LibraryState>()(
         // Primera página, lista ligera (sin `content`), más recientes primero.
         // Preservamos el `content` que ya tengamos en memoria/AsyncStorage para no
         // perder la lectura offline ni re-descargar libros.
-        const { data } = await supabase
-          .from('library_items')
-          .select(LIST_COLUMNS)
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .range(0, PAGE_SIZE - 1);
+        const data = await selectLibraryPage((cols) =>
+          supabase
+            .from('library_items')
+            .select(cols)
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .range(0, PAGE_SIZE - 1),
+        );
         if (data) {
           const prev = new Map(get().items.map(b => [b.id, b]));
           set({
@@ -124,13 +142,15 @@ export const useLibraryStore = create<LibraryState>()(
 
         set({ isLoadingMore: true });
         try {
-          const { data } = await supabase
-            .from('library_items')
-            .select(LIST_COLUMNS)
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .lt('created_at', oldest)
-            .range(0, PAGE_SIZE - 1);
+          const data = await selectLibraryPage((cols) =>
+            supabase
+              .from('library_items')
+              .select(cols)
+              .eq('user_id', userId)
+              .order('created_at', { ascending: false })
+              .lt('created_at', oldest)
+              .range(0, PAGE_SIZE - 1),
+          );
           if (data) {
             const existingIds = new Set(get().items.map(b => b.id));
             const fresh = (data as LibraryItem[])
