@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming, runOnJS } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal, KeyboardAvoidingView, Platform, Dimensions, Animated, PanResponder } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -343,31 +342,40 @@ function BookFormModal({
   const [coverOpen, setCoverOpen]   = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  // Bottom sheet arrastrable: entra deslizando hacia arriba y se cierra
-  // deslizando hacia abajo, por la X, por tap en el fondo o botón atrás.
+  // Bottom sheet arrastrable (RN Animated + PanResponder; compatible con web,
+  // sin worklets de Reanimated). Entra deslizando hacia arriba y se cierra
+  // deslizando hacia abajo por el handle, por la X, por tap en el fondo o atrás.
   const SHEET_MAX = Math.min(SCREEN_HEIGHT * 0.9, 760);
-  const translateY = useSharedValue(SCREEN_HEIGHT);
-  const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: translateY.value }] }));
+  const translateY = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const onCloseRef = React.useRef(onClose);
+  onCloseRef.current = onClose;
 
   const handleClose = React.useCallback(() => {
-    translateY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (finished) => {
-      if (finished) runOnJS(onClose)();
-    });
-  }, [onClose]);
+    Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: USE_NATIVE_DRIVER })
+      .start(() => onCloseRef.current());
+  }, [translateY]);
 
   React.useEffect(() => {
-    translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
+    Animated.spring(translateY, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, speed: 14, bounciness: 4 }).start();
   }, []);
 
-  const dragGesture = Gesture.Pan()
-    .onUpdate((e) => { translateY.value = Math.max(0, e.translationY); })
-    .onEnd((e) => {
-      if (e.translationY > 120 || e.velocityY > 800) {
-        translateY.value = withTiming(SCREEN_HEIGHT, { duration: 220 }, (f) => { if (f) runOnJS(onClose)(); });
-      } else {
-        translateY.value = withSpring(0, { damping: 18, stiffness: 120 });
-      }
-    });
+  // El PanResponder se adjunta SOLO al handle superior (no a todo el sheet),
+  // para no robarle el scroll al formulario.
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4,
+      onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 120 || g.vy > 0.8) {
+          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: USE_NATIVE_DRIVER })
+            .start(() => onCloseRef.current());
+        } else {
+          Animated.spring(translateY, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, speed: 14, bounciness: 4 }).start();
+        }
+      },
+    })
+  ).current;
 
   // Si editamos y aún no está el contenido en memoria, cárgalo.
   React.useEffect(() => {
@@ -467,13 +475,11 @@ function BookFormModal({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
 
-        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX }, sheetStyle]}>
+        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX, transform: [{ translateY }] }]}>
           {/* Handle arrastrable (deslizar abajo para cerrar) */}
-          <GestureDetector gesture={dragGesture}>
-            <View style={styles.dragZone}>
-              <View style={styles.dragHandle} />
-            </View>
-          </GestureDetector>
+          <View style={styles.dragZone} {...panResponder.panHandlers}>
+            <View style={styles.dragHandle} />
+          </View>
 
           {/* Cabecera con X */}
           <View style={styles.formHeader}>
