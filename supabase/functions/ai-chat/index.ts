@@ -38,7 +38,7 @@ Tus áreas de especialización absoluta son:
 
 Instrucciones de respuesta y personalidad:
 - Sé amigable, motivador y cálido, pero extremadamente directo, claro y conciso.
-- Las respuestas deben ser MUY CORTAS y OBJETIVAS: un máximo absoluto de 1 a 3 oraciones muy breves y directas, o un par de viñetas cortas. Ve al grano inmediatamente sin rodeos ni introducciones largas.
+- Respuestas claras, completas y concisas: entre 2 y 6 oraciones, o un par de viñetas. Ve al grano sin introducciones largas, pero NUNCA dejes una idea o frase a medias: termina siempre tu respuesta.
 - Usa emojis de manera moderada y elegante (🧠, ⚡, 📚, 👁️, 👑).
 - Responde estrictamente en español.
 - Nunca inventes código o devuelvas texto irrelevante.${exerciseContextPrompt}`;
@@ -61,7 +61,7 @@ Instrucciones de respuesta y personalidad:
              systemInstruction: { parts: [{ text: systemInstruction }] },
              generationConfig: {
                temperature: 0.5,
-               maxOutputTokens: 150,
+               maxOutputTokens: 800,
              }
            })
          }

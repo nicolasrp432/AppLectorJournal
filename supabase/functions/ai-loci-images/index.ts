@@ -101,47 +101,70 @@ Responde con un JSON válido.`
       });
     }
 
-    // Now, call Google Imagen 3 (imagen-3.0-generate-002:predict)
+    const imagePrompt = `A vibrant, detailed digital art illustration depicting a whimsical and surreal scene in a ${room.toLowerCase()}: ${description}. High quality, colorful, playful 3D render feel, clean design, no text.`;
     let imageBase64 = null;
+    let imageMime = "image/png";
+
+    // 1) "Nano Banana" = Gemini 2.5 Flash Image: generación nativa de imágenes,
+    //    mejor calidad. Devuelve la imagen como inlineData base64.
     try {
-      const imagePrompt = `A vibrant, detailed digital art illustration depicting a whimsical and surreal scene in a ${room.toLowerCase()}: ${description}. High quality, colorful, 3d render feel, clean design.`;
-      
-      const imageResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+      const nb = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            instances: [
-              {
-                prompt: imagePrompt
-              }
-            ],
-            parameters: {
-              sampleCount: 1,
-              aspectRatio: "1:1",
-              outputMimeType: "image/png"
-            }
-          })
+            contents: [{ parts: [{ text: imagePrompt }] }],
+            generationConfig: { responseModalities: ["IMAGE"] },
+          }),
         }
       );
-
-      if (imageResponse.ok) {
-        const imageData = await imageResponse.json();
-        imageBase64 = imageData.predictions?.[0]?.bytesBase64Encoded || null;
+      if (nb.ok) {
+        const nbData = await nb.json();
+        const parts = nbData.candidates?.[0]?.content?.parts || [];
+        const imgPart = parts.find((p: any) => p.inlineData?.data || p.inline_data?.data);
+        const inline = imgPart?.inlineData || imgPart?.inline_data;
+        if (inline?.data) {
+          imageBase64 = inline.data;
+          imageMime = inline.mimeType || inline.mime_type || "image/png";
+        }
       } else {
-        const errDetails = await imageResponse.text();
-        console.warn(`Imagen 3 API returned error status ${imageResponse.status}:`, errDetails);
+        console.warn(`Nano Banana returned ${nb.status}:`, (await nb.text()).slice(0, 300));
       }
-    } catch (imageErr) {
-      console.warn("Failed to generate image via Google Imagen 3:", imageErr);
+    } catch (e) {
+      console.warn("Nano Banana (gemini-2.5-flash-image) failed:", e);
+    }
+
+    // 2) Respaldo: Imagen 3 (por si el modelo de imagen no está disponible).
+    if (!imageBase64) {
+      try {
+        const imageResponse = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              instances: [{ prompt: imagePrompt }],
+              parameters: { sampleCount: 1, aspectRatio: "1:1", outputMimeType: "image/png" },
+            }),
+          }
+        );
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json();
+          imageBase64 = imageData.predictions?.[0]?.bytesBase64Encoded || null;
+        } else {
+          console.warn(`Imagen 3 returned ${imageResponse.status}:`, (await imageResponse.text()).slice(0, 300));
+        }
+      } catch (imageErr) {
+        console.warn("Imagen 3 fallback failed:", imageErr);
+      }
     }
 
     // Prepare a response structure compatible with both old and new clients
     const responsePayload = {
       description,
       imageBase64,
-      mimeType: "image/png",
+      mimeType: imageMime,
       descriptions: [
         {
           item: itemWord,
