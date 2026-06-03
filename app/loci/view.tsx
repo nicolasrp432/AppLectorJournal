@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLociStore, UserMemoryPalace } from '../../store/useLociStore';
+import { invokeEdgeFunction } from '../../lib/supabase';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
 import { COLORS } from '../../constants/colors';
@@ -15,13 +16,48 @@ import { FONTS } from '../../constants/typography';
 const { width } = Dimensions.get('window');
 
 export default function LociViewScreen() {
-  const { palaces, fetchPalaces, deletePalace, isLoading } = useLociStore();
+  const { palaces, fetchPalaces, deletePalace, updateMemoryImage, isLoading } = useLociStore();
   const [selectedPalace, setSelectedPalace] = useState<UserMemoryPalace | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [generatingImg, setGeneratingImg] = useState(false);
+  const attemptedRef = React.useRef<Set<string>>(new Set());
 
   useEffect(() => {
     fetchPalaces();
   }, []);
+
+  // El palacio en estado actual (re-derivado del store para ver imágenes nuevas).
+  const livePalace = selectedPalace ? palaces.find(p => p.id === selectedPalace.id) ?? selectedPalace : null;
+
+  // Genera la imagen del locus que se está viendo, UNA A UNA (bajo demanda) con
+  // Nano Banana, para no exceder la cuota. La persiste al terminar.
+  useEffect(() => {
+    const mem = livePalace?.memories[activeSlide];
+    if (!livePalace || !mem || mem.image_url) return;
+    if (attemptedRef.current.has(mem.id)) return;
+    attemptedRef.current.add(mem.id);
+
+    let active = true;
+    (async () => {
+      setGeneratingImg(true);
+      try {
+        const { data } = await invokeEdgeFunction<{ imageBase64?: string; mimeType?: string }>('ai-loci-images', {
+          room: mem.room,
+          items: [mem.item],
+          hook: mem.story,
+        });
+        if (active && data?.imageBase64) {
+          const uri = `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`;
+          await updateMemoryImage(livePalace.id, mem.id, uri);
+        }
+      } catch (e) {
+        console.warn('Loci image gen failed:', e);
+      } finally {
+        if (active) setGeneratingImg(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [livePalace?.id, activeSlide]);
 
   const handleLaunchPalaceRecall = (palaceId: string) => {
     router.push({
@@ -126,39 +162,46 @@ export default function LociViewScreen() {
       )}
 
       {/* SELECTED PALACE SLIDESHOW WALKTHROUGH */}
-      {!isLoading && selectedPalace && (
+      {!isLoading && livePalace && (
         <View style={{ flex: 1 }}>
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={styles.walkthroughScroll}
             showsVerticalScrollIndicator={false}
           >
             {/* Slide Carousel Card */}
             <View style={styles.slideCard}>
               <View style={styles.slideImgBox}>
-                {selectedPalace.memories[activeSlide]?.image_url ? (
-                  <Image 
-                    source={{ uri: selectedPalace.memories[activeSlide].image_url }} 
-                    style={styles.slideImg} 
+                {livePalace.memories[activeSlide]?.image_url ? (
+                  <Image
+                    source={{ uri: livePalace.memories[activeSlide].image_url }}
+                    style={styles.slideImg}
                   />
                 ) : (
                   <View style={styles.slideImgPlaceholder}>
-                    <Ionicons name="image-outline" size={48} color={COLORS.subtle} />
+                    {generatingImg ? (
+                      <>
+                        <ActivityIndicator color={COLORS.loci} size="large" />
+                        <Text style={styles.genImgText}>Creando imagen con IA…</Text>
+                      </>
+                    ) : (
+                      <Ionicons name="image-outline" size={48} color={COLORS.subtle} />
+                    )}
                   </View>
                 )}
                 <View style={styles.slideRoomBadge}>
-                  <Text style={styles.slideRoomText}>Locus {activeSlide + 1}: {selectedPalace.memories[activeSlide]?.room}</Text>
+                  <Text style={styles.slideRoomText}>Locus {activeSlide + 1}: {livePalace.memories[activeSlide]?.room}</Text>
                 </View>
               </View>
 
               <View style={styles.slideInfo}>
-                <Text style={styles.slideConcept}>{selectedPalace.memories[activeSlide]?.item}</Text>
-                <Text style={styles.slideStory}>{selectedPalace.memories[activeSlide]?.story}</Text>
+                <Text style={styles.slideConcept}>{livePalace.memories[activeSlide]?.item}</Text>
+                <Text style={styles.slideStory}>{livePalace.memories[activeSlide]?.story}</Text>
               </View>
             </View>
 
             {/* Slide indicators / selectors */}
             <View style={styles.indicatorsRow}>
-              {selectedPalace.memories.map((_, idx) => (
+              {livePalace.memories.map((_, idx) => (
                 <Pressable
                   key={idx}
                   onPress={() => setActiveSlide(idx)}
@@ -179,9 +222,9 @@ export default function LociViewScreen() {
               </Pressable>
 
               <Pressable
-                onPress={() => setActiveSlide(s => Math.min(selectedPalace.memories.length - 1, s + 1))}
-                disabled={activeSlide === selectedPalace.memories.length - 1}
-                style={[styles.slideNavBtn, activeSlide === selectedPalace.memories.length - 1 && { opacity: 0.4 }]}
+                onPress={() => setActiveSlide(s => Math.min(livePalace.memories.length - 1, s + 1))}
+                disabled={activeSlide === livePalace.memories.length - 1}
+                style={[styles.slideNavBtn, activeSlide === livePalace.memories.length - 1 && { opacity: 0.4 }]}
               >
                 <Text style={styles.navBtnText}>Siguiente</Text>
                 <Ionicons name="chevron-forward" size={24} color={COLORS.ink} />
@@ -189,9 +232,9 @@ export default function LociViewScreen() {
             </View>
 
             <View style={{ height: 24 }} />
-            <PushButton 
-              color={COLORS.loci} 
-              onPress={() => handleLaunchPalaceRecall(selectedPalace.id)}
+            <PushButton
+              color={COLORS.loci}
+              onPress={() => handleLaunchPalaceRecall(livePalace.id)}
             >
               Comenzar Test de Recuerdo
             </PushButton>
@@ -238,7 +281,8 @@ const styles = StyleSheet.create({
   slideCard:        { backgroundColor: COLORS.white, borderRadius: 24, borderWidth: 1.5, borderColor: COLORS.border, overflow: 'hidden' },
   slideImgBox:      { width: '100%', height: width - 48, position: 'relative' },
   slideImg:         { width: '100%', height: '100%' },
-  slideImgPlaceholder: { width: '100%', height: '100%', backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center' },
+  slideImgPlaceholder: { width: '100%', height: '100%', backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  genImgText:       { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
   slideRoomBadge:   { position: 'absolute', bottom: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
   slideRoomText:    { fontFamily: FONTS.headingSemi, fontSize: 11, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.8 },
   

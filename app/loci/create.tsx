@@ -92,63 +92,22 @@ export default function LociCreateScreen() {
 
   const handleConfirmConcepts = async () => {
     setStep('generating');
-    setCurrentGenIndex(0);
-    const finalMemories: typeof memoriesWithImages = [];
-
-    for (let i = 0; i < generatedConcepts.length; i++) {
-      const item = generatedConcepts[i];
-      setCurrentGenIndex(i);
-      setLoadingText(`Pintando con Google Imagen 3:\nHabitación ${i + 1} de ${generatedConcepts.length} (${item.room})`);
-
-      let base64Image: string | undefined = undefined;
-
-      try {
-        const { data, error } = await invokeEdgeFunction<{ imageBase64: string; mimeType?: string }>('ai-loci-images', {
-          room: item.room,
-          items: [item.concept],
-          hook: item.story,
-        });
-
-        if (!error && data && data.imageBase64) {
-          base64Image = `data:${data.mimeType || 'image/png'};base64,${data.imageBase64}`;
-        }
-      } catch (err) {
-        console.warn(`Imagen generation failed for ${item.room}:`, err);
-      }
-
-      // Fallback robusto con imágenes espectaculares de Unsplash si falla la IA o CORS
-      if (!base64Image) {
-        const randomUnsplashSeed = (item.room.length + item.concept.length) % 10;
-        const premiumFallbacks = [
-          'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1618005198143-d3667cd6f29e?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1564186763535-ebb21ef5277f?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1533827436517-5782748b430b?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1527489377706-5bf97e608852?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1603006905003-be475563bc59?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1524661135-423995f22d0b?w=600&auto=format&fit=crop&q=80',
-          'https://images.unsplash.com/photo-1517256064527-09c53b2d0bc6?w=600&auto=format&fit=crop&q=80'
-        ];
-        base64Image = premiumFallbacks[randomUnsplashSeed];
-      }
-
-      finalMemories.push({
-        room: item.room,
-        concept: item.concept,
-        story: item.story,
-        image_url: base64Image
-      });
-    }
-
-    // Save locally and in Supabase
     setLoadingText('Consolidando tu Palacio Mental...');
-    const palace = await createPalace(topic, theme, finalMemories.map(m => ({
+
+    // No generamos las imágenes aquí: hacerlo de golpe (5 a la vez) excede la
+    // cuota. Se generan UNA A UNA con Nano Banana al ver cada locus en el visor.
+    const finalMemories = generatedConcepts.map(item => ({
+      room: item.room,
+      concept: item.concept,
+      story: item.story,
+      image_url: undefined as string | undefined,
+    }));
+
+    await createPalace(topic, theme, finalMemories.map(m => ({
       room: m.room,
       item: m.concept,
       story: m.story,
-      image_url: m.image_url
+      image_url: m.image_url,
     })));
 
     setMemoriesWithImages(finalMemories);
@@ -239,10 +198,7 @@ export default function LociCreateScreen() {
           <ActivityIndicator color={COLORS.loci} size="large" style={{ marginTop: 24 }} />
           <Text style={styles.loadingTitle}>{loadingText}</Text>
           {step === 'generating' && (
-            <View style={{ width: '80%', marginTop: 20 }}>
-              <ProgressBar value={(currentGenIndex + 1) / generatedConcepts.length} color={COLORS.loci} height={8} />
-              <Text style={styles.progressCounter}>Habitación {currentGenIndex + 1} de {generatedConcepts.length}</Text>
-            </View>
+            <Text style={styles.progressCounter}>Las imágenes se crearán al visitar cada locus.</Text>
           )}
         </View>
       )}

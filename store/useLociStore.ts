@@ -28,6 +28,7 @@ interface LociStoreState {
   createPalace: (topic: string, theme: 'casa' | 'oficina' | 'naturaleza' | 'cuerpo' | 'mano' | 'custom', memories: Omit<LociMemoryItem, 'id' | 'palace_id'>[]) => Promise<UserMemoryPalace | null>;
   getPalace: (id: string) => UserMemoryPalace | undefined;
   deletePalace: (id: string) => Promise<void>;
+  updateMemoryImage: (palaceId: string, memoryId: string, imageUrl: string) => Promise<void>;
   reset: () => void;
 }
 
@@ -206,6 +207,23 @@ export const useLociStore = create<LociStoreState>()(
           }
         } catch (err) {
           console.warn('Error deleting palace from Supabase:', err);
+        }
+      },
+
+      // Persiste la imagen de UN locus (generación bajo demanda en el visor).
+      updateMemoryImage: async (palaceId, memoryId, imageUrl) => {
+        set(state => ({
+          palaces: state.palaces.map(p => p.id === palaceId
+            ? { ...p, memories: p.memories.map(m => m.id === memoryId ? { ...m, image_url: imageUrl } : m) }
+            : p),
+        }));
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await supabase.from('loci_memories').update({ image_url: imageUrl }).eq('id', memoryId);
+          }
+        } catch (err) {
+          console.warn('Could not persist loci image to Supabase:', err);
         }
       },
     }),
