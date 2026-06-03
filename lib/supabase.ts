@@ -91,9 +91,25 @@ export async function invokeEdgeFunction<T = any>(
     });
 
     if (!response.ok) {
+      // Propaga el motivo real del fallo (cuerpo del edge function) para poder
+      // diagnosticar (clave inválida, API no habilitada, modelo no disponible…)
+      // en vez de un genérico "estado 500".
+      let detail = '';
+      try {
+        const raw = await response.text();
+        try {
+          const body = JSON.parse(raw);
+          const d = body?.error?.message ?? body?.error ?? body?.message ?? raw;
+          detail = typeof d === 'string' ? d : JSON.stringify(d);
+        } catch {
+          detail = raw;
+        }
+      } catch { /* sin cuerpo legible */ }
       return {
         data: null,
-        error: new Error(`Edge Function falló con estado ${response.status}`),
+        error: new Error(
+          `Edge Function falló con estado ${response.status}${detail ? `: ${detail.slice(0, 400)}` : ''}`,
+        ),
       };
     }
 
