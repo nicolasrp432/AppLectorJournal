@@ -104,13 +104,10 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
 
   const handleNextPhase = () => {
     readTimeRef.current = (Date.now() - readStart.current) / 1000;
-    
-    // 3D book page flip transition sequence
-    pageRotation.value = withTiming(-90, { duration: 320 }, () => {
-      runOnJS(startQuizPhase)();
-      pageRotation.value = 90;
-      pageRotation.value = withSpring(0, { damping: 14 });
-    });
+    // Transición directa al quiz. (Antes había un volteo 3D con rotateY +
+    // backfaceVisibility:'hidden' que en web dejaba la tarjeta "de canto" =
+    // invisible → pantalla en blanco al pasar al quiz.)
+    startQuizPhase();
   };
 
   const handlePick = (i: number) => {
@@ -167,14 +164,8 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
   };
 
   // Reanimated Styles
-  const flipCardStyle = useAnimatedStyle(() => ({
-    transform: [
-      { perspective: 1200 },
-      { rotateY: `${pageRotation.value}deg` },
-    ],
-    backfaceVisibility: 'hidden',
-    flex: 1,
-  }));
+  // (Se eliminó el volteo 3D: causaba pantalla en blanco en web.)
+  const flipCardStyle = { flex: 1 } as const;
 
   const rulerStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: rulerY.value }],
