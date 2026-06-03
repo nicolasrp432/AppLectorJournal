@@ -83,25 +83,20 @@ export const useRewardsStore = create<RewardsState>()(
               .in('reward_id', rewardsOfType)
               .then(({ error: resetErr }) => {
                 if (resetErr) console.warn('[useRewardsStore] Reset equipped error:', resetErr);
-                
-                // 2. Set equipped = true for newly equipped reward
-                supabase.from('owned_rewards')
-                  .update({ equipped: true })
-                  .eq('user_id', userId)
-                  .eq('reward_id', rewardId)
-                  .then(({ error: updateErr }) => {
-                    if (updateErr) {
-                      // If not present in DB (e.g. was local buy), upsert it as equipped
-                      supabase.from('owned_rewards').upsert({
-                        user_id: userId,
-                        reward_id: rewardId,
-                        equipped: true,
-                        acquired_at: new Date().toISOString(),
-                      }).then(({ error: upsertErr }) => {
-                        if (upsertErr) console.error('[useRewardsStore] Sync equipped failed:', upsertErr);
-                      });
-                    }
-                  });
+
+                // 2. Upsert (crear o actualizar) la recompensa como equipada.
+                //    Antes se usaba .update(), que sobre una fila inexistente
+                //    afecta 0 filas SIN devolver error, por lo que el upsert de
+                //    respaldo nunca corría: la compra (tema/avatar/etc.) jamás se
+                //    guardaba en owned_rewards y se perdía al refrescar/cerrar sesión.
+                supabase.from('owned_rewards').upsert({
+                  user_id: userId,
+                  reward_id: rewardId,
+                  equipped: true,
+                  acquired_at: new Date().toISOString(),
+                }, { onConflict: 'user_id,reward_id' }).then(({ error: upsertErr }) => {
+                  if (upsertErr) console.error('[useRewardsStore] Sync equipped failed:', upsertErr);
+                });
               });
           }
         });
