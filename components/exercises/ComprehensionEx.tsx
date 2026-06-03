@@ -50,35 +50,31 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
   }, [passage.text]);
 
   const [activeSentence, setActiveSentence] = useState(0);
+  const [aiTried, setAiTried] = useState(false);
 
-  useEffect(() => {
-    let active = true;
-    async function loadAIQuestions() {
-      setIsLoadingAI(true);
-      try {
-        const { data, error } = await dedupe(
-          `ai-questions:${simpleHash(basePassage.text)}`,
-          () => invokeEdgeFunction<{ questions: any[] }>('ai-questions', { text: basePassage.text, count: 3 }),
-        );
-
-        if (error || !data) {
-          throw error || new Error('Respuesta de Edge Function vacía');
-        }
-        if (active && data && data.questions && data.questions.length > 0) {
-          setPassage({
-            ...basePassage,
-            questions: data.questions
-          });
-        }
-      } catch (err) {
-        console.warn('Could not load dynamic AI questions, using pre-defined:', err);
-      } finally {
-        if (active) setIsLoadingAI(false);
+  // Las preguntas vienen PRECARGADAS con el pasaje (constants/passages). La IA es
+  // OPCIONAL: solo se generan preguntas nuevas si el usuario lo pide con el botón.
+  const regenerateWithAI = async () => {
+    if (isLoadingAI) return;
+    setIsLoadingAI(true);
+    setAiTried(true);
+    try {
+      const { data, error } = await dedupe(
+        `ai-questions:${simpleHash(basePassage.text)}`,
+        () => invokeEdgeFunction<{ questions: any[] }>('ai-questions', { text: basePassage.text, count: 3 }),
+      );
+      if (error || !data) throw error || new Error('Respuesta de Edge Function vacía');
+      if (data.questions && data.questions.length > 0) {
+        setPassage({ ...basePassage, questions: data.questions });
+        setQIdx(0);
+        setAnswers([]);
       }
+    } catch (err) {
+      console.warn('No se pudieron generar preguntas con IA; se mantienen las precargadas:', err);
+    } finally {
+      setIsLoadingAI(false);
     }
-    loadAIQuestions();
-    return () => { active = false; };
-  }, [basePassage]);
+  };
   
   const startTime = useRef(Date.now());
   const readStart = useRef(Date.now());
@@ -204,13 +200,15 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
                 {isLoadingAI ? (
                   <View style={styles.aiBadgeLoading}>
                     <ActivityIndicator size="small" color={accent} style={{ marginRight: 6 }} />
-                    <Text style={styles.aiBadgeText}>Generando preguntas con IA...</Text>
+                    <Text style={styles.aiBadgeText}>Generando preguntas con IA…</Text>
                   </View>
                 ) : (
-                  <View style={styles.aiBadge}>
+                  <Pressable onPress={regenerateWithAI} style={styles.aiBadge}>
                     <Ionicons name="sparkles" size={10} color="#8B5CF6" style={{ marginRight: 4 }} />
-                    <Text style={[styles.aiBadgeText, { color: '#8B5CF6' }]}>Preguntas Dinámicas con Gemini Flash</Text>
-                  </View>
+                    <Text style={[styles.aiBadgeText, { color: '#8B5CF6' }]}>
+                      {aiTried ? 'Regenerar preguntas con IA' : 'Preguntas listas · Generar con IA (opcional)'}
+                    </Text>
+                  </Pressable>
                 )}
               </View>
 
