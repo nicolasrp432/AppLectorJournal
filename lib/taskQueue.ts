@@ -155,6 +155,16 @@ async function applyMutation(m: Mutation): Promise<{ ok: boolean; retry: boolean
     }
     const { error } = await query;
     if (error) {
+      // Resiliencia: si falla porque una columna aún no existe en el remoto
+      // (p.ej. `cover_url` sin la migración 008), reintenta la MISMA mutación
+      // sin ese campo en vez de descartarla. Así los inserts/updates de la
+      // biblioteca se sincronizan con o sin migración (la portada queda en
+      // local hasta aplicarla). Evita el "mutación descartada" y perder libros.
+      const msg = (error as any).message || '';
+      if (/cover_url/i.test(msg) && m.payload && 'cover_url' in m.payload) {
+        const { cover_url, ...rest } = m.payload;
+        return applyMutation({ ...m, payload: rest });
+      }
       // Errores de validación/permiso (4xx lógicos) no se resuelven reintentando.
       const status = (error as any).code;
       const permanent = typeof status === 'string' && /^(22|23|42)/.test(status);

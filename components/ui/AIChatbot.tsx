@@ -312,14 +312,14 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
 
         let result;
         try {
-          result = await tryModel('gemini-1.5-flash');
+          result = await tryModel('gemini-2.5-flash');
         } catch (firstErr) {
-          console.warn('gemini-1.5-flash failed, trying gemini-2.0-flash fallback:', firstErr);
+          console.warn('gemini-2.5-flash failed, trying gemini-2.0-flash fallback:', firstErr);
           try {
             result = await tryModel('gemini-2.0-flash');
           } catch (secErr) {
-            console.warn('gemini-2.0-flash failed, trying gemini-1.5-pro fallback:', secErr);
-            result = await tryModel('gemini-1.5-pro');
+            console.warn('gemini-2.0-flash failed, trying gemini-2.5-pro fallback:', secErr);
+            result = await tryModel('gemini-2.5-pro');
           }
         }
 
@@ -340,16 +340,22 @@ export function AIChatbot({ mode = 'embedded', exerciseId, onClose }: AIChatbotP
         }
       } catch (fallbackErr: any) {
         console.warn('Fallback failed too:', fallbackErr);
-        const errMessage = fallbackErr?.message || '';
-        const isKeyIssue = /not configured|no configurada|expired|API key|API_KEY_INVALID|GEMINI_API_KEY/i.test(errMessage);
+        // `err` es el error del edge function (ahora con el motivo real de Gemini);
+        // `fallbackErr` es el de la llamada directa. Mostramos el motivo para
+        // poder diagnosticar en vez de un mensaje genérico.
+        const edgeMsg = (err as any)?.message || '';
+        const fbMsg = fallbackErr?.message || '';
+        const combined = `${edgeMsg} ${fbMsg}`;
+        const isKeyIssue = /not configured|no configurada|expired|API key|API_KEY_INVALID|GEMINI_API_KEY|PERMISSION_DENIED|403|invalid/i.test(combined);
+        const reason = edgeMsg.replace(/^Edge Function falló con estado \d+:?\s*/i, '').trim();
         setMessages((prev) => [
           ...prev,
           {
             id: Math.random().toString(),
             role: 'assistant',
             text: isKeyIssue
-              ? '🔑 Error de configuración: falta o no es válida la clave de Gemini. Configúrala como secreto de Supabase (GEMINI_API_KEY, para las Edge Functions) y/o como variable del cliente (EXPO_PUBLIC_GEMINI_API_KEY en el entorno de despliegue) con una clave válida de Google AI Studio. 🧠⚡'
-              : '¡Hola! Estoy experimentando una micro-desconexión en mis sinapsis digitales. Revisa tu conexión a internet e inténtalo de nuevo en unos momentos. 🧠⚡',
+              ? `🔑 Error de configuración de la IA: la clave de Gemini falta, expiró o la API "Generative Language" no está habilitada. Pon GEMINI_API_KEY como secreto en Supabase y ejecuta "supabase functions deploy ai-chat".${reason ? `\n\nDetalle del servidor: ${reason}` : ''} 🧠`
+              : `La IA no pudo responder ahora mismo.${reason ? ` Motivo del servidor: ${reason}` : ' Revisa tu conexión e inténtalo de nuevo.'} 🧠⚡`,
           },
         ]);
         triggerHaptic('warning');

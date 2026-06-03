@@ -108,23 +108,15 @@ export const useNotificationStore = create<NotificationState>()(
                 read: false,
               };
 
-              const { data: inserted, error: insertError } = await supabase
-                .from('notifications')
-                .insert(welcomeNotif)
-                .select()
-                .single();
-
-              if (!insertError && inserted) {
-                set({ notifications: [inserted as NotificationItem] });
-              } else {
-                // Local fallback
-                const fallbackNotif: NotificationItem = {
-                  ...welcomeNotif,
-                  id: 'welcome_auth_fallback',
-                  created_at: new Date().toISOString(),
-                };
-                set({ notifications: [fallbackNotif] });
-              }
+              // La tabla `notifications` no tiene policy de INSERT (por diseño),
+              // así que insertar el welcome desde el cliente SIEMPRE daba 403.
+              // Lo creamos solo en local para no producir ese error en consola.
+              const fallbackNotif: NotificationItem = {
+                ...welcomeNotif,
+                id: 'welcome_auth_fallback',
+                created_at: new Date().toISOString(),
+              };
+              set({ notifications: [fallbackNotif] });
             } else {
               set({ notifications: data as NotificationItem[] });
             }
