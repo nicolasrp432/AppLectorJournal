@@ -12,7 +12,7 @@ serve(async (req) => {
 
   try {
     const { text } = await req.json();
-    const apiKey = Deno.env.get('GEMINI_API_KEY');
+    const apiKey = (Deno.env.get('GEMINI_API_KEY') || Deno.env.get('EXPO_PUBLIC_GEMINI_API_KEY'))?.trim().replace(/^["']|["']$/g, "");
 
     if (!apiKey) {
       return new Response(JSON.stringify({ error: "GEMINI_API_KEY is not set." }), {
