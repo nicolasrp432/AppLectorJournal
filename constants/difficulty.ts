@@ -62,3 +62,29 @@ export function getLevel<T extends keyof typeof DIFFICULTY>(
   const idx  = Math.max(0, Math.min(list.length - 1, level - 1));
   return list[idx] as (typeof DIFFICULTY)[T][number];
 }
+
+/**
+ * Umbrales de adaptación por ejercicio. `up`: a partir de qué score (0–1) un
+ * intento cuenta como "bueno"; `down`: por debajo de qué score cuenta como
+ * "pobre". El motor (`lib/adaptLevel.ts`) exige confirmación (dos resultados
+ * consecutivos o mastery alto) antes de cambiar de nivel, evitando saltos por
+ * suerte y bajadas por un único mal día. Cada ejercicio se afina por separado
+ * porque su "score" significa cosas distintas.
+ */
+export interface AdaptThreshold { up: number; down: number }
+
+export const DEFAULT_ADAPT_THRESHOLD: AdaptThreshold = { up: 0.85, down: 0.55 };
+
+export const ADAPT_THRESHOLDS: Record<string, AdaptThreshold> = {
+  schulte:       { up: 0.85, down: 0.55 },
+  wordspan:      { up: 0.85, down: 0.50 },
+  loci:          { up: 0.80, down: 0.45 }, // la memoria espacial es exigente: más indulgente al bajar
+  comprehension: { up: 0.80, down: 0.50 },
+  reading:       { up: 0.90, down: 0.60 },
+  boss:          { up: 0.85, down: 0.55 },
+  freereading:   { up: 0.75, down: 0.50 },
+};
+
+export function thresholdsFor(exId: string): AdaptThreshold {
+  return ADAPT_THRESHOLDS[exId] ?? DEFAULT_ADAPT_THRESHOLD;
+}

@@ -169,7 +169,13 @@ export default function ExerciseScreen() {
     const score = built.passed ? (raw.comprehension ?? (raw.correct && raw.total ? raw.correct / raw.total : 0.9)) : 0.4;
     const clampedScore = Math.max(0, Math.min(1, score as number));
 
-    const adapt = adaptLevel(dbExerciseId, clampedScore, prog.current_level);
+    const adapt = adaptLevel(
+      dbExerciseId as ExerciseId,
+      clampedScore,
+      prog.current_level,
+      prog.mastery,
+      prog.last_score,
+    );
     // Si el nodo fijó un nivel y se superó, el progreso refleja ese logro
     // (nunca baja por debajo del nivel pinneado alcanzado).
     const effectiveLevel = built.passed && pinnedLevel
@@ -194,7 +200,7 @@ export default function ExerciseScreen() {
       best_score: Math.max(prog.best_score, clampedScore),
       last_score: clampedScore,
       total_sessions: prog.total_sessions + 1,
-      mastery: Math.min(1, Math.max(0, prog.mastery + adapt.masteryDelta)),
+      mastery: adapt.newMastery,
     });
 
     await addXP(built.xpEarned);

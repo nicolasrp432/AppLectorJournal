@@ -91,6 +91,7 @@ const ROOM_ASPECTS: Record<string, { emoji: string; colors: [string, string]; bo
 
 interface Props {
   count?: number;
+  /** @deprecated La fase de estudio es ahora autoguiada; ya no se auto-avanza por tiempo. */
   studyMs?: number;
   accent?: string;
   palaceId?: string; // New palaceId prop
@@ -113,7 +114,7 @@ function getSurrealLociAssociation(roomLabel: string, objectWord: string): strin
     .replace('{ROOM}', roomLabel.toLowerCase());
 }
 
-export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', palaceId, onFinish, onQuit }: Props) {
+export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, onFinish, onQuit }: Props) {
   const { getPalace } = useLociStore();
   const customPalace = palaceId ? getPalace(palaceId) : undefined;
 
@@ -177,14 +178,10 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', pa
   const hasHint = owned.includes('pw-hint');
   const [hintActive, setHintActive] = useState(false);
 
-  useEffect(() => {
-    if (phase !== 'learn') return;
-    const t = setTimeout(() => {
-      if (learnIdx + 1 >= assoc.length) setPhase('recall');
-      else setLearnIdx(i => i + 1);
-    }, studyMs);
-    return () => clearTimeout(t);
-  }, [learnIdx, phase, studyMs]);
+  // Fase de estudio AUTOGUIADA: el usuario avanza con el botón "Siguiente"
+  // cuando ha fijado la imagen mental. Antes un temporizador (studyMs)
+  // auto-avanzaba y "pasaba las imágenes muy rápido"; eso se ha eliminado para
+  // que cada quien consolide la asociación a su ritmo.
 
   useEffect(() => {
     setHintActive(false);
@@ -248,6 +245,13 @@ export function LociExercise({ count = 5, studyMs = 4000, accent = '#8B5CF6', pa
               isLoading={isStoryLoading}
               key={learnIdx}
             />
+
+            <View style={styles.selfPacedHint}>
+              <Ionicons name="time-outline" size={13} color={COLORS.muted} />
+              <Text style={styles.selfPacedHintText}>
+                Tómate tu tiempo: avanza cuando hayas fijado bien la imagen en tu mente.
+              </Text>
+            </View>
           </View>
         ) : (
           <View style={styles.recallHeader}>
@@ -562,6 +566,8 @@ const styles = StyleSheet.create({
   learnHeader:  { width: '100%', alignItems: 'center', gap: 10 },
   recallHeader: { width: '100%', alignItems: 'center', gap: 8 },
   hint:         { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1.5 },
+  selfPacedHint:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 12 },
+  selfPacedHintText: { flex: 1, fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, lineHeight: 15 },
   assocRow:     { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 4 },
   wordBubble:   {
     paddingVertical: 12,
