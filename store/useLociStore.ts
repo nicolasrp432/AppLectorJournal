@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { getStarterPalace } from '../constants/lociStarterPalaces';
 
 export interface LociMemoryItem {
   id: string;
@@ -40,7 +41,9 @@ export const useLociStore = create<LociStoreState>()(
       reset: () => set({ palaces: [] }),
 
       getPalace: (id) => {
-        return get().palaces.find(p => p.id === id);
+        // Los palacios del usuario tienen prioridad; si no, se resuelve contra
+        // los palacios de ejemplo pre-construidos (solo lectura).
+        return get().palaces.find(p => p.id === id) ?? getStarterPalace(id);
       },
 
       fetchPalaces: async () => {

@@ -7,6 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useLociStore, UserMemoryPalace } from '../../store/useLociStore';
+import { STARTER_PALACES, isStarterPalaceId } from '../../constants/lociStarterPalaces';
 import { invokeEdgeFunction } from '../../lib/supabase';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { PushButton } from '../../components/ui/PushButton';
@@ -34,6 +35,8 @@ export default function LociViewScreen() {
   useEffect(() => {
     const mem = livePalace?.memories[activeSlide];
     if (!livePalace || !mem || mem.image_url) return;
+    // Los palacios de ejemplo funcionan offline (con emoji); no gastamos IA en ellos.
+    if (isStarterPalaceId(livePalace.id)) return;
     if (attemptedRef.current.has(mem.id)) return;
     attemptedRef.current.add(mem.id);
 
@@ -89,14 +92,16 @@ export default function LociViewScreen() {
         <Text style={styles.headerTitle}>
           {selectedPalace ? selectedPalace.topic : 'Mis Palacios de Memoria'}
         </Text>
-        {selectedPalace ? (
+        {selectedPalace && !isStarterPalaceId(selectedPalace.id) ? (
           <Pressable onPress={() => handleDelete(selectedPalace.id)} style={styles.deleteBtn}>
             <Ionicons name="trash-outline" size={18} color="#EF4444" />
           </Pressable>
-        ) : (
+        ) : !selectedPalace ? (
           <Pressable onPress={() => router.push('/loci/create' as any)} style={styles.addBtn}>
             <Text style={styles.addBtnText}>+ Crear</Text>
           </Pressable>
+        ) : (
+          <View style={{ width: 38 }} />
         )}
       </View>
 
@@ -110,55 +115,61 @@ export default function LociViewScreen() {
 
       {/* PALACES LIST VIEW */}
       {!isLoading && !selectedPalace && (
-        palaces.length === 0 ? (
-          <View style={styles.emptyState}>
-            <MascotChar which="loci" expression="happy" size={120} />
-            <Text style={styles.emptyTitle}>No tienes palacios de memoria creados</Text>
-            <Text style={styles.emptySub}>Crea uno sobre cualquier tema libre usando la Inteligencia Artificial.</Text>
-            <View style={{ height: 16 }} />
-            <PushButton color={COLORS.loci} onPress={() => router.push('/loci/create' as any)}>
-              Construir mi primer palacio
-            </PushButton>
+        <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
+          <View style={styles.mascotRow}>
+            <MascotChar which="loci" size={70} />
+            <View style={styles.mascotBalloon}>
+              <Text style={styles.balloonText}>
+                Practica con un palacio de ejemplo o construye el tuyo sobre cualquier tema. Repásalos deslizando y pon a prueba tu recuerdo.
+              </Text>
+            </View>
           </View>
-        ) : (
-          <ScrollView contentContainerStyle={styles.listContainer} showsVerticalScrollIndicator={false}>
-            <View style={styles.mascotRow}>
-              <MascotChar which="loci" size={70} />
-              <View style={styles.mascotBalloon}>
-                <Text style={styles.balloonText}>
-                  Aquí se guardan tus palacios construidos. Repásalos deslizando las habitaciones o pon a prueba tu recuerdo con el test.
-                </Text>
-              </View>
-            </View>
 
-            <View style={styles.palacesGrid}>
-              {palaces.map(p => (
-                <Pressable 
-                  key={p.id} 
-                  onPress={() => { setSelectedPalace(p); setActiveSlide(0); }}
-                  style={styles.palaceCard}
-                >
-                  <View style={styles.palaceCover}>
-                    {p.memories?.[0]?.image_url ? (
-                      <Image source={{ uri: p.memories[0].image_url }} style={styles.coverImg} />
-                    ) : (
-                      <View style={[styles.coverPlaceholder, { backgroundColor: COLORS.loci + '15' }]}>
-                        <Ionicons name="home" size={24} color={COLORS.loci} />
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.palaceInfo}>
-                    <Text style={styles.palaceTopic} numberOfLines={2}>{p.topic}</Text>
-                    <Text style={styles.palaceMeta}>
-                      Plantilla: <Text style={{ textTransform: 'capitalize' }}>{p.theme}</Text> · 5 Loci
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} style={{ marginRight: 4 }} />
-                </Pressable>
-              ))}
+          {/* Palacios propios */}
+          {palaces.length > 0 ? (
+            <>
+              <Text style={styles.sectionTitle}>Mis palacios</Text>
+              <View style={styles.palacesGrid}>
+                {palaces.map(p => (
+                  <PalaceRow
+                    key={p.id}
+                    topic={p.topic}
+                    theme={p.theme}
+                    count={p.memories.length}
+                    coverUri={p.memories?.[0]?.image_url}
+                    onPress={() => { setSelectedPalace(p); setActiveSlide(0); }}
+                  />
+                ))}
+              </View>
+            </>
+          ) : (
+            <View style={styles.emptyInline}>
+              <Text style={styles.emptyTitle}>Aún no tienes palacios propios</Text>
+              <Text style={styles.emptySub}>Empieza practicando con un ejemplo de abajo, o crea uno sobre cualquier tema.</Text>
+              <View style={{ height: 12 }} />
+              <PushButton color={COLORS.loci} onPress={() => router.push('/loci/create' as any)}>
+                Construir mi primer palacio
+              </PushButton>
             </View>
-          </ScrollView>
-        )
+          )}
+
+          {/* Palacios de ejemplo (pre-construidos) */}
+          <Text style={[styles.sectionTitle, { marginTop: 28 }]}>Palacios de ejemplo</Text>
+          <Text style={styles.sectionSub}>Listos para practicar ahora mismo, sin crear nada.</Text>
+          <View style={styles.palacesGrid}>
+            {STARTER_PALACES.map(p => (
+              <PalaceRow
+                key={p.id}
+                topic={p.topic}
+                theme={p.theme}
+                count={p.memories.length}
+                starter
+                onPress={() => { setSelectedPalace(p); setActiveSlide(0); }}
+              />
+            ))}
+          </View>
+          <View style={{ height: 40 }} />
+        </ScrollView>
       )}
 
       {/* SELECTED PALACE SLIDESHOW WALKTHROUGH */}
@@ -246,8 +257,51 @@ export default function LociViewScreen() {
   );
 }
 
+function PalaceRow({ topic, theme, count, coverUri, starter, onPress }: {
+  topic: string;
+  theme: string;
+  count: number;
+  coverUri?: string;
+  starter?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable onPress={onPress} style={styles.palaceCard}>
+      <View style={styles.palaceCover}>
+        {coverUri ? (
+          <Image source={{ uri: coverUri }} style={styles.coverImg} />
+        ) : (
+          <View style={[styles.coverPlaceholder, { backgroundColor: COLORS.loci + '15' }]}>
+            <Ionicons name={starter ? 'sparkles' : 'home'} size={22} color={COLORS.loci} />
+          </View>
+        )}
+      </View>
+      <View style={styles.palaceInfo}>
+        <View style={styles.palaceTopicRow}>
+          <Text style={styles.palaceTopic} numberOfLines={2}>{topic}</Text>
+          {starter && (
+            <View style={styles.starterBadge}>
+              <Text style={styles.starterBadgeText}>Ejemplo</Text>
+            </View>
+          )}
+        </View>
+        <Text style={styles.palaceMeta}>
+          Plantilla: <Text style={{ textTransform: 'capitalize' }}>{theme}</Text> · {count} Loci
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={COLORS.subtle} style={{ marginRight: 4 }} />
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   safe:             { flex: 1, backgroundColor: COLORS.canvas },
+  sectionTitle:     { fontFamily: FONTS.headingSemi, fontSize: 12, color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
+  sectionSub:       { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, marginTop: -6, marginBottom: 12 },
+  emptyInline:      { backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.border, padding: 20, alignItems: 'center' },
+  palaceTopicRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  starterBadge:     { backgroundColor: COLORS.loci + '15', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  starterBadgeText: { fontFamily: FONTS.headingSemi, fontSize: 9, color: COLORS.loci, textTransform: 'uppercase', letterSpacing: 0.5 },
   header:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   backBtn:          { width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
   headerTitle:      { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, flex: 1, textAlign: 'center', marginHorizontal: 8 },
@@ -258,7 +312,6 @@ const styles = StyleSheet.create({
   loadingBox:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText:      { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
 
-  emptyState:       { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 8 },
   emptyTitle:       { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink, textAlign: 'center' },
   emptySub:         { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 20, marginBottom: 12 },
 
