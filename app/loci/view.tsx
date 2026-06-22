@@ -125,6 +125,12 @@ export default function LociViewScreen() {
             </View>
           </View>
 
+          <Pressable onPress={() => router.push('/loci/tutorial' as any)} style={styles.howToBtn}>
+            <Ionicons name="school-outline" size={16} color={COLORS.loci} />
+            <Text style={styles.howToText}>¿Cómo funciona? Aprende la técnica en 1 minuto</Text>
+            <Ionicons name="chevron-forward" size={16} color={COLORS.loci} />
+          </Pressable>
+
           {/* Palacios propios */}
           {palaces.length > 0 ? (
             <>
@@ -298,6 +304,8 @@ const styles = StyleSheet.create({
   safe:             { flex: 1, backgroundColor: COLORS.canvas },
   sectionTitle:     { fontFamily: FONTS.headingSemi, fontSize: 12, color: COLORS.ink, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 10 },
   sectionSub:       { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, marginTop: -6, marginBottom: 12 },
+  howToBtn:         { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: COLORS.loci + '0D', borderRadius: 14, borderWidth: 1, borderColor: COLORS.loci + '33', paddingVertical: 12, paddingHorizontal: 14, marginBottom: 20 },
+  howToText:        { flex: 1, fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.loci },
   emptyInline:      { backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.border, padding: 20, alignItems: 'center' },
   palaceTopicRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   starterBadge:     { backgroundColor: COLORS.loci + '15', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
