@@ -8,6 +8,21 @@
 
 ---
 
+## Estado de ejecución
+
+✅ **Hecho** (en esta rama, con `tsc` limpio y 43 tests verdes):
+- **A1 — CI**: workflow `typecheck`+`test` (gates) y `lint` (advisory).
+- **B1 — Motor adaptativo**: histéresis/confirmación, umbrales por ejercicio, uso real de `mastery` (`lib/adaptLevel.ts` + 14 tests).
+- **B2 — Estudio autoguiado del Loci**: eliminado el auto-avance por temporizador (el "pasa muy rápido").
+- **B2 — Lógica de recuerdo** (`lib/loci.ts`): matching difuso + scoring ordenado/libre (15 tests).
+- **B2 — Palacios pre-hechos**: 3 palacios de ejemplo jugables sin crear nada.
+- **B2 — Creación guiada**: el usuario escribe sus propias asociaciones (IA opcional).
+- **B2 — Modo tutorial**: enseña los 4 principios con un mini-ejemplo activo.
+
+⬜ **Pendiente**: recuerdo libre en la UI del ejercicio principal (niveles medios/altos); recuerdo ordenado/demorado con SM-2; Track A restante (A2 seguridad edge functions, A3 logger, A4 `any`, A5 refactor pantallas).
+
+---
+
 ## Contexto
 
 La app ya tiene la base de P0+P1 hecha (limpieza + tooling). Ahora el foco es la **calidad funcional**: que los ejercicios funcionen bien para cualquier usuario, que la dificultad suba de forma progresiva y justa, y que el **Método Loci** deje de ser un drill pasivo que "pasa las imágenes muy rápido" y se convierta en una **verdadera experiencia de construir palacios mentales** de lo que el usuario quiera memorizar — con palacios ya creados para practicar de inmediato.
