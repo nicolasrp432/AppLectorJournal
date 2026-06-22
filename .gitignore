@@ -3,12 +3,17 @@
 # dependencies
 node_modules/
 .env*
+!.env.example
 
 # Expo
 .expo/
 dist/
 web-build/
 expo-env.d.ts
+
+# Build artifacts (expo export output)
+bundle.js
+exact_bundle.js
 
 # Native
 .kotlin/
