@@ -21,10 +21,11 @@ export const DIFFICULTY = {
   ] as WordSpanLevel[],
 
   loci: [
-    { level: 1, label: '5 objetos', count: 5 },
-    { level: 2, label: '6 objetos', count: 6 },
-    { level: 3, label: '7 objetos', count: 7 },
-    { level: 4, label: '8 objetos', count: 8 },
+    { level: 1, label: '5 objetos',            count: 5,  recall: 'recognition', delayed: false },
+    { level: 2, label: '6 objetos',            count: 6,  recall: 'recognition', delayed: false },
+    { level: 3, label: '7 objetos · libre',    count: 7,  recall: 'free',        delayed: false },
+    { level: 4, label: '8 objetos · ordenado', count: 8,  recall: 'ordered',     delayed: false },
+    { level: 5, label: '10 objetos · demorado', count: 10, recall: 'ordered',    delayed: true  },
   ] as LociLevel[],
 
   comprehension: [

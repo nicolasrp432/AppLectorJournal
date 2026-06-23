@@ -10,7 +10,7 @@
 
 ## Estado de ejecución
 
-✅ **Hecho** (en esta rama, con `tsc` limpio y 43 tests verdes):
+✅ **Hecho** (en esta rama, con `tsc` limpio y 51 tests verdes):
 - **A1 — CI**: workflow `typecheck`+`test` (gates) y `lint` (advisory).
 - **A2 — Seguridad de edge functions**: validación de JWT de usuario, CORS por allowlist y rate limiting por usuario (`_shared/guard.ts`, migración `009`, cliente). ⚠️ requiere `supabase functions deploy` + aplicar la migración.
 - **B1 — Motor adaptativo**: histéresis/confirmación, umbrales por ejercicio, uso real de `mastery` (`lib/adaptLevel.ts` + 14 tests).
@@ -20,8 +20,9 @@
 - **B2 — Palacios pre-hechos**: 3 palacios de ejemplo jugables sin crear nada.
 - **B2 — Creación guiada**: el usuario escribe sus propias asociaciones (IA opcional).
 - **B2 — Modo tutorial**: enseña los 4 principios con un mini-ejemplo activo.
+- **B2 — Recuerdo ordenado/demorado + repaso SM-2**: nivel 5 con recorrido ordenado sin pista y fase distractora antes del recuerdo; el resultado programa el repaso espaciado del palacio con `lib/sm2.ts` (`scoreToQuality`/`isDue` en `lib/loci.ts`, `reviewPalace`/`getDuePalaces` en `useLociStore`, migración `010`, sección "Repasar hoy" + badge en `app/loci/view.tsx`). ⚠️ requiere aplicar la migración `010`. (20 tests de `loci.ts`.)
 
-⬜ **Pendiente**: recuerdo ordenado completo/demorado con repaso SM-2; Track A restante (A3 logger, A4 `any`, A5 refactor pantallas).
+⬜ **Pendiente**: Track A restante (A3 logger, A4 `any`, A5 refactor pantallas).
 
 ---
 

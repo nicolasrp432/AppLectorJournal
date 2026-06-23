@@ -17,7 +17,7 @@ import { FONTS } from '../../constants/typography';
 const { width } = Dimensions.get('window');
 
 export default function LociViewScreen() {
-  const { palaces, fetchPalaces, deletePalace, updateMemoryImage, isLoading } = useLociStore();
+  const { palaces, fetchPalaces, deletePalace, updateMemoryImage, getDuePalaces, isLoading } = useLociStore();
   const [selectedPalace, setSelectedPalace] = useState<UserMemoryPalace | null>(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [generatingImg, setGeneratingImg] = useState(false);
@@ -29,6 +29,10 @@ export default function LociViewScreen() {
 
   // El palacio en estado actual (re-derivado del store para ver imágenes nuevas).
   const livePalace = selectedPalace ? palaces.find(p => p.id === selectedPalace.id) ?? selectedPalace : null;
+
+  // Palacios cuyo repaso espaciado (SM-2) ya vence: "a repasar hoy".
+  const duePalaces = getDuePalaces();
+  const dueIds = React.useMemo(() => new Set(duePalaces.map(p => p.id)), [duePalaces]);
 
   // Genera la imagen del locus que se está viendo, UNA A UNA (bajo demanda) con
   // Nano Banana, para no exceder la cuota. La persiste al terminar.
@@ -131,6 +135,34 @@ export default function LociViewScreen() {
             <Ionicons name="chevron-forward" size={16} color={COLORS.loci} />
           </Pressable>
 
+          {/* Repaso espaciado: palacios a repasar hoy */}
+          {duePalaces.length > 0 && (
+            <>
+              <View style={styles.dueHeaderRow}>
+                <Ionicons name="alarm-outline" size={16} color={COLORS.loci} />
+                <Text style={styles.sectionTitle}>Repasar hoy</Text>
+                <View style={styles.dueCountPill}>
+                  <Text style={styles.dueCountText}>{duePalaces.length}</Text>
+                </View>
+              </View>
+              <Text style={styles.sectionSub}>El repaso espaciado refuerza estos palacios justo antes de olvidarlos.</Text>
+              <View style={styles.palacesGrid}>
+                {duePalaces.map(p => (
+                  <PalaceRow
+                    key={`due_${p.id}`}
+                    topic={p.topic}
+                    theme={p.theme}
+                    count={p.memories.length}
+                    coverUri={p.memories?.[0]?.image_url}
+                    due
+                    onPress={() => handleLaunchPalaceRecall(p.id)}
+                  />
+                ))}
+              </View>
+              <View style={{ height: 24 }} />
+            </>
+          )}
+
           {/* Palacios propios */}
           {palaces.length > 0 ? (
             <>
@@ -143,6 +175,7 @@ export default function LociViewScreen() {
                     theme={p.theme}
                     count={p.memories.length}
                     coverUri={p.memories?.[0]?.image_url}
+                    due={dueIds.has(p.id)}
                     onPress={() => { setSelectedPalace(p); setActiveSlide(0); }}
                   />
                 ))}
@@ -263,16 +296,17 @@ export default function LociViewScreen() {
   );
 }
 
-function PalaceRow({ topic, theme, count, coverUri, starter, onPress }: {
+function PalaceRow({ topic, theme, count, coverUri, starter, due, onPress }: {
   topic: string;
   theme: string;
   count: number;
   coverUri?: string;
   starter?: boolean;
+  due?: boolean;
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.palaceCard}>
+    <Pressable onPress={onPress} style={[styles.palaceCard, due && styles.palaceCardDue]}>
       <View style={styles.palaceCover}>
         {coverUri ? (
           <Image source={{ uri: coverUri }} style={styles.coverImg} />
@@ -288,6 +322,12 @@ function PalaceRow({ topic, theme, count, coverUri, starter, onPress }: {
           {starter && (
             <View style={styles.starterBadge}>
               <Text style={styles.starterBadgeText}>Ejemplo</Text>
+            </View>
+          )}
+          {due && (
+            <View style={styles.dueBadge}>
+              <Ionicons name="alarm-outline" size={10} color="#fff" />
+              <Text style={styles.dueBadgeText}>Toca repasar</Text>
             </View>
           )}
         </View>
@@ -310,6 +350,11 @@ const styles = StyleSheet.create({
   palaceTopicRow:   { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
   starterBadge:     { backgroundColor: COLORS.loci + '15', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
   starterBadgeText: { fontFamily: FONTS.headingSemi, fontSize: 9, color: COLORS.loci, textTransform: 'uppercase', letterSpacing: 0.5 },
+  dueBadge:         { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: COLORS.loci, borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 },
+  dueBadgeText:     { fontFamily: FONTS.headingSemi, fontSize: 9, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.5 },
+  dueHeaderRow:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  dueCountPill:     { backgroundColor: COLORS.loci, borderRadius: 999, minWidth: 20, height: 20, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center' },
+  dueCountText:     { fontFamily: FONTS.headingSemi, fontSize: 11, color: '#fff' },
   header:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
   backBtn:          { width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
   headerTitle:      { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, flex: 1, textAlign: 'center', marginHorizontal: 8 },
@@ -330,6 +375,7 @@ const styles = StyleSheet.create({
 
   palacesGrid:      { gap: 12 },
   palaceCard:       { flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1.5, borderColor: COLORS.border, padding: 12, gap: 12 },
+  palaceCardDue:    { borderColor: COLORS.loci, backgroundColor: COLORS.loci + '08' },
   palaceCover:      { width: 50, height: 50, borderRadius: 10, overflow: 'hidden' },
   coverImg:         { width: '100%', height: '100%' },
   coverPlaceholder: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },

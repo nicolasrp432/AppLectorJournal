@@ -353,15 +353,18 @@ export default function ExerciseScreen() {
         content = <WordSpanExercise level={wordSpanCount} showMs={wordSpanInterval} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
         break;
       case 'loci': {
-        // Nivel 3+ usa recuerdo libre (recorrer la ruta y recordar el objeto);
-        // niveles bajos, reconocimiento (tocar la habitación).
+        // El modo de recuerdo y el recuerdo demorado se derivan del nivel
+        // (constants/difficulty.ts): reconocimiento → libre → ordenado →
+        // ordenado+demorado, que alimenta el repaso espaciado SM-2.
         const lociLevel = pinnedLevel ?? getProgress('loci').current_level;
+        const lociCfg = getLevel('loci', lociLevel);
         content = (
           <LociExercise
             count={lociCount}
             accent={accent}
             palaceId={palaceId}
-            recallMode={lociLevel >= 3 ? 'free' : 'recognition'}
+            recallMode={lociCfg.recall}
+            delayed={lociCfg.delayed}
             onFinish={handleFinish}
             onQuit={quit}
           />

@@ -14,7 +14,7 @@ import { useRewardsStore } from '../../store/useRewardsStore';
 import { usePrefsStore } from '../../store/usePrefsStore';
 import { useLociStore } from '../../store/useLociStore';
 import { supabase } from '../../lib/supabase';
-import { matchesRecall } from '../../lib/loci';
+import { matchesRecall, scoreToQuality } from '../../lib/loci';
 
 const ROOM_THEMES = {
   casa: [
@@ -100,10 +100,18 @@ interface Props {
    * Modo de recuerdo:
    * - 'recognition' (niveles bajos): se da el objeto y el usuario toca la
    *   habitación donde lo colocó.
-   * - 'free' (niveles altos): se recorre la ruta en orden y el usuario recuerda
+   * - 'free' (niveles medios): se recorre la ruta en orden y el usuario recuerda
    *   QUÉ objeto puso en cada sitio eligiéndolo de un banco barajado.
+   * - 'ordered' (niveles altos): igual que 'free' pero como recorrido ordenado
+   *   completo sin pistas; alimenta el repaso espaciado.
    */
-  recallMode?: 'recognition' | 'free';
+  recallMode?: 'recognition' | 'free' | 'ordered';
+  /**
+   * Recuerdo demorado: intercala una breve tarea distractora entre el estudio y
+   * el recuerdo para impedir el repaso mental inmediato (nivel alto). El
+   * resultado programa el repaso espaciado SM-2 del palacio.
+   */
+  delayed?: boolean;
   onFinish: (result: { correct: number; total: number; time: number }) => void;
   onQuit: () => void;
 }
@@ -123,8 +131,8 @@ function getSurrealLociAssociation(roomLabel: string, objectWord: string): strin
     .replace('{ROOM}', roomLabel.toLowerCase());
 }
 
-export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMode = 'recognition', onFinish, onQuit }: Props) {
-  const { getPalace } = useLociStore();
+export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMode = 'recognition', delayed = false, onFinish, onQuit }: Props) {
+  const { getPalace, reviewPalace } = useLociStore();
   const customPalace = palaceId ? getPalace(palaceId) : undefined;
 
   const [assoc] = useState(() => {
@@ -169,7 +177,7 @@ export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMo
   const [aiImages, setAiImages] = useState<Record<string, string>>({});
   const [isLoadingAI, setIsLoadingAI] = useState(false);
 
-  const [phase, setPhase] = useState<'learn' | 'recall'>('learn');
+  const [phase, setPhase] = useState<'learn' | 'distractor' | 'recall'>('learn');
   const [learnIdx, setLearnIdx] = useState(0);
   const [recallIdx, setRecallIdx] = useState(0);
   const [answers, setAnswers] = useState<boolean[]>([]);
@@ -213,11 +221,21 @@ export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMo
     setFeedback(null);
     setPickedWord(null);
     if (recallIdx + 1 >= assoc.length) {
-      onFinish({ correct: newAnswers.filter(Boolean).length, total: assoc.length, time: (Date.now() - startTime.current) / 1000 });
+      const correctCount = newAnswers.filter(Boolean).length;
+      // Programa el repaso espaciado del palacio (solo palacios reales del
+      // usuario; reviewPalace ignora los de ejemplo).
+      if (palaceId) {
+        reviewPalace(palaceId, scoreToQuality(assoc.length ? correctCount / assoc.length : 0));
+      }
+      onFinish({ correct: correctCount, total: assoc.length, time: (Date.now() - startTime.current) / 1000 });
     } else {
       setRecallIdx(i => i + 1);
     }
   };
+
+  // Tras el estudio, pasa a la fase de recuerdo. Si es demorado, intercala la
+  // tarea distractora; si no, va directo al recuerdo.
+  const startRecall = () => setPhase(delayed ? 'distractor' : 'recall');
 
   const handleRoomPick = (roomId: string) => {
     if (feedback) return;
@@ -245,6 +263,15 @@ export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMo
   const imageUri = current.image_url || aiImages[current.id];
 
   const isStoryLoading = false;
+
+  if (phase === 'distractor') {
+    return (
+      <View style={styles.container}>
+        <ExerciseTopBar progress={1} accent={accent} onQuit={onQuit} title="Distracción" />
+        <DistractorPhase accent={accent} onDone={() => setPhase('recall')} />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -286,9 +313,11 @@ export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMo
               </Text>
             </View>
           </View>
-        ) : recallMode === 'free' ? (
+        ) : recallMode !== 'recognition' ? (
           <View style={styles.recallHeader}>
-            <Text style={styles.hint}>Recorre tu palacio · {recallIdx + 1}/{assoc.length}</Text>
+            <Text style={styles.hint}>
+              {recallMode === 'ordered' ? 'Recorrido ordenado' : 'Recorre tu palacio'} · {recallIdx + 1}/{assoc.length}
+            </Text>
             <View style={[styles.roomCueBubble, { borderColor: accent }]}>
               <Ionicons name={current.icon as any} size={18} color={accent} />
               <Text style={[styles.roomCueText, { color: accent }]}>{current.label}</Text>
@@ -351,7 +380,7 @@ export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMo
       {phase === 'learn' && (
         <View style={styles.footer}>
           <Pressable
-            onPress={() => learnIdx + 1 >= assoc.length ? setPhase('recall') : setLearnIdx(i => i + 1)}
+            onPress={() => learnIdx + 1 >= assoc.length ? startRecall() : setLearnIdx(i => i + 1)}
             style={[styles.nextBtn, { backgroundColor: accent }]}
           >
             <Text style={styles.nextBtnText}>
@@ -360,6 +389,91 @@ export function LociExercise({ count = 5, accent = '#8B5CF6', palaceId, recallMo
           </Pressable>
         </View>
       )}
+    </View>
+  );
+}
+
+// Tarea distractora del recuerdo demorado: ocupa la memoria de trabajo durante
+// ~20 s (tocar números desordenados en orden ascendente) para que el usuario no
+// pueda repasar mentalmente el palacio justo antes de recordarlo. Termina al
+// completar la secuencia o al agotarse el tiempo.
+const DISTRACTOR_SECONDS = 20;
+const DISTRACTOR_COUNT = 9;
+
+function DistractorPhase({ accent, onDone }: { accent: string; onDone: () => void }) {
+  const [numbers] = useState(() => {
+    const arr = Array.from({ length: DISTRACTOR_COUNT }, (_, i) => i + 1);
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  });
+  const [next, setNext] = useState(1);
+  const [secondsLeft, setSecondsLeft] = useState(DISTRACTOR_SECONDS);
+  const doneRef = React.useRef(false);
+
+  const finish = () => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    onDone();
+  };
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSecondsLeft(s => {
+        if (s <= 1) { clearInterval(t); finish(); return 0; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleTap = (n: number) => {
+    if (n !== next) return;
+    if (n >= DISTRACTOR_COUNT) { finish(); return; }
+    setNext(n + 1);
+  };
+
+  return (
+    <View style={styles.distractorWrap}>
+      <View style={styles.distractorHeader}>
+        <Ionicons name="hourglass-outline" size={22} color={accent} />
+        <Text style={styles.distractorTitle}>Pausa de distracción</Text>
+        <Text style={styles.distractorSub}>
+          Toca los números en orden (1 → {DISTRACTOR_COUNT}). Evita repasar el palacio: el reto es
+          recordarlo después.
+        </Text>
+        <View style={[styles.distractorTimer, { borderColor: accent }]}>
+          <Ionicons name="time-outline" size={14} color={accent} />
+          <Text style={[styles.distractorTimerText, { color: accent }]}>{secondsLeft}s</Text>
+        </View>
+      </View>
+
+      <View style={styles.distractorGrid}>
+        {numbers.map(n => {
+          const tapped = n < next;
+          return (
+            <Pressable
+              key={n}
+              disabled={tapped}
+              onPress={() => handleTap(n)}
+              style={[
+                styles.distractorCell,
+                tapped
+                  ? { backgroundColor: `${accent}22`, borderColor: accent }
+                  : { backgroundColor: COLORS.white, borderColor: '#E5E7EB' },
+              ]}
+            >
+              <Text style={[styles.distractorCellText, { color: tapped ? accent : COLORS.ink }]}>{n}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      <Pressable onPress={finish} style={styles.distractorSkip} hitSlop={8}>
+        <Text style={styles.distractorSkipText}>Saltar al recuerdo →</Text>
+      </Pressable>
     </View>
   );
 }
@@ -661,6 +775,17 @@ const styles = StyleSheet.create({
   roomCueBubble:     { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 22, borderRadius: 16, borderWidth: 2, backgroundColor: COLORS.white },
   roomCueText:       { fontFamily: FONTS.heading, fontSize: 18 },
   freeRecallPrompt:  { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, marginTop: 4 },
+  distractorWrap:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 24 },
+  distractorHeader:  { alignItems: 'center', gap: 8 },
+  distractorTitle:   { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  distractorSub:     { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 19, maxWidth: 320 },
+  distractorTimer:   { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14, marginTop: 4 },
+  distractorTimerText:{ fontFamily: FONTS.headingSemi, fontSize: 13 },
+  distractorGrid:    { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, maxWidth: 280 },
+  distractorCell:    { width: 72, height: 72, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
+  distractorCellText:{ fontFamily: FONTS.heading, fontSize: 24 },
+  distractorSkip:    { paddingVertical: 8, paddingHorizontal: 16 },
+  distractorSkipText:{ fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.muted },
   itemBank:          { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 8 },
   itemChip:          { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 18, borderRadius: 14, borderWidth: 1.5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
   itemChipText:      { fontFamily: FONTS.headingSemi, fontSize: 14 },

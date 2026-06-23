@@ -1,4 +1,4 @@
-import { normalizeAnswer, levenshtein, matchesRecall, gradeRecall } from '../loci';
+import { normalizeAnswer, levenshtein, matchesRecall, gradeRecall, scoreToQuality, isDue } from '../loci';
 
 describe('normalizeAnswer', () => {
   it('quita acentos, mayúsculas y signos', () => {
@@ -67,5 +67,36 @@ describe('gradeRecall — no ordenado', () => {
   it('no cuenta dos veces el mismo objetivo', () => {
     const g = gradeRecall(['llave', 'llave', 'llave'], targets, false);
     expect(g.correct).toBe(1);
+  });
+});
+
+describe('scoreToQuality', () => {
+  it('mapea recuerdo perfecto a 5', () => expect(scoreToQuality(1)).toBe(5));
+  it('clampa por encima de 1', () => expect(scoreToQuality(1.5)).toBe(5));
+  it('respeta los cortes intermedios', () => {
+    expect(scoreToQuality(0.8)).toBe(4);
+    expect(scoreToQuality(0.6)).toBe(3); // aprobado justo
+    expect(scoreToQuality(0.59)).toBe(2); // suspende → reinicia intervalo
+    expect(scoreToQuality(0.4)).toBe(2);
+    expect(scoreToQuality(0.2)).toBe(1);
+  });
+  it('mapea blackout a 0', () => expect(scoreToQuality(0)).toBe(0));
+});
+
+describe('isDue', () => {
+  const now = new Date('2026-06-23T12:00:00Z');
+  it('está vencido cuando la fecha ya pasó', () => {
+    expect(isDue('2026-06-20T12:00:00Z', now)).toBe(true);
+  });
+  it('no está vencido cuando la fecha es futura', () => {
+    expect(isDue('2026-06-30T12:00:00Z', now)).toBe(false);
+  });
+  it('trata como vencido lo no programado o inválido', () => {
+    expect(isDue(null, now)).toBe(true);
+    expect(isDue(undefined, now)).toBe(true);
+    expect(isDue('no-es-fecha', now)).toBe(true);
+  });
+  it('acepta objetos Date', () => {
+    expect(isDue(new Date('2026-06-23T11:59:00Z'), now)).toBe(true);
   });
 });

@@ -105,3 +105,27 @@ export function gradeRecall(
   const correct = results.filter(Boolean).length;
   return { correct, total, score: total ? correct / total : 0, results };
 }
+
+/**
+ * Mapea el `score` de un recuerdo ([0,1]) a la calidad SM-2 [0,5] que espera
+ * `calculateSM2` (ver `lib/sm2.ts`). Los cortes son generosos en la parte alta
+ * (recordar casi todo el palacio = respuesta sólida) y exigentes en la baja
+ * (un recuerdo pobre reinicia el intervalo). Quality ≥ 3 cuenta como aprobado.
+ */
+export function scoreToQuality(score: number): number {
+  const s = Math.max(0, Math.min(1, score));
+  if (s >= 1) return 5;
+  if (s >= 0.8) return 4;
+  if (s >= 0.6) return 3;
+  if (s >= 0.4) return 2;
+  if (s >= 0.2) return 1;
+  return 0;
+}
+
+/** ¿Toca repasar este palacio? (su próxima fecha programada ya venció). */
+export function isDue(nextDue: string | Date | null | undefined, now: Date = new Date()): boolean {
+  if (!nextDue) return true; // sin programación previa, conviene repasar.
+  const due = nextDue instanceof Date ? nextDue : new Date(nextDue);
+  if (Number.isNaN(due.getTime())) return true;
+  return due.getTime() <= now.getTime();
+}
