@@ -352,9 +352,22 @@ export default function ExerciseScreen() {
       case 'wordspan':
         content = <WordSpanExercise level={wordSpanCount} showMs={wordSpanInterval} distractorCount={config.distractors} accent={accent} onFinish={handleFinish} onQuit={quit} />;
         break;
-      case 'loci':
-        content = <LociExercise count={lociCount} studyMs={lociStudyTime} accent={accent} palaceId={palaceId} onFinish={handleFinish} onQuit={quit} />;
+      case 'loci': {
+        // Nivel 3+ usa recuerdo libre (recorrer la ruta y recordar el objeto);
+        // niveles bajos, reconocimiento (tocar la habitación).
+        const lociLevel = pinnedLevel ?? getProgress('loci').current_level;
+        content = (
+          <LociExercise
+            count={lociCount}
+            accent={accent}
+            palaceId={palaceId}
+            recallMode={lociLevel >= 3 ? 'free' : 'recognition'}
+            onFinish={handleFinish}
+            onQuit={quit}
+          />
+        );
         break;
+      }
       case 'comprehension':
         content = <ComprehensionExercise accent={accent} onFinish={handleFinish} onQuit={quit} />;
         break;
@@ -747,7 +760,7 @@ function ExerciseIntro({
             </View>
             <Text style={introStyles.memoryExplainerText}>
               El cerebro humano no está diseñado evolutivamente para memorizar listas frías de palabras abstractas, sino para recordar <Text style={{ fontWeight: 'bold' }}>espacios, recorridos y ubicaciones físicas (visión espacial)</Text> a través del hipocampo.{"\n\n"}
-              Al forzar asociaciones <Text style={{ fontWeight: 'bold', color: '#8B5CF6' }}>inverosímiles, locas, cómicas y surrealistas</Text> en rincones o puntos físicos concretos, provocamos una micro-respuesta emocional en la amígdala. Esta emoción le indica al cerebro: <Text style={{ fontStyle: 'italic', fontWeight: '600' }}>"¡Esto es sumamente inusual y llamativo, no lo borres!"</Text>, consolidando los datos en tu memoria a largo plazo durante mucho más tiempo.
+              Al forzar asociaciones <Text style={{ fontWeight: 'bold', color: '#8B5CF6' }}>inverosímiles, locas, cómicas y surrealistas</Text> en rincones o puntos físicos concretos, provocamos una micro-respuesta emocional en la amígdala. Esta emoción le indica al cerebro: <Text style={{ fontStyle: 'italic', fontWeight: '600' }}>«¡Esto es sumamente inusual y llamativo, no lo borres!»</Text>, consolidando los datos en tu memoria a largo plazo durante mucho más tiempo.
             </Text>
           </View>
         )}
