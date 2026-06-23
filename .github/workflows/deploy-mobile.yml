@@ -1,0 +1,73 @@
+name: Deploy Mobile (EAS)
+
+on:
+  # Builds automáticos solo en main; submit a tiendas es siempre manual
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to build'
+        required: true
+        default: 'all'
+        type: choice
+        options: [all, android, ios]
+      profile:
+        description: 'Build profile'
+        required: true
+        default: 'production'
+        type: choice
+        options: [production, preview]
+      submit:
+        description: 'Submit to stores after build?'
+        required: true
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
+
+jobs:
+  build:
+    name: EAS Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Expo
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Determine platform and profile
+        id: params
+        run: |
+          echo "platform=${{ github.event.inputs.platform || 'all' }}" >> $GITHUB_OUTPUT
+          echo "profile=${{ github.event.inputs.profile || 'production' }}" >> $GITHUB_OUTPUT
+          echo "submit=${{ github.event.inputs.submit || 'false' }}" >> $GITHUB_OUTPUT
+
+      - name: Build Android
+        if: ${{ steps.params.outputs.platform == 'android' || steps.params.outputs.platform == 'all' }}
+        run: eas build --platform android --profile ${{ steps.params.outputs.profile }} --non-interactive
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Build iOS
+        if: ${{ steps.params.outputs.platform == 'ios' || steps.params.outputs.platform == 'all' }}
+        run: eas build --platform ios --profile ${{ steps.params.outputs.profile }} --non-interactive
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+
+      - name: Submit to stores (solo si se pidió explícitamente)
+        if: ${{ steps.params.outputs.submit == 'true' }}
+        run: eas submit --platform ${{ steps.params.outputs.platform }} --latest --non-interactive
