@@ -12,14 +12,16 @@
 
 ✅ **Hecho** (en esta rama, con `tsc` limpio y 43 tests verdes):
 - **A1 — CI**: workflow `typecheck`+`test` (gates) y `lint` (advisory).
+- **A2 — Seguridad de edge functions**: validación de JWT de usuario, CORS por allowlist y rate limiting por usuario (`_shared/guard.ts`, migración `009`, cliente). ⚠️ requiere `supabase functions deploy` + aplicar la migración.
 - **B1 — Motor adaptativo**: histéresis/confirmación, umbrales por ejercicio, uso real de `mastery` (`lib/adaptLevel.ts` + 14 tests).
 - **B2 — Estudio autoguiado del Loci**: eliminado el auto-avance por temporizador (el "pasa muy rápido").
 - **B2 — Lógica de recuerdo** (`lib/loci.ts`): matching difuso + scoring ordenado/libre (15 tests).
+- **B2 — Recuerdo libre en el ejercicio principal**: niveles 3+ recorren la ruta y eligen el objeto de un banco barajado; niveles bajos siguen con reconocimiento.
 - **B2 — Palacios pre-hechos**: 3 palacios de ejemplo jugables sin crear nada.
 - **B2 — Creación guiada**: el usuario escribe sus propias asociaciones (IA opcional).
 - **B2 — Modo tutorial**: enseña los 4 principios con un mini-ejemplo activo.
 
-⬜ **Pendiente**: recuerdo libre en la UI del ejercicio principal (niveles medios/altos); recuerdo ordenado/demorado con SM-2; Track A restante (A2 seguridad edge functions, A3 logger, A4 `any`, A5 refactor pantallas).
+⬜ **Pendiente**: recuerdo ordenado completo/demorado con repaso SM-2; Track A restante (A3 logger, A4 `any`, A5 refactor pantallas).
 
 ---
 
