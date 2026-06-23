@@ -15,6 +15,8 @@ export interface Profile {
   subscription_tier?: string;
   subscription_status?: string;
   subscription_expires_at?: string | null;
+  reading_lives?: number;
+  reading_lives_updated_at?: string | null;
 }
 
 export interface Session {

@@ -6,6 +6,8 @@ import { enqueueMutation } from '../lib/taskQueue';
 import { xpToLevel } from '../lib/xpEngine';
 import type { Profile, MascotKey } from '../types/db';
 import { REWARDS } from '../constants/rewards';
+import { LIVES_ENABLED, MAX_READING_LIVES, REFUND_COMPREHENSION_THRESHOLD } from '../constants/lives';
+import { msToNextLife } from '../lib/lives';
 
 function getSpentXP(): number {
   try {
@@ -27,6 +29,8 @@ interface ProfileState {
   profile: Profile | null;
   isLoading: boolean;
   dailySessionsCount: number;
+  readingLives: number;
+  nextLifeAt: string | null;
   fetchProfile: () => Promise<void>;
   addXP: (amount: number) => Promise<{ newXP: number; newLevel: number }>;
   updateProfile: (patch: Partial<Profile>) => Promise<void>;
@@ -37,6 +41,12 @@ interface ProfileState {
   fetchDailySessionsCount: () => Promise<void>;
   canStartSession: () => boolean;
   incrementSessionCountLocal: () => void;
+  fetchReadingLives: () => Promise<void>;
+  getAvailableReadingLives: () => number;
+  canStartReading: () => boolean;
+  consumeReadingLife: () => Promise<boolean>;
+  refundReadingLifeIfQualified: (comprehension: number) => Promise<void>;
+  timeToNextLife: () => number;
 }
 
 const DEFAULT_PROFILE: Profile = {
@@ -101,6 +111,8 @@ export const useProfileStore = create<ProfileState>()(
       profile: DEFAULT_PROFILE,
       isLoading: false,
       dailySessionsCount: 0,
+      readingLives: MAX_READING_LIVES,
+      nextLifeAt: null,
 
       fetchProfile: async () => {
         set({ isLoading: true });
@@ -199,7 +211,7 @@ export const useProfileStore = create<ProfileState>()(
 
       setProfileLocal: (profile: Profile) => set({ profile }),
 
-      reset: () => set({ profile: DEFAULT_PROFILE, dailySessionsCount: 0 }),
+      reset: () => set({ profile: DEFAULT_PROFILE, dailySessionsCount: 0, readingLives: MAX_READING_LIVES, nextLifeAt: null }),
 
       isPremium: () => {
         const p = get().profile;
@@ -238,6 +250,72 @@ export const useProfileStore = create<ProfileState>()(
       incrementSessionCountLocal: () => {
         set(state => ({ dailySessionsCount: state.dailySessionsCount + 1 }));
       },
+
+      // --- Vidas de lectura -------------------------------------------------
+
+      fetchReadingLives: async () => {
+        const current = get().profile;
+        // Local o premium: se trata como vidas llenas (premium ignora el sistema).
+        if (!current || current.id === 'local' || get().isPremium()) {
+          set({ readingLives: MAX_READING_LIVES, nextLifeAt: null });
+          return;
+        }
+        try {
+          const { data, error } = await supabase.rpc('get_reading_lives');
+          const row = Array.isArray(data) ? data[0] : data;
+          if (!error && row) {
+            set({ readingLives: Number(row.lives), nextLifeAt: row.next_regen_at ?? null });
+          }
+        } catch (err) {
+          console.warn('Error fetching reading lives:', err);
+        }
+      },
+
+      getAvailableReadingLives: () => {
+        if (get().isPremium()) return MAX_READING_LIVES;
+        return get().readingLives;
+      },
+
+      canStartReading: () => {
+        if (!LIVES_ENABLED) return true;
+        if (get().isPremium()) return true;
+        return get().readingLives >= 1;
+      },
+
+      consumeReadingLife: async () => {
+        const current = get().profile;
+        // Sin coste para premium, flag apagado o usuario local.
+        if (!LIVES_ENABLED || get().isPremium() || !current || current.id === 'local') {
+          return true;
+        }
+        try {
+          const { data, error } = await supabase.rpc('consume_reading_life');
+          const row = Array.isArray(data) ? data[0] : data;
+          if (error || !row) return false;
+          set({ readingLives: Number(row.lives), nextLifeAt: row.next_regen_at ?? null });
+          return row.ok === true;
+        } catch (err) {
+          console.warn('Error consuming reading life:', err);
+          return false;
+        }
+      },
+
+      refundReadingLifeIfQualified: async (comprehension: number) => {
+        if (!LIVES_ENABLED || comprehension < REFUND_COMPREHENSION_THRESHOLD) return;
+        const current = get().profile;
+        if (get().isPremium() || !current || current.id === 'local') return;
+        try {
+          const { data, error } = await supabase.rpc('refund_reading_life');
+          const row = Array.isArray(data) ? data[0] : data;
+          if (!error && row) {
+            set({ readingLives: Number(row.lives), nextLifeAt: row.next_regen_at ?? null });
+          }
+        } catch (err) {
+          console.warn('Error refunding reading life:', err);
+        }
+      },
+
+      timeToNextLife: () => msToNextLife(get().nextLifeAt),
     }),
     {
       name:    'lectorapp-profile',

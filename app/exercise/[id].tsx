@@ -18,6 +18,8 @@ import { AIChatbot } from '../../components/ui/AIChatbot';
 
 import { EXERCISES } from '../../constants/exercises';
 import { getLevel } from '../../constants/difficulty';
+import { isReadingExercise, MAX_READING_LIVES, PRACTICE_MODE_XP_FACTOR, REFUND_COMPREHENSION_THRESHOLD } from '../../constants/lives';
+import { ReadingLives } from '../../components/ReadingLives';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { adaptLevel } from '../../lib/adaptLevel';
@@ -107,7 +109,16 @@ export default function ExerciseScreen() {
     canStartSession,
     incrementSessionCountLocal,
     isPremium,
+    fetchReadingLives,
+    canStartReading,
+    consumeReadingLife,
+    refundReadingLifeIfQualified,
+    readingLives,
+    nextLifeAt,
   } = useProfileStore();
+
+  const isReading = isReadingExercise(exerciseId);
+  const showLives = isReading && !isPremium();
 
   const { get: getProgress, update: updateProgress } = useProgressStore();
   const { insert: insertSession }          = useSessionStore();
@@ -118,9 +129,13 @@ export default function ExerciseScreen() {
   const [result, setResult]                = useState<BuiltResult | null>(null);
   const [newAchievements, setNewAchievements] = useState<string[]>([]);
   const [showLimitModal, setShowLimitModal]   = useState(false);
+  const [showLivesModal, setShowLivesModal]   = useState(false);
+  const [practiceMode, setPracticeMode]       = useState(false);
+  const [livesNote, setLivesNote]             = useState<string | null>(null);
 
   React.useEffect(() => {
     fetchDailySessionsCount();
+    fetchReadingLives();
   }, []);
 
   // Customizable parametric states for exercises. Cuando el nodo fija un nivel,
@@ -163,8 +178,28 @@ export default function ExerciseScreen() {
 
     const prog = getProgress(dbExerciseId as ExerciseId);
     const built = buildResult(exerciseId, exercise, raw);
+    // Modo práctica (lectura sin vidas): XP reducido.
+    if (isReading && practiceMode) {
+      built.xpEarned = Math.floor(built.xpEarned * PRACTICE_MODE_XP_FACTOR);
+    }
     setResult(built);
-    incrementSessionCountLocal();
+    // La lectura se rige por vidas, no por el cupo diario de 3 sesiones.
+    if (!isReading) {
+      incrementSessionCountLocal();
+    }
+
+    // Mensaje contextual de vidas para la pantalla de resultado.
+    if (isReading && !isPremium()) {
+      if (practiceMode) {
+        setLivesNote('Modo práctica · XP reducido (no gastaste vidas)');
+      } else if ((raw.comprehension ?? 0) >= REFUND_COMPREHENSION_THRESHOLD) {
+        setLivesNote('💚 +1 vida por tu comprensión ≥80%');
+      } else {
+        setLivesNote('Has usado 1 vida de lectura');
+      }
+    } else {
+      setLivesNote(null);
+    }
 
     const score = built.passed ? (raw.comprehension ?? (raw.correct && raw.total ? raw.correct / raw.total : 0.9)) : 0.4;
     const clampedScore = Math.max(0, Math.min(1, score as number));
@@ -210,6 +245,12 @@ export default function ExerciseScreen() {
       await completeNode(nodeId);
     }
 
+    // Premio a la calidad: comprensión >= 80% devuelve 1 vida (no en práctica,
+    // que no consumió ninguna). El umbral se valida dentro de la acción.
+    if (isReading && !practiceMode) {
+      await refundReadingLifeIfQualified(raw.comprehension ?? 0);
+    }
+
     // Update streak server-side (no-op when offline / no session)
     const { data: authData } = await supabase.auth.getSession();
     if (authData.session) {
@@ -238,8 +279,18 @@ export default function ExerciseScreen() {
       <>
         <ExerciseIntro
           exercise={exercise}
-          onStart={() => {
-            if (!canStartSession()) {
+          livesBanner={showLives ? <ReadingLives lives={readingLives} nextLifeAt={nextLifeAt} /> : null}
+          onStart={async () => {
+            if (isReading) {
+              // Lectura: regida por vidas (premium ignora el sistema).
+              if (!canStartReading()) {
+                setShowLivesModal(true);
+                return;
+              }
+              await consumeReadingLife();
+              setPracticeMode(false);
+              setPhase('playing');
+            } else if (!canStartSession()) {
               setShowLimitModal(true);
             } else {
               setPhase('playing');
@@ -310,6 +361,66 @@ export default function ExerciseScreen() {
             </View>
           </View>
         </Modal>
+
+        {/* Modal de vidas de lectura agotadas (regulador suave + modo práctica) */}
+        <Modal
+          visible={showLivesModal}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowLivesModal(false)}
+        >
+          <View style={limitStyles.modalOverlay}>
+            <BlurView intensity={70} style={StyleSheet.absoluteFill} tint="dark" />
+            <View style={limitStyles.limitCard}>
+              <View style={limitStyles.mascotContainer}>
+                <MascotChar which="calm" size={105} expression="sleepy" />
+              </View>
+
+              <Text style={limitStyles.limitTitle}>¡Sin vidas de lectura!</Text>
+
+              <View style={{ marginVertical: 12 }}>
+                <ReadingLives lives={readingLives} nextLifeAt={nextLifeAt} />
+              </View>
+
+              <Text style={limitStyles.limitText}>
+                Recuperas <Text style={{ fontFamily: FONTS.headingBold, color: COLORS.focus }}>1 vida cada 30 minutos</Text> (hasta {MAX_READING_LIVES}). También puedes seguir practicando ahora mismo con XP reducido.
+              </Text>
+
+              <Pressable
+                style={limitStyles.upgradeBtn}
+                onPress={() => {
+                  setShowLivesModal(false);
+                  setPracticeMode(true);
+                  setPhase('playing');
+                }}
+              >
+                <LinearGradient
+                  colors={[accent, accent]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={limitStyles.gradientBtn}
+                >
+                  <Ionicons name="book" size={16} color="#fff" style={{ marginRight: 6 }} />
+                  <Text style={limitStyles.upgradeText}>Practicar igualmente (XP reducido)</Text>
+                </LinearGradient>
+              </Pressable>
+
+              <Pressable
+                style={limitStyles.closeBtn}
+                onPress={() => {
+                  setShowLivesModal(false);
+                  router.push('/(tabs)/tienda');
+                }}
+              >
+                <Text style={limitStyles.closeText}>Entrenar sin límites (PRO)</Text>
+              </Pressable>
+
+              <Pressable style={limitStyles.closeBtn} onPress={() => setShowLivesModal(false)}>
+                <Text style={limitStyles.closeText}>Esperaré a recuperar vidas</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </>
     );
   } else if (phase === 'result' && result) {
@@ -318,8 +429,9 @@ export default function ExerciseScreen() {
         exercise={exercise}
         result={result}
         newAchievements={newAchievements}
+        livesNote={livesNote}
         onContinue={() => router.back()}
-        onRetry={() => { setResult(null); setPhase('playing'); setNewAchievements([]); }}
+        onRetry={() => { setResult(null); setPhase('playing'); setNewAchievements([]); setLivesNote(null); }}
       />
     );
   } else {
@@ -489,6 +601,7 @@ function ExerciseIntro({
   exercise,
   onStart,
   onBack,
+  livesBanner,
   schulteSize,
   setSchulteSize,
   wordSpanCount,
@@ -507,6 +620,7 @@ function ExerciseIntro({
   exercise: typeof EXERCISES[string];
   onStart: () => void;
   onBack: () => void;
+  livesBanner?: React.ReactNode;
   schulteSize: number;
   setSchulteSize: (val: number) => void;
   wordSpanCount: number;
@@ -743,6 +857,8 @@ function ExerciseIntro({
           <Text style={introStyles.title}>{exercise.title}</Text>
         </View>
 
+        {livesBanner ? <View style={{ marginBottom: 14 }}>{livesBanner}</View> : null}
+
         <View style={introStyles.demoWrap}>
           <ExerciseDemo kind={exercise.id as ExerciseId} accent={c} height={180} />
         </View>
@@ -811,10 +927,11 @@ function MetaChip({ label, value, color }: { label: string; value: string; color
 
 // ─── Result screen ────────────────────────────────────────────────────────────
 
-function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry }: {
+function ExerciseResult({ exercise, result, newAchievements, livesNote, onContinue, onRetry }: {
   exercise: typeof EXERCISES[string];
   result: BuiltResult;
   newAchievements: string[];
+  livesNote?: string | null;
   onContinue: () => void;
   onRetry: () => void;
 }) {
@@ -875,6 +992,13 @@ function ExerciseResult({ exercise, result, newAchievements, onContinue, onRetry
             <StatCard key={i} stat={s} delay={200 + i * 80} />
           ))}
         </View>
+
+        {livesNote ? (
+          <View style={resultStyles.livesNote}>
+            <Ionicons name="heart" size={18} color="#EF4444" />
+            <Text style={resultStyles.livesNoteText}>{livesNote}</Text>
+          </View>
+        ) : null}
 
         {result.passed && !xp2xActivated && (
           <View style={resultStyles.xpCard}>
@@ -1272,6 +1396,8 @@ const resultStyles = StyleSheet.create({
   xpLabel:      { fontFamily: FONTS.headingSemi, fontSize: 10, color: '#92400E', textTransform: 'uppercase', letterSpacing: 1 },
   xpValue:      { fontFamily: FONTS.heading, fontSize: 20, color: '#78350F' },
   insightCard:  { backgroundColor: COLORS.white, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', gap: 12 },
+  livesNote:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, backgroundColor: '#FEF2F2', borderRadius: 14, borderWidth: 1, borderColor: '#FECACA', paddingVertical: 10, paddingHorizontal: 14 },
+  livesNoteText: { fontFamily: FONTS.headingSemi, fontSize: 13, color: '#991B1B' },
   insightLabel: { fontFamily: FONTS.headingSemi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
   insightText:  { fontFamily: FONTS.body, fontSize: 13, color: '#374151', lineHeight: 20 },
   footer:       { padding: 16, paddingBottom: 28, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.surface, flexDirection: 'row', gap: 10 },
