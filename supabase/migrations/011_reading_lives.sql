@@ -177,7 +177,7 @@ as $$
     from public.sessions
     where user_id = p_user_id
       and finished_at >= p_start_of_day
-      and exercise_id not in ('reading', 'freereading', 'comprehension');
+      and exercise_id::text not in ('reading', 'freereading', 'comprehension');
 $$;
 
 revoke all on function public.get_user_daily_session_count(uuid, timestamptz) from public;
