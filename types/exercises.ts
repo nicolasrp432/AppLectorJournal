@@ -36,7 +36,9 @@ export interface ResultStat {
 // Difficulty configs per exercise
 export interface SchulteLevel { level: number; label: string; size: number; target_time: number; inverse?: boolean; showQuadrantHint?: boolean }
 export interface WordSpanLevel { level: number; label: string; count: number; show_ms: number }
-export interface LociLevel    { level: number; label: string; count: number }
+/** Modo de recuerdo del Loci: tocar la habitación, recuerdo libre o recorrido ordenado. */
+export type LociRecallMode = 'recognition' | 'free' | 'ordered';
+export interface LociLevel    { level: number; label: string; count: number; recall: LociRecallMode; delayed: boolean }
 export interface ComprehensionLevel { level: number; label: string; length: 'short'|'medium'|'long'; q_count: number }
 export interface ReadingLevel { level: number; label: string; wpm: number }
 export interface BossLevel    { level: number; label: string; zone: string }

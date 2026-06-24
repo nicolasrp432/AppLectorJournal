@@ -1,14 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import { guard, corsHeaders as buildCors } from "../_shared/guard.ts";
 
 serve(async (req) => {
+  const origin = req.headers.get('Origin');
+  const corsHeaders = buildCors(origin);
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  const auth = await guard(req, { fn: 'ai-chat', limit: 40, windowSec: 3600 });
+  if (auth instanceof Response) return auth;
 
   try {
     const { messages, context } = await req.json();

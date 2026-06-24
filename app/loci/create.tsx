@@ -44,24 +44,40 @@ export default function LociCreateScreen() {
   const [currentGenIndex, setCurrentGenIndex] = useState(0);
   const [memoriesWithImages, setMemoriesWithImages] = useState<{ room: string; concept: string; story: string; image_url?: string }[]>([]);
 
-  const handleStartDecomposition = async () => {
-    if (!topic.trim()) return;
-    
-    let rooms: string[] = [];
+  // Resuelve la lista de habitaciones según la plantilla elegida.
+  const resolveRooms = (): string[] | null => {
     if (theme === 'custom') {
       const parsed = customRoomsText.split(',').map(r => r.trim()).filter(Boolean);
       if (parsed.length < 3) {
         alert('Por favor ingresa al menos 3 habitaciones separadas por comas.');
-        return;
+        return null;
       }
-      rooms = parsed;
-    } else {
-      rooms = ROOMS_LIST[theme];
+      return parsed;
     }
+    return ROOMS_LIST[theme];
+  };
+
+  // Camino "lo escribo yo": el usuario es el autor de cada asociación. La IA
+  // queda como ayuda OPCIONAL dentro del paso de edición (es donde se aprende
+  // la técnica). Ver docs/PLAN_MEJORAS_Y_EJERCICIOS.md (B2).
+  const handleSelfAuthor = () => {
+    if (!topic.trim()) return;
+    const rooms = resolveRooms();
+    if (!rooms) return;
+    setGeneratedConcepts(rooms.map(room => ({ room, concept: '', story: '' })));
+    setStep('concepts');
+  };
+
+  // Camino "borrador con IA": la IA propone, pero el resultado es EDITABLE por
+  // el usuario en el paso siguiente.
+  const handleAiDraft = async () => {
+    if (!topic.trim()) return;
+    const rooms = resolveRooms();
+    if (!rooms) return;
 
     setStep('splitting');
-    setLoadingText('Decomponiendo tu tema con Inteligencia Artificial...');
-    
+    setLoadingText('Creando un borrador con IA (podrás editarlo)...');
+
     try {
       const { data, error } = await invokeEdgeFunction<{ concepts: any[] }>('ai-loci-split', {
         topic,
@@ -78,19 +94,47 @@ export default function LociCreateScreen() {
       }
     } catch (err) {
       console.warn(err);
-      alert('Error al conectar con la Inteligencia Artificial. Usando desglose básico.');
-      // Local fallback
-      const fallback = rooms.map((room, idx) => ({
-        room,
-        concept: `${topic} - Parte ${idx + 1}`,
-        story: `Una escena surrealista y divertida sobre ${topic} que ocurre en: ${room}.`,
-      }));
-      setGeneratedConcepts(fallback);
+      alert('No se pudo conectar con la IA. Te dejamos las habitaciones para que escribas tú las asociaciones.');
+      setGeneratedConcepts(rooms.map(room => ({ room, concept: '', story: '' })));
       setStep('concepts');
     }
   };
 
+  const updateConcept = (idx: number, field: 'concept' | 'story', value: string) => {
+    setGeneratedConcepts(cs => cs.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
+  };
+
+  // Ayuda opcional: rellena con IA solo los campos que el usuario dejó vacíos.
+  const [suggesting, setSuggesting] = useState(false);
+  const handleSuggestEmpty = async () => {
+    const rooms = generatedConcepts.map(c => c.room);
+    setSuggesting(true);
+    try {
+      const { data, error } = await invokeEdgeFunction<{ concepts: any[] }>('ai-loci-split', {
+        topic, theme, rooms,
+      });
+      if (error || !data?.concepts?.length) throw error || new Error('Sin sugerencias');
+      setGeneratedConcepts(cs => cs.map((c, i) => ({
+        room: c.room,
+        concept: c.concept?.trim() ? c.concept : (data.concepts[i]?.concept ?? ''),
+        story: c.story?.trim() ? c.story : (data.concepts[i]?.story ?? ''),
+      })));
+    } catch (err) {
+      console.warn(err);
+      alert('No se pudieron obtener sugerencias de la IA en este momento.');
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   const handleConfirmConcepts = async () => {
+    // El usuario es el autor: cada locus necesita al menos QUÉ recordar.
+    const missing = generatedConcepts.filter(c => !c.concept?.trim()).length;
+    if (missing > 0) {
+      alert(`Faltan ${missing} ${missing === 1 ? 'habitación' : 'habitaciones'} por completar (escribe qué recordar en cada una).`);
+      return;
+    }
+
     setStep('generating');
     setLoadingText('Consolidando tu Palacio Mental...');
 
@@ -182,11 +226,22 @@ export default function LociCreateScreen() {
           <View style={{ height: 24 }} />
           <PushButton
             color={COLORS.loci}
-            onPress={handleStartDecomposition}
+            onPress={handleSelfAuthor}
             disabled={!topic.trim() || (theme === 'custom' && !customRoomsText.trim())}
           >
-            Comenzar construcción
+            Escribir yo mis asociaciones
           </PushButton>
+          <Pressable
+            onPress={handleAiDraft}
+            disabled={!topic.trim() || (theme === 'custom' && !customRoomsText.trim())}
+            style={[styles.secondaryBtn, (!topic.trim() || (theme === 'custom' && !customRoomsText.trim())) && { opacity: 0.5 }]}
+          >
+            <Ionicons name="sparkles-outline" size={16} color={COLORS.loci} />
+            <Text style={styles.secondaryBtnText}>Empezar con un borrador de IA</Text>
+          </Pressable>
+          <Text style={styles.authorHint}>
+            Crear tú mismo las imágenes mentales es lo que de verdad entrena tu memoria. La IA es solo una ayuda opcional.
+          </Text>
           <View style={{ height: 40 }} />
         </ScrollView>
       )}
@@ -203,27 +258,55 @@ export default function LociCreateScreen() {
         </View>
       )}
 
-      {/* STEP 3: CONCEPTS PREVIEW */}
+      {/* STEP 3: AUTHORING (editable) */}
       {step === 'concepts' && (
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Plan de Memorización</Text>
-          <Text style={styles.subtitle}>Hemos dividido "{topic}" en 5 sub-conceptos para colocarlos en tu Palacio.</Text>
+          <Text style={styles.title}>Construye tu Palacio</Text>
+          <Text style={styles.subtitle}>
+            Para cada habitación, escribe QUÉ quieres recordar y una imagen mental vívida y absurda que lo ancle a ese lugar. Cuanto más exagerada, mejor se recuerda.
+          </Text>
+
+          <Pressable onPress={handleSuggestEmpty} disabled={suggesting} style={styles.suggestBtn}>
+            {suggesting ? (
+              <ActivityIndicator size="small" color={COLORS.loci} />
+            ) : (
+              <Ionicons name="sparkles" size={15} color={COLORS.loci} />
+            )}
+            <Text style={styles.suggestBtnText}>
+              {suggesting ? 'Pensando…' : 'Rellenar lo vacío con sugerencias de IA'}
+            </Text>
+          </Pressable>
 
           <View style={styles.conceptList}>
             {generatedConcepts.map((item, idx) => (
               <View key={idx} style={styles.conceptCard}>
                 <View style={styles.conceptBadge}>
-                  <Text style={styles.conceptBadgeText}>{item.room}</Text>
+                  <Text style={styles.conceptBadgeText}>Locus {idx + 1} · {item.room}</Text>
                 </View>
-                <Text style={styles.conceptTitle}>{item.concept}</Text>
-                <Text style={styles.conceptStory}>{item.story}</Text>
+                <Text style={styles.authorFieldLabel}>Qué recordar aquí</Text>
+                <TextInput
+                  style={styles.authorInput}
+                  value={item.concept}
+                  onChangeText={(v) => updateConcept(idx, 'concept', v)}
+                  placeholder="Ej: Mercurio, Leche, el año 1492…"
+                  placeholderTextColor={COLORS.subtle}
+                />
+                <Text style={styles.authorFieldLabel}>Tu imagen mental (asociación)</Text>
+                <TextInput
+                  style={[styles.authorInput, styles.authorInputMultiline]}
+                  value={item.story}
+                  onChangeText={(v) => updateConcept(idx, 'story', v)}
+                  placeholder="Ej: Un termómetro gigante con patas corre por la entrada chamuscando todo…"
+                  placeholderTextColor={COLORS.subtle}
+                  multiline
+                />
               </View>
             ))}
           </View>
 
           <View style={{ height: 24 }} />
           <PushButton color={COLORS.loci} onPress={handleConfirmConcepts}>
-            Confirmar y pintar Palacio (Google Imagen 3)
+            Guardar mi Palacio
           </PushButton>
           <View style={{ height: 40 }} />
         </ScrollView>
@@ -235,7 +318,7 @@ export default function LociCreateScreen() {
           <View style={styles.successBox}>
             <Ionicons name="checkmark-circle" size={80} color="#10B981" />
             <Text style={styles.successTitle}>¡Palacio Creado con Éxito!</Text>
-            <Text style={styles.successSub}>Tu Palacio sobre "{topic}" ha sido guardado de forma permanente local y sincronizado.</Text>
+            <Text style={styles.successSub}>Tu Palacio sobre «{topic}» ha sido guardado de forma permanente local y sincronizado.</Text>
           </View>
 
           <Text style={styles.sectionTitle}>Recorrido del Palacio</Text>
@@ -313,6 +396,16 @@ const styles = StyleSheet.create({
   conceptBadgeText: { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.loci, textTransform: 'uppercase' },
   conceptTitle:     { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink },
   conceptStory:     { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, marginTop: 6, lineHeight: 20 },
+
+  secondaryBtn:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.loci, backgroundColor: COLORS.loci + '08' },
+  secondaryBtnText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.loci },
+  authorHint:       { fontFamily: FONTS.body, fontSize: 11.5, color: COLORS.muted, textAlign: 'center', lineHeight: 16, marginTop: 12, paddingHorizontal: 8 },
+
+  suggestBtn:       { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: COLORS.loci + '40', backgroundColor: COLORS.loci + '08' },
+  suggestBtnText:   { fontFamily: FONTS.headingSemi, fontSize: 12.5, color: COLORS.loci },
+  authorFieldLabel: { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 12, marginBottom: 6 },
+  authorInput:      { fontFamily: FONTS.body, fontSize: 14, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 14, color: COLORS.ink, backgroundColor: COLORS.canvas },
+  authorInputMultiline: { minHeight: 72, textAlignVertical: 'top' },
 
   successBox:       { alignItems: 'center', marginVertical: 32 },
   successTitle:     { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, marginTop: 16 },

@@ -77,8 +77,14 @@ export async function invokeEdgeFunction<T = any>(
       return { data: null, error: new Error('Supabase URL no configurada') };
     }
 
+    // Las Edge Functions ahora exigen un usuario autenticado (validan el JWT en
+    // su cuerpo). Enviamos el access_token real del usuario; la clave anon ya no
+    // sirve como credencial de usuario, solo como apikey de enrutado del gateway.
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token ?? SUPABASE_ANON;
+    const token = session?.access_token;
+    if (!token) {
+      return { data: null, error: new Error('Debes iniciar sesión para usar las funciones de IA.') };
+    }
 
     const response = await fetch(`${SUPABASE_URL}/functions/v1/${functionName}`, {
       method: 'POST',

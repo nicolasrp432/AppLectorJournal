@@ -2,6 +2,9 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../lib/supabase';
+import { getStarterPalace, isStarterPalaceId } from '../constants/lociStarterPalaces';
+import { calculateSM2 } from '../lib/sm2';
+import { isDue } from '../lib/loci';
 
 export interface LociMemoryItem {
   id: string;
@@ -18,7 +21,17 @@ export interface UserMemoryPalace {
   theme: 'casa' | 'oficina' | 'naturaleza' | 'cuerpo' | 'mano' | 'custom';
   created_at: string;
   memories: LociMemoryItem[];
+  // Programación de repaso espaciado (SM-2). Opcionales: los palacios antiguos
+  // o los de ejemplo no las traen y se tratan con valores por defecto.
+  interval?: number;        // días hasta el próximo repaso
+  repetitions?: number;     // repasos correctos consecutivos
+  easeFactor?: number;      // factor de facilidad (EF)
+  nextDue?: string;         // ISO; cuándo toca repasar
+  lastReviewedAt?: string;  // ISO; último repaso
 }
+
+/** Valores de programación SM-2 por defecto (palacio nunca repasado). */
+const DEFAULT_REVIEW = { interval: 0, repetitions: 0, easeFactor: 2.5 };
 
 interface LociStoreState {
   palaces: UserMemoryPalace[];
@@ -29,6 +42,10 @@ interface LociStoreState {
   getPalace: (id: string) => UserMemoryPalace | undefined;
   deletePalace: (id: string) => Promise<void>;
   updateMemoryImage: (palaceId: string, memoryId: string, imageUrl: string) => Promise<void>;
+  /** Programa el siguiente repaso del palacio con SM-2 a partir de la calidad [0,5]. */
+  reviewPalace: (palaceId: string, quality: number) => Promise<void>;
+  /** Palacios propios (no de ejemplo) cuyo repaso ya vence. */
+  getDuePalaces: () => UserMemoryPalace[];
   reset: () => void;
 }
 
@@ -40,7 +57,9 @@ export const useLociStore = create<LociStoreState>()(
       reset: () => set({ palaces: [] }),
 
       getPalace: (id) => {
-        return get().palaces.find(p => p.id === id);
+        // Los palacios del usuario tienen prioridad; si no, se resuelve contra
+        // los palacios de ejemplo pre-construidos (solo lectura).
+        return get().palaces.find(p => p.id === id) ?? getStarterPalace(id);
       },
 
       fetchPalaces: async () => {
@@ -89,6 +108,11 @@ export const useLociStore = create<LociStoreState>()(
                 theme: p.theme as any,
                 created_at: p.created_at,
                 memories: palaceMemories,
+                interval: p.interval ?? DEFAULT_REVIEW.interval,
+                repetitions: p.repetitions ?? DEFAULT_REVIEW.repetitions,
+                easeFactor: p.ease_factor ?? DEFAULT_REVIEW.easeFactor,
+                nextDue: p.next_due ?? undefined,
+                lastReviewedAt: p.last_reviewed_at ?? undefined,
               };
             });
 
@@ -116,6 +140,7 @@ export const useLociStore = create<LociStoreState>()(
             story: m.story,
             image_url: m.image_url,
           })),
+          ...DEFAULT_REVIEW,
         };
 
         // Save locally first
@@ -178,6 +203,10 @@ export const useLociStore = create<LociStoreState>()(
                   theme,
                   created_at: pRes.created_at,
                   memories: dbMemories,
+                  interval: pRes.interval ?? DEFAULT_REVIEW.interval,
+                  repetitions: pRes.repetitions ?? DEFAULT_REVIEW.repetitions,
+                  easeFactor: pRes.ease_factor ?? DEFAULT_REVIEW.easeFactor,
+                  nextDue: pRes.next_due ?? undefined,
                 };
 
                 set(state => ({
@@ -225,6 +254,55 @@ export const useLociStore = create<LociStoreState>()(
         } catch (err) {
           console.warn('Could not persist loci image to Supabase:', err);
         }
+      },
+
+      // Programa el siguiente repaso del palacio con SM-2 (mismo motor que las
+      // flashcards). Actualiza el estado local y persiste en Supabase, salvo en
+      // palacios de ejemplo (solo lectura) o sin sesión.
+      reviewPalace: async (palaceId, quality) => {
+        const palace = get().palaces.find(p => p.id === palaceId);
+        if (!palace) return; // los palacios de ejemplo no se programan.
+
+        const { interval, repetitions, easeFactor, nextDue } = calculateSM2(
+          quality,
+          palace.interval ?? DEFAULT_REVIEW.interval,
+          palace.repetitions ?? DEFAULT_REVIEW.repetitions,
+          palace.easeFactor ?? DEFAULT_REVIEW.easeFactor,
+        );
+        const nextDueIso = nextDue.toISOString();
+        const lastReviewedAt = new Date().toISOString();
+
+        set(state => ({
+          palaces: state.palaces.map(p => p.id === palaceId
+            ? { ...p, interval, repetitions, easeFactor, nextDue: nextDueIso, lastReviewedAt }
+            : p),
+        }));
+
+        if (isStarterPalaceId(palaceId) || palaceId.startsWith('pal_')) {
+          return; // ejemplo o palacio aún no sincronizado con la BD.
+        }
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session) {
+            await supabase
+              .from('user_memory_palaces')
+              .update({
+                interval,
+                repetitions,
+                ease_factor: easeFactor,
+                next_due: nextDueIso,
+                last_reviewed_at: lastReviewedAt,
+              })
+              .eq('id', palaceId);
+          }
+        } catch (err) {
+          console.warn('Could not persist palace review to Supabase:', err);
+        }
+      },
+
+      getDuePalaces: () => {
+        const now = new Date();
+        return get().palaces.filter(p => !isStarterPalaceId(p.id) && isDue(p.nextDue, now));
       },
     }),
     {
