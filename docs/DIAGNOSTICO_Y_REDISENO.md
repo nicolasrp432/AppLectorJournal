@@ -222,8 +222,46 @@ mazo, nunca. Esto ya conviene aplicarlo a `ai-flashcards`.
 | `7f94a89` | Entitlement premium autoritativo en servidor: migración 012, `lib/premium.ts`, RevenueCat con `logIn`/claves por plataforma, webhook, 12 tests |
 | `983276d` | Dificultad progresiva en la ruta: `lib/nodeDifficulty.ts`, nivel de nodo como suelo, UI del nivel efectivo, 10 tests |
 | `2fdb85a` | Objetivo metacognitivo y calibración: `lib/readingGoals.ts`, `ReadingGoalStep`, feedback en resultado, 11 tests |
+| `527dc41` | Liga competitiva real: migración 013, `lib/league.ts`, `useLeagueStore` con Realtime, componentes en `components/league/`, 31 tests |
+| `ce308e6` | Capa de Realtime reutilizable (`lib/realtime.ts`) e integración de la liga en progreso |
 
-De 59 a 92 tests. Typecheck limpio en todo momento.
+De 59 a 123 tests. Typecheck limpio en todo momento.
+
+### 4.1 La liga era una maqueta
+
+Vivía entera dentro de `perfil.tsx`:
+
+- Cuatro rivales con XP constante escrito a mano (Camila 750, Carlos 620, Mateo
+  320, Sofía 210). Nunca cambiaban.
+- El literal `'3d 12h'` como temporizador. No corría.
+- El tier salía de `profile.level`, no de competir: subir de nivel te "ascendía
+  de liga" aunque no hubieras entrenado esa semana.
+- El indicador de ascenso y descenso no ascendía ni descendía a nadie.
+
+Ahora: cohortes semanales de hasta 30 por tier, ciclo lunes→domingo en UTC, y
+ascenso/descenso resuelto al entrar en el ciclo nuevo. La resolución es perezosa
+a propósito — un cron sería un punto de fallo extra para algo que solo tiene que
+ser correcto en el momento de consultarlo.
+
+Dos decisiones que conviene conocer:
+
+- **El cliente no escribe `weekly_xp`.** Misma lección que 012: si pudiera, la
+  clasificación sería tan decorativa como la maqueta. Todo pasa por
+  `add_league_xp()`, con tope por llamada.
+- **Nombre y avatar se copian al entrar en la cohorte** en vez de unir contra
+  `profiles`. Unir obligaría a abrir esa tabla a terceros y filtraría el email;
+  un marcador solo necesita nombre y avatar.
+
+### 4.2 No existía ninguna integración en tiempo real
+
+Cero usos de Supabase Realtime en todo el proyecto antes de esta sesión. La liga
+es la primera: una clasificación que solo se actualiza al recargar la pantalla es
+una foto, no una liga.
+
+`lib/realtime.ts` deja la capa lista para reutilizar (registro de canales por
+clave, baja automática, `unsubscribeAll()` al cerrar sesión). El cliente no-op de
+`supabase.ts` tampoco tenía `channel`, así que cualquier suscripción reventaba
+sin variables de entorno configuradas; también está corregido.
 
 ---
 
@@ -239,6 +277,18 @@ De 59 a 92 tests. Typecheck limpio en todo momento.
    `get_entitlement()` → premium activo en la app.
 
 Sin esto, todo lo demás es secundario: la app no puede cobrar.
+
+### Fase A-bis — activar la liga (minutos)
+
+1. Aplicar `013_leagues.sql`.
+2. Comprobar en el panel de Supabase que Realtime está habilitado para el
+   proyecto y que `league_members` figura en la publicación `supabase_realtime`
+   (la migración lo añade, pero conviene verlo).
+3. Probar con dos cuentas a la vez: al terminar un ejercicio en una, la
+   clasificación de la otra debe moverse sin recargar.
+
+Con una sola cuenta la cohorte tendrá un único miembro y parecerá vacía — es el
+comportamiento correcto, no un fallo.
 
 ### Fase B — Schulte con crowding adaptativo (1–2 días)
 
