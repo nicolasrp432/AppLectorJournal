@@ -1,42 +1,55 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { revenueCat, SubscriptionOffering } from '../lib/revenuecat';
+import { revenueCat, SubscriptionOffering, PurchaseResult } from '../lib/revenuecat';
 import { useProfileStore } from './useProfileStore';
-import { supabase } from '../lib/supabase';
 
 interface SubscriptionState {
   isPremium: boolean;
   isLoading: boolean;
   offerings: SubscriptionOffering[];
+  /** Último motivo de fallo de compra/restauración, para que la UI lo explique. */
+  lastError: PurchaseResult['reason'] | null;
   initialize: () => Promise<void>;
   fetchOfferings: () => Promise<void>;
   checkSubscription: () => Promise<boolean>;
-  purchase: (offering: SubscriptionOffering) => Promise<boolean>;
-  restore: () => Promise<boolean>;
+  purchase: (offering: SubscriptionOffering) => Promise<PurchaseResult>;
+  restore: () => Promise<PurchaseResult>;
   reset: () => void;
 }
 
+/**
+ * Estado de suscripción del cliente.
+ *
+ * Regla clave: este store NO decide quién es premium; solo *dispara* la compra
+ * y luego pregunta al servidor. Antes escribía él mismo
+ * `subscription_tier: 'premium'` en la tabla `profiles`, lo que combinado con la
+ * política RLS abierta convertía cualquier "compra" simulada (web/Expo Go) en
+ * premium real y permanente en la base de datos.
+ */
 export const useSubscriptionStore = create<SubscriptionState>()(
   persist(
     (set, get) => ({
       isPremium: false,
       isLoading: false,
       offerings: [],
+      lastError: null,
 
       initialize: async () => {
         set({ isLoading: true });
         try {
-          // 1. Initialise RevenueCat SDK
           await revenueCat.configure();
-          
-          // 2. Fetch packages & check entitlement
-          await Promise.all([
-            get().fetchOfferings(),
-            get().checkSubscription(),
-          ]);
+
+          // Vincula las compras al usuario de Supabase antes de leer nada:
+          // sin esto RevenueCat trabaja con un id anónimo por instalación.
+          const profile = useProfileStore.getState().profile;
+          if (profile && profile.id !== 'local') {
+            await revenueCat.identify(profile.id);
+          }
+
+          await Promise.all([get().fetchOfferings(), get().checkSubscription()]);
         } catch (error) {
-          console.warn('[SubscriptionStore] Initialization failed:', error);
+          console.warn('[SubscriptionStore] Fallo al inicializar:', error);
         } finally {
           set({ isLoading: false });
         }
@@ -44,113 +57,110 @@ export const useSubscriptionStore = create<SubscriptionState>()(
 
       fetchOfferings: async () => {
         try {
-          const offerings = await revenueCat.getOfferings();
-          set({ offerings });
+          set({ offerings: await revenueCat.getOfferings() });
         } catch (error) {
-          console.error('[SubscriptionStore] Error fetching offerings:', error);
+          console.error('[SubscriptionStore] Error obteniendo offerings:', error);
         }
       },
 
+      /**
+       * El servidor manda. Se consulta `get_entitlement()`; RevenueCat solo
+       * sirve de señal para forzar un refresco cuando el webhook aún no ha
+       * aterrizado (hay unos segundos de latencia tras comprar).
+       */
       checkSubscription: async () => {
         try {
-          // 1. Check RevenueCat active entitlement
-          const rcEntitled = await revenueCat.checkPremiumEntitlement();
-          
-          // 2. Check Supabase DB profile override
-          const profile = useProfileStore.getState().profile;
-          const dbEntitled = profile
-            ? (profile.subscription_tier === 'premium' || profile.subscription_status === 'active')
-            : false;
-          
-          const isPremium = rcEntitled || dbEntitled;
-          
-          if (get().isPremium !== isPremium) {
-            set({ isPremium });
-            
-            // Sync with profile store locally and Supabase if logged in
-            if (profile && profile.id !== 'local') {
-              const tier = isPremium ? 'premium' : 'free';
-              const status = isPremium ? 'active' : 'inactive';
-              
-              await useProfileStore.getState().updateProfile({
-                subscription_tier: tier,
-                subscription_status: status
-              });
+          const profileStore = useProfileStore.getState();
+          let entitled = await profileStore.refreshEntitlement();
+
+          if (!entitled) {
+            const rcEntitled = await revenueCat.checkPremiumEntitlement();
+            if (rcEntitled) {
+              // RevenueCat ya lo ve activo pero el webhook no ha escrito todavía:
+              // reintenta una vez tras un margen corto.
+              await new Promise(r => setTimeout(r, 1500));
+              entitled = await useProfileStore.getState().refreshEntitlement();
+              if (!entitled) {
+                console.warn(
+                  '[SubscriptionStore] RevenueCat reporta entitlement activo pero el ' +
+                    'servidor no. ¿Está desplegado el webhook que llama a set_entitlement?',
+                );
+              }
             }
           }
-          
-          return isPremium;
+
+          if (get().isPremium !== entitled) set({ isPremium: entitled });
+          return entitled;
         } catch (error) {
-          console.error('[SubscriptionStore] Error checking subscription:', error);
+          console.error('[SubscriptionStore] Error comprobando la suscripción:', error);
           return get().isPremium;
         }
       },
 
       purchase: async (offering: SubscriptionOffering) => {
-        set({ isLoading: true });
+        set({ isLoading: true, lastError: null });
         try {
-          const success = await revenueCat.purchasePackage(offering);
-          if (success) {
-            set({ isPremium: true });
-            
-            // Synchronize with Supabase database and profile store
-            const profile = useProfileStore.getState().profile;
-            if (profile) {
-              await useProfileStore.getState().updateProfile({
-                subscription_tier: 'premium',
-                subscription_status: 'active'
-              });
-            }
-            return true;
+          const result = await revenueCat.purchasePackage(offering);
+
+          if (!result.ok) {
+            set({ lastError: result.reason ?? 'failed' });
+            return result;
           }
-          return false;
+
+          if (result.simulated) {
+            // Compra de desarrollo: se refleja solo en memoria, jamás en la BD.
+            set({ isPremium: true });
+            return result;
+          }
+
+          // Compra real: el entitlement lo escribe el webhook con service_role,
+          // así que aquí solo releemos.
+          const entitled = await get().checkSubscription();
+          return entitled ? result : { ok: false, reason: 'not_entitled' as const };
         } catch (error) {
-          console.error('[SubscriptionStore] Purchase failed:', error);
-          return false;
+          console.error('[SubscriptionStore] Compra fallida:', error);
+          set({ lastError: 'failed' });
+          return { ok: false, reason: 'failed' as const };
         } finally {
           set({ isLoading: false });
         }
       },
 
       restore: async () => {
-        set({ isLoading: true });
+        set({ isLoading: true, lastError: null });
         try {
-          const success = await revenueCat.restorePurchases();
-          if (success) {
-            set({ isPremium: true });
-            
-            // Synchronize with Supabase database and profile store
-            const profile = useProfileStore.getState().profile;
-            if (profile) {
-              await useProfileStore.getState().updateProfile({
-                subscription_tier: 'premium',
-                subscription_status: 'active'
-              });
-            }
-            return true;
+          const result = await revenueCat.restorePurchases();
+          if (!result.ok) {
+            set({ lastError: result.reason ?? 'failed' });
+            return result;
           }
-          return false;
+          if (result.simulated) {
+            set({ isPremium: true });
+            return result;
+          }
+          const entitled = await get().checkSubscription();
+          return entitled ? result : { ok: false, reason: 'not_entitled' as const };
         } catch (error) {
-          console.error('[SubscriptionStore] Restore failed:', error);
-          return false;
+          console.error('[SubscriptionStore] Restaurar falló:', error);
+          set({ lastError: 'failed' });
+          return { ok: false, reason: 'failed' as const };
         } finally {
           set({ isLoading: false });
         }
       },
 
       reset: () => {
-        // Reset local simulation
         revenueCat.setSimulatedPremium(false);
-        set({
-          isPremium: false,
-          isLoading: false,
-          offerings: [],
-        });
+        void revenueCat.signOut();
+        set({ isPremium: false, isLoading: false, offerings: [], lastError: null });
       },
     }),
     {
       name: 'lectorapp-subscription',
       storage: createJSONStorage(() => AsyncStorage),
-    }
-  )
+      // `isPremium` NO se persiste: es estado derivado del servidor. Persistirlo
+      // dejaba premium "pegado" en el dispositivo tras caducar o cerrar sesión.
+      partialize: state => ({ offerings: state.offerings }),
+    },
+  ),
 );

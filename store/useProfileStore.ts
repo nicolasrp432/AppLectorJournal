@@ -8,6 +8,7 @@ import type { Profile, MascotKey } from '../types/db';
 import { REWARDS } from '../constants/rewards';
 import { LIVES_ENABLED, MAX_READING_LIVES, REFUND_COMPREHENSION_THRESHOLD } from '../constants/lives';
 import { msToNextLife } from '../lib/lives';
+import { isEntitled } from '../lib/premium';
 
 function getSpentXP(): number {
   try {
@@ -38,6 +39,7 @@ interface ProfileState {
   setProfileLocal: (profile: Profile) => void;
   reset: () => void;
   isPremium: () => boolean;
+  refreshEntitlement: () => Promise<boolean>;
   fetchDailySessionsCount: () => Promise<void>;
   canStartSession: () => boolean;
   incrementSessionCountLocal: () => void;
@@ -216,7 +218,42 @@ export const useProfileStore = create<ProfileState>()(
       isPremium: () => {
         const p = get().profile;
         if (!p) return false;
-        return p.subscription_tier === 'premium' || p.subscription_status === 'active';
+        // Exige tier + estado vigente + no caducado (ver lib/premium.ts). El OR
+        // anterior concedía premium con una fila a medio actualizar y no miraba
+        // nunca `subscription_expires_at`.
+        return isEntitled({
+          tier:      p.subscription_tier,
+          status:    p.subscription_status,
+          expiresAt: p.subscription_expires_at,
+        });
+      },
+
+      /**
+       * Relee el entitlement desde el servidor (`get_entitlement`), que es la
+       * autoridad. El cliente ya no puede escribir las columnas de suscripción
+       * (012_subscription_entitlements.sql), así que esta es la única vía de
+       * refresco tras una compra o una caducidad.
+       */
+      refreshEntitlement: async () => {
+        const current = get().profile;
+        if (!current || current.id === 'local') return get().isPremium();
+        try {
+          const { data, error } = await supabase.rpc('get_entitlement');
+          const row = Array.isArray(data) ? data[0] : data;
+          if (error || !row) return get().isPremium();
+          set({
+            profile: {
+              ...current,
+              subscription_tier:       row.tier   ?? 'free',
+              subscription_status:     row.status ?? 'inactive',
+              subscription_expires_at: row.expires_at ?? null,
+            },
+          });
+          return row.is_premium === true;
+        } catch (err) {
+          console.warn('Error refrescando el entitlement:', err);
+          return get().isPremium();
+        }
       },
 
       fetchDailySessionsCount: async () => {
