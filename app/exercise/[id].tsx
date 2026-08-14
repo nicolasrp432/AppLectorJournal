@@ -23,6 +23,7 @@ import { ReadingLives } from '../../components/ReadingLives';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { adaptLevel } from '../../lib/adaptLevel';
+import { calibrate, type Calibration, type ReadingGoalId } from '../../lib/readingGoals';
 
 import { useProfileStore } from '../../store/useProfileStore';
 import { useProgressStore } from '../../store/useProgressStore';
@@ -62,6 +63,10 @@ interface RawResult {
   score?: number;
   defeated?: boolean;
   rounds?: number;
+  /** Objetivo metacognitivo declarado antes de leer (solo lecturas). */
+  goal?: ReadingGoalId;
+  /** Ritmo que ese objetivo sugería, para el contraste de calibración. */
+  targetWpm?: number;
 }
 
 interface BuiltResult {
@@ -132,6 +137,7 @@ export default function ExerciseScreen() {
   const [showLivesModal, setShowLivesModal]   = useState(false);
   const [practiceMode, setPracticeMode]       = useState(false);
   const [livesNote, setLivesNote]             = useState<string | null>(null);
+  const [calibration, setCalibration]         = useState<Calibration | null>(null);
 
   React.useEffect(() => {
     fetchDailySessionsCount();
@@ -199,6 +205,17 @@ export default function ExerciseScreen() {
       }
     } else {
       setLivesNote(null);
+    }
+
+    // Calibración: contrasta lo que el usuario se propuso antes de leer con lo
+    // que logró. Sin este contraste, elegir objetivo sería un clic decorativo;
+    // es precisamente el bucle de auto-monitorización el que produce el efecto.
+    if (raw.goal && raw.targetWpm && raw.wpm != null) {
+      setCalibration(
+        calibrate(raw.goal, raw.comprehension ?? 0, raw.wpm, raw.targetWpm),
+      );
+    } else {
+      setCalibration(null);
     }
 
     const score = built.passed ? (raw.comprehension ?? (raw.correct && raw.total ? raw.correct / raw.total : 0.9)) : 0.4;
@@ -430,6 +447,7 @@ export default function ExerciseScreen() {
         result={result}
         newAchievements={newAchievements}
         livesNote={livesNote}
+        calibration={calibration}
         onContinue={() => router.back()}
         onRetry={() => { setResult(null); setPhase('playing'); setNewAchievements([]); setLivesNote(null); }}
       />
@@ -927,11 +945,13 @@ function MetaChip({ label, value, color }: { label: string; value: string; color
 
 // ─── Result screen ────────────────────────────────────────────────────────────
 
-function ExerciseResult({ exercise, result, newAchievements, livesNote, onContinue, onRetry }: {
+function ExerciseResult({ exercise, result, newAchievements, livesNote, calibration, onContinue, onRetry }: {
   exercise: typeof EXERCISES[string];
   result: BuiltResult;
   newAchievements: string[];
   livesNote?: string | null;
+  /** Contraste entre el objetivo declarado antes de leer y lo logrado. */
+  calibration?: Calibration | null;
   onContinue: () => void;
   onRetry: () => void;
 }) {
@@ -997,6 +1017,29 @@ function ExerciseResult({ exercise, result, newAchievements, livesNote, onContin
           <View style={resultStyles.livesNote}>
             <Ionicons name="heart" size={18} color="#EF4444" />
             <Text style={resultStyles.livesNoteText}>{livesNote}</Text>
+          </View>
+        ) : null}
+
+        {calibration ? (
+          <View
+            style={[
+              resultStyles.calibNote,
+              calibration.met ? resultStyles.calibOk : resultStyles.calibMiss,
+            ]}
+          >
+            <Ionicons
+              name={calibration.met ? 'checkmark-circle' : 'compass-outline'}
+              size={18}
+              color={calibration.met ? '#15803D' : '#B45309'}
+            />
+            <Text
+              style={[
+                resultStyles.calibText,
+                { color: calibration.met ? '#14532D' : '#78350F' },
+              ]}
+            >
+              {calibration.message}
+            </Text>
           </View>
         ) : null}
 
@@ -1398,6 +1441,10 @@ const resultStyles = StyleSheet.create({
   insightCard:  { backgroundColor: COLORS.white, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', gap: 12 },
   livesNote:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, backgroundColor: '#FEF2F2', borderRadius: 14, borderWidth: 1, borderColor: '#FECACA', paddingVertical: 10, paddingHorizontal: 14 },
   livesNoteText: { fontFamily: FONTS.headingSemi, fontSize: 13, color: '#991B1B' },
+  calibNote:     { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16, borderRadius: 14, borderWidth: 1, paddingVertical: 11, paddingHorizontal: 14 },
+  calibOk:       { backgroundColor: '#F0FDF4', borderColor: '#BBF7D0' },
+  calibMiss:     { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+  calibText:     { flex: 1, fontFamily: FONTS.body, fontSize: 12.5, lineHeight: 17 },
   insightLabel: { fontFamily: FONTS.headingSemi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
   insightText:  { fontFamily: FONTS.body, fontSize: 13, color: '#374151', lineHeight: 20 },
   footer:       { padding: 16, paddingBottom: 28, backgroundColor: COLORS.white, borderTopWidth: 1, borderTopColor: COLORS.surface, flexDirection: 'row', gap: 10 },

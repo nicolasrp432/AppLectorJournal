@@ -16,9 +16,14 @@ import { FONTS } from '../../constants/typography';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 import { simpleHash } from '../../lib/text';
 import { dedupe } from '../../lib/taskQueue';
+import { ReadingGoalStep } from './ReadingGoalStep';
+import type { ReadingGoalId } from '../../lib/readingGoals';
 
 type Mode = 'rsvp' | 'guide' | 'chunk';
-type Phase = 'config' | 'reading' | 'quiz';
+// 'goal' va antes de 'config': declarar para qué se lee recalibra la
+// auto-vigilancia y mejora la velocidad sin coste de comprensión
+// (Klimovich et al., 2023). Ver lib/readingGoals.ts.
+type Phase = 'goal' | 'config' | 'reading' | 'quiz';
 
 interface FocalReadingResult {
   wpm: number;
@@ -27,6 +32,10 @@ interface FocalReadingResult {
   comprehension: number;
   correct: number;
   total: number;
+  /** Objetivo declarado antes de leer, para el feedback de calibración. */
+  goal?: ReadingGoalId;
+  /** Ritmo que el objetivo sugería, para contrastarlo con el real. */
+  targetWpm?: number;
 }
 
 function PageFlipWrapper({ children }: { children: React.ReactNode }) {
@@ -70,7 +79,9 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
   const [chunkSize, setChunkSize] = useState(2);
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [phase, setPhase] = useState<Phase>('config');
+  const [phase, setPhase] = useState<Phase>('goal');
+  const [goal, setGoal] = useState<ReadingGoalId | null>(null);
+  const [targetWpm, setTargetWpm] = useState(initialWpm);
   const startTimeRef = useRef<number>(0);
   const [readSeconds, setReadSeconds] = useState(0);
   const [picked, setPicked] = useState<Record<number, number>>({});
@@ -209,12 +220,29 @@ export function FocalReadingExercise({ initialWpm = 280, initialMode = 'rsvp', a
       setFeedback(null);
       if (qi + 1 >= passage.questions.length) {
         const totalCorrect = Object.entries(newPicked).filter(([k, v]) => passage.questions[+k].correct === v).length;
-        onFinish({ wpm, mode, time: readSeconds, comprehension: totalCorrect / passage.questions.length, correct: totalCorrect, total: passage.questions.length });
+        onFinish({ wpm, mode, time: readSeconds, comprehension: totalCorrect / passage.questions.length, correct: totalCorrect, total: passage.questions.length, goal: goal ?? undefined, targetWpm });
       } else {
         setQIdx(qi + 1);
       }
     }, 1100);
   };
+
+  if (phase === 'goal') {
+    return (
+      <ReadingGoalStep
+        baseWpm={initialWpm}
+        accent={accent}
+        onSelect={(goalId, suggestedWpm) => {
+          setGoal(goalId);
+          setTargetWpm(suggestedWpm);
+          // El objetivo propone el ritmo; el usuario sigue pudiendo ajustarlo
+          // en la pantalla de configuración.
+          setWpm(suggestedWpm);
+          setPhase('config');
+        }}
+      />
+    );
+  }
 
   if (phase === 'config') {
     return (
