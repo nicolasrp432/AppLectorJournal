@@ -56,7 +56,6 @@ export function subscribeTable<Row = Record<string, unknown>>(
         table: sub.table,
         ...(sub.filter ? { filter: sub.filter } : {}),
       } as never,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (payload: any) => {
         // En un DELETE la fila viene en `old`; en el resto, en `new`.
         const row = (payload?.new ?? payload?.old) as Row | undefined;
