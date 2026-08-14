@@ -29,6 +29,7 @@ import { useLeagueStore } from '../store/useLeagueStore';
 import { scheduleDailyReminder } from '../lib/notifications';
 import { swr, TTL } from '../lib/cache';
 import { runInBackground, flushMutations } from '../lib/taskQueue';
+import { unsubscribeAll } from '../lib/realtime';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -77,9 +78,10 @@ export default function RootLayout() {
         // Al cerrar sesión hay que desvincular RevenueCat: si no, las compras
         // del usuario anterior quedan asociadas a quien entre después.
         void useSubscriptionStore.getState().reset();
-        // Y cerrar el canal de Realtime de la liga, o seguiría recibiendo
-        // eventos de la cohorte del usuario que acaba de salir.
+        // Y cerrar TODOS los canales de Realtime: uno abierto seguiría
+        // recibiendo eventos de los datos del usuario que acaba de salir.
         useLeagueStore.getState().reset();
+        unsubscribeAll();
         router.replace('/(auth)/welcome');
       }
     });

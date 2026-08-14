@@ -15,6 +15,7 @@ import { useNodeStore } from '../../store/useNodeStore';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { RadarChart } from '../../components/ui/RadarChart';
+import { LeagueCard } from '../../components/league/LeagueCard';
 import { WarmupModal } from '../../components/ui/WarmupModal';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
@@ -415,6 +416,14 @@ export default function ProgresoScreen() {
             </ExpoLinearGradient>
           </View>
         )}
+
+        {/* Liga semanal — mismo componente que en perfil, con clasificación en
+            vivo. Aquí tiene más sentido que en ningún sitio: es la pantalla
+            donde el usuario viene a medirse. */}
+        <Text style={styles.sectionTitle}>Liga semanal</Text>
+        <View style={{ marginBottom: 22 }}>
+          <LeagueCard />
+        </View>
 
         {/* Habilidades Cognitivas Radar Chart */}
         <Text style={styles.sectionTitle}>Habilidades Cognitivas</Text>

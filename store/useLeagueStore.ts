@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '../lib/supabase';
+import { subscribeTable, unsubscribeKey } from '../lib/realtime';
 import {
   LeagueMember, LeagueTierId, RankedMember,
   rankCohort, userPosition, xpToClimb, FIRST_TIER,
@@ -65,8 +66,8 @@ function toMember(row: StandingRow): LeagueMember {
   };
 }
 
-/** Canal activo. Fuera del store: es un recurso, no estado renderizable. */
-let channel: ReturnType<typeof supabase.channel> | null = null;
+/** Clave del canal. Constante para que reconectar reemplace, no acumule. */
+const LEAGUE_CHANNEL_KEY = 'league-standings';
 
 export const useLeagueStore = create<LeagueState>()((set, get) => ({
   tier: FIRST_TIER,
@@ -121,50 +122,28 @@ export const useLeagueStore = create<LeagueState>()((set, get) => ({
     const { cohortId } = get();
     if (!cohortId) return () => {};
 
-    // Un canal a la vez: al cambiar de cohorte (ciclo nuevo) hay que soltar el
-    // anterior o se acumularían suscripciones muertas recibiendo eventos.
-    if (channel) {
-      supabase.removeChannel(channel);
-      channel = null;
-    }
-
-    channel = supabase
-      .channel(`league:${cohortId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'league_members',
-          filter: `cohort_id=eq.${cohortId}`,
-        },
-        payload => {
-          // Se aplica el cambio en local en vez de re-consultar: el evento ya
-          // trae la fila (replica identity full) y una consulta por cada XP
-          // ajeno multiplicaría el tráfico por el tamaño de la cohorte.
-          const row = payload.new as StandingRow | undefined;
-          if (!row?.user_id) return;
-
-          set(state => {
-            const next = [...state.members];
-            const i = next.findIndex(m => m.userId === row.user_id);
-            if (i >= 0) next[i] = { ...next[i], weeklyXp: Number(row.weekly_xp) || 0 };
-            else next.push(toMember(row));
-            return { members: next };
-          });
-        },
-      )
-      .subscribe(status => {
-        set({ isLive: status === 'SUBSCRIBED' });
-      });
-
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel);
-        channel = null;
-      }
-      set({ isLive: false });
-    };
+    // Reutiliza la clave `LEAGUE_CHANNEL_KEY`: suscribirse de nuevo (al cambiar
+    // de cohorte en un ciclo nuevo) reemplaza el canal anterior en vez de
+    // acumularlo. Un canal huérfano seguiría aplicando XP de una cohorte vieja.
+    return subscribeTable<StandingRow>({
+      key: LEAGUE_CHANNEL_KEY,
+      table: 'league_members',
+      filter: `cohort_id=eq.${cohortId}`,
+      onStatus: connected => set({ isLive: connected }),
+      onChange: row => {
+        // Se aplica el cambio en local en vez de re-consultar: el evento ya trae
+        // la fila (replica identity full) y una consulta por cada XP ajeno
+        // multiplicaría el tráfico por el tamaño de la cohorte.
+        if (!row?.user_id) return;
+        set(state => {
+          const next = [...state.members];
+          const i = next.findIndex(m => m.userId === row.user_id);
+          if (i >= 0) next[i] = { ...next[i], weeklyXp: Number(row.weekly_xp) || 0 };
+          else next.push(toMember(row));
+          return { members: next };
+        });
+      },
+    });
   },
 
   addXp: async (amount: number) => {
@@ -180,10 +159,7 @@ export const useLeagueStore = create<LeagueState>()((set, get) => ({
   },
 
   reset: () => {
-    if (channel) {
-      supabase.removeChannel(channel);
-      channel = null;
-    }
+    unsubscribeKey(LEAGUE_CHANNEL_KEY);
     set({
       tier: FIRST_TIER, cohortId: null, cycleKey: null,
       members: [], isLoading: false, isLive: false, error: null,
