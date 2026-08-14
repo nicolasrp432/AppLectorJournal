@@ -1,47 +1,3 @@
--- ============================================================================
---  APLICAR AHORA — LectorApp
--- ============================================================================
---  Copia TODO este archivo y pégalo en:
---      Supabase Dashboard -> SQL Editor -> New query -> Run
---
---  Es la union de las migraciones 012 y 013, en orden. Todo es idempotente:
---  puedes ejecutarlo mas de una vez sin romper nada.
---
---  QUE HACE
---  --------
---  012  Cierra el agujero por el que cualquier usuario podia concederse premium
---       y rellenarse las vidas con la clave anon. Crea las columnas de
---       suscripcion (que nunca existieron pese a que el cliente las escribia).
---  013  Crea la liga competitiva semanal real y la publica en Realtime.
---
---  DESPUES DE EJECUTAR ESTO todavia faltan 3 pasos que NO son SQL:
---  ---------------------------------------------------------------
---  1) Desplegar el webhook de RevenueCat (sin verificacion de JWT, porque
---     RevenueCat no envia un JWT de Supabase):
---         supabase functions deploy revenuecat-webhook --no-verify-jwt
---
---  2) Fijar los secretos:
---         supabase secrets set REVENUECAT_WEBHOOK_SECRET="<cadena larga aleatoria>"
---     y en tu .env / EAS:
---         EXPO_PUBLIC_REVENUECAT_IOS_KEY=<clave iOS de RevenueCat>
---         EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=<clave Android de RevenueCat>
---         EXPO_PUBLIC_REVENUECAT_ENTITLEMENT=<id del entitlement, p.ej. premium>
---
---  3) En RevenueCat -> Project Settings -> Integrations -> Webhooks:
---         URL            https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
---         Authorization  el MISMO valor que REVENUECAT_WEBHOOK_SECRET
---
---  COMPROBACION FINAL
---  ------------------
---    select public.is_premium();        -- deberia devolver false para una cuenta gratuita
---    select * from public.get_entitlement();
---    select * from public.join_league();  -- te mete en una cohorte del ciclo actual
---
---  Hasta que no hagas los 3 pasos de arriba, una compra NO concedera premium.
---  Es intencional: preferible no conceder a nadie que concederselo a cualquiera.
--- ============================================================================
-
-
 -- ==========================================================================
 --  BLOQUE 1 de 2 — 012_subscription_entitlements.sql
 -- ==========================================================================
@@ -83,6 +39,12 @@ alter table public.profiles add column if not exists subscription_status text no
 alter table public.profiles add column if not exists subscription_expires_at timestamptz;
 -- Id de RevenueCat para conciliar el webhook con el usuario de Supabase.
 alter table public.profiles add column if not exists rc_app_user_id text;
+
+-- `avatar_url` tampoco la creaba ninguna migración, aunque `uploadAvatar()` la
+-- escribe desde el primer día: mismo fallo silencioso que las columnas de
+-- suscripción. Se declara aquí porque el GRANT de más abajo la nombra, y un
+-- GRANT sobre una columna inexistente aborta el script entero.
+alter table public.profiles add column if not exists avatar_url text;
 
 create index if not exists profiles_rc_app_user_id_idx on public.profiles (rc_app_user_id);
 

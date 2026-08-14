@@ -36,6 +36,12 @@ alter table public.profiles add column if not exists subscription_expires_at tim
 -- Id de RevenueCat para conciliar el webhook con el usuario de Supabase.
 alter table public.profiles add column if not exists rc_app_user_id text;
 
+-- `avatar_url` tampoco la creaba ninguna migración, aunque `uploadAvatar()` la
+-- escribe desde el primer día: mismo fallo silencioso que las columnas de
+-- suscripción. Se declara aquí porque el GRANT de más abajo la nombra, y un
+-- GRANT sobre una columna inexistente aborta el script entero.
+alter table public.profiles add column if not exists avatar_url text;
+
 create index if not exists profiles_rc_app_user_id_idx on public.profiles (rc_app_user_id);
 
 -- --------------------------------------------------------------------------
