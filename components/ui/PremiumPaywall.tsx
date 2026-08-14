@@ -22,6 +22,24 @@ if (Platform.OS !== 'web') {
   }
 }
 
+/** Mensaje por cada motivo de fallo, para no decir siempre "inténtalo de nuevo". */
+const PURCHASE_ERROR_COPY: Record<string, string> = {
+  cancelled:    'Cancelaste el pago.',
+  unavailable:  'Las compras no están disponibles en esta plataforma. Abre la app en iOS o Android.',
+  not_entitled: 'El pago se procesó pero aún no vemos la suscripción activa. Puede tardar unos segundos: prueba a restaurar compras.',
+  failed:       'No se pudo completar la compra. Inténtalo de nuevo.',
+};
+
+/** `Alert` no existe en web; unifica ambos caminos en una sola llamada. */
+function notify(title: string, message: string) {
+  if (Platform.OS === 'web') {
+    // eslint-disable-next-line no-alert
+    window.alert(`${title}\n\n${message}`);
+  } else {
+    Alert.alert(title, message);
+  }
+}
+
 interface PremiumPaywallProps {
   visible: boolean;
   onClose: () => void;
@@ -50,22 +68,24 @@ export function PremiumPaywall({ visible, onClose }: PremiumPaywallProps) {
 
     setLocalLoading(true);
     try {
-      const success = await purchase(plan);
-      if (success) {
+      const result = await purchase(plan);
+      if (result.ok) {
         haptics.success();
-        if (Platform.OS === 'web') {
-          alert('¡Bienvenido a LectorApp Pro! Tu suscripción simulada ha sido activada con éxito.');
-        } else {
-          Alert.alert('¡Éxito!', '¡Bienvenido a LectorApp Pro! Tu suscripción ha sido activada con éxito.');
-        }
+        notify(
+          '¡Éxito!',
+          result.simulated
+            ? 'Suscripción simulada activada (solo desarrollo).'
+            : '¡Bienvenido a LectorApp Pro! Tu suscripción está activa.',
+        );
         onClose();
       } else {
-        haptics.error();
-        if (Platform.OS === 'web') {
-          alert('No se pudo completar la compra. Por favor, intenta de nuevo.');
-        } else {
-          Alert.alert('Compra cancelada', 'No se pudo completar el pago. Por favor, intenta de nuevo.');
+        // Cancelar no es un error: no merece háptica de fallo ni alerta.
+        if (result.reason === 'cancelled') {
+          haptics.tap();
+          return;
         }
+        haptics.error();
+        notify('No se completó la compra', PURCHASE_ERROR_COPY[result.reason ?? 'failed']);
       }
     } catch (e) {
       haptics.error();
@@ -80,22 +100,19 @@ export function PremiumPaywall({ visible, onClose }: PremiumPaywallProps) {
     haptics.tap();
     setLocalLoading(true);
     try {
-      const success = await restore();
-      if (success) {
+      const result = await restore();
+      if (result.ok) {
         haptics.success();
-        if (Platform.OS === 'web') {
-          alert('¡Suscripción Pro restaurada con éxito!');
-        } else {
-          Alert.alert('Restaurado', '¡Suscripción Pro restaurada con éxito!');
-        }
+        notify('Restaurado', '¡Suscripción Pro restaurada con éxito!');
         onClose();
       } else {
         haptics.warning();
-        if (Platform.OS === 'web') {
-          alert('No encontramos ninguna suscripción Pro activa asociada a tu cuenta.');
-        } else {
-          Alert.alert('Sin Suscripciones', 'No encontramos ninguna suscripción Pro activa asociada a tu cuenta.');
-        }
+        notify(
+          'Sin suscripciones',
+          result.reason === 'not_entitled'
+            ? 'No encontramos ninguna suscripción Pro activa asociada a tu cuenta.'
+            : PURCHASE_ERROR_COPY[result.reason ?? 'failed'],
+        );
       }
     } catch (e) {
       haptics.error();

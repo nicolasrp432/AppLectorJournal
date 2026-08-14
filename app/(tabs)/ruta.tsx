@@ -16,6 +16,8 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 import { LinearGradient } from 'expo-linear-gradient';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
+import { DIFFICULTY } from '../../constants/difficulty';
+import { resolveNodeDifficulty, boostLabel } from '../../lib/nodeDifficulty';
 import { useRewardsStore } from '../../store/useRewardsStore';
 import { useDailyMissionStore } from '../../store/useDailyMissionStore';
 import { useProgressStore } from '../../store/useProgressStore';
@@ -1471,6 +1473,18 @@ function ExercisePreviewSheet({
   // Retrieve best records from Zustand store
   const bestRecord = useProgressStore.getState().get(node.exId);
 
+  // Dificultad efectiva: el nodo pone el suelo, el rendimiento del usuario puede
+  // subirlo. Rejugar un nodo ya completado admite un empuje mayor.
+  const difficulty = node.level != null
+    ? resolveNodeDifficulty({
+        nodeLevel:     node.level,
+        adaptiveLevel: bestRecord.current_level,
+        completed:     useNodeStore.getState().completed.includes(node.id),
+        maxLevel:      (DIFFICULTY[node.exId as keyof typeof DIFFICULTY] as readonly unknown[] | undefined)?.length ?? node.level,
+      })
+    : null;
+  const difficultyTag = difficulty ? boostLabel(difficulty) : null;
+
   const sheetAnimatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: sheetTranslateY.value }],
   }));
@@ -1478,8 +1492,9 @@ function ExercisePreviewSheet({
   const handleStart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
     onClose();
-    // El nodo puede fijar un nivel de dificultad; si no, el router usa el adaptativo.
-    const levelParam = node.level != null ? `&level=${node.level}` : '';
+    // El nivel del nodo es el suelo curricular, no un techo: si el usuario ya
+    // rinde por encima, el nodo se sirve más difícil (ver lib/nodeDifficulty.ts).
+    const levelParam = difficulty != null ? `&level=${difficulty.level}` : '';
     router.push(`/exercise/${node.exId}?nodeId=${node.id}${levelParam}` as Parameters<typeof router.push>[0]);
   };
 
@@ -1518,6 +1533,21 @@ function ExercisePreviewSheet({
             <View style={styles.previewTitleBox}>
               <Text style={styles.previewExType}>EJERCICIO COGNITIVO</Text>
               <Text style={styles.previewTitle}>{data.title}</Text>
+              {difficulty && (
+                <View style={styles.previewLevelRow}>
+                  <Text style={[styles.previewLevelText, { color: node.color }]}>
+                    Nivel {difficulty.level}
+                  </Text>
+                  {difficultyTag && (
+                    <View style={[styles.previewLevelTag, { backgroundColor: node.color + '1A' }]}>
+                      <Ionicons name="trending-up" size={11} color={node.color} />
+                      <Text style={[styles.previewLevelTagText, { color: node.color }]}>
+                        {difficultyTag}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           </View>
 
@@ -1898,6 +1928,29 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#1E293B',
     marginTop: 2,
+  },
+  previewLevelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 5,
+    flexWrap: 'wrap',
+  },
+  previewLevelText: {
+    fontFamily: FONTS.headingBold,
+    fontSize: 12,
+  },
+  previewLevelTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  previewLevelTagText: {
+    fontFamily: FONTS.headingSemi,
+    fontSize: 10,
   },
   previewDesc: {
     fontFamily: FONTS.body,

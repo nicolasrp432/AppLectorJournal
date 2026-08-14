@@ -24,9 +24,12 @@ import { useAchievementsStore } from '../store/useAchievementsStore';
 import { useLibraryStore } from '../store/useLibraryStore';
 import { useRewardsStore } from '../store/useRewardsStore';
 import { useSessionStore } from '../store/useSessionStore';
+import { useSubscriptionStore } from '../store/useSubscriptionStore';
+import { useLeagueStore } from '../store/useLeagueStore';
 import { scheduleDailyReminder } from '../lib/notifications';
 import { swr, TTL } from '../lib/cache';
 import { runInBackground, flushMutations } from '../lib/taskQueue';
+import { unsubscribeAll } from '../lib/realtime';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -72,6 +75,13 @@ export default function RootLayout() {
         syncUser(session.user.id, { force: event === 'SIGNED_IN' });
         router.replace('/(tabs)/ruta');
       } else {
+        // Al cerrar sesión hay que desvincular RevenueCat: si no, las compras
+        // del usuario anterior quedan asociadas a quien entre después.
+        void useSubscriptionStore.getState().reset();
+        // Y cerrar TODOS los canales de Realtime: uno abierto seguiría
+        // recibiendo eventos de los datos del usuario que acaba de salir.
+        useLeagueStore.getState().reset();
+        unsubscribeAll();
         router.replace('/(auth)/welcome');
       }
     });
@@ -89,6 +99,12 @@ export default function RootLayout() {
     runInBackground(async () => {
       // Reintenta cualquier escritura que quedara pendiente (modo offline-first).
       flushMutations();
+
+      // Vincula las compras a este usuario y relee el entitlement desde el
+      // servidor. Sin `identify()` RevenueCat usa un id anónimo por instalación,
+      // así que la suscripción no sobrevivía a un reinstall ni llegaba a un
+      // segundo dispositivo.
+      useSubscriptionStore.getState().initialize().catch(() => {});
 
       // Cada dataset se revalida sólo si su TTL expiró. Las claves van namespaced
       // por usuario para que un cambio de cuenta nunca sirva datos de otra.

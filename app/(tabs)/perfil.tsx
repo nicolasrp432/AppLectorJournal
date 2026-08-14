@@ -18,6 +18,7 @@ import { useProgressStore } from '../../store/useProgressStore';
 import { useNodeStore } from '../../store/useNodeStore';
 import { useRewardsStore } from '../../store/useRewardsStore';
 import { useSubscriptionStore } from '../../store/useSubscriptionStore';
+import { LeagueCard } from '../../components/league/LeagueCard';
 import { PremiumPaywall } from '../../components/ui/PremiumPaywall';
 import { ProgressBar } from '../../components/ui/ProgressBar';
 import { MascotChar } from '../../components/ui/MascotChar';
@@ -86,7 +87,6 @@ export default function PerfilScreen() {
 
   const [editing, setEditing]     = useState(false);
   const [editName, setEditName]   = useState('');
-  const [leagueExpanded, setLeagueExpanded] = useState(false);
   const [editBio,  setEditBio]    = useState('');
   const [uploading, setUploading] = useState(false);
 
@@ -296,33 +296,10 @@ export default function PerfilScreen() {
   const isProfilePremium = useProfileStore(s => s.isPremium());
   const isPremium = isPremiumRC || isProfilePremium;
 
-  const getLeagueInfo = (lvl: number) => {
-    if (lvl >= 9) return { name: 'Liga Diamante', icon: 'diamond', color: '#06B6D4', colorBg: '#ECFEFF' };
-    if (lvl >= 7) return { name: 'Liga Esmeralda', icon: 'shield-checkmark', color: '#10B981', colorBg: '#ECFDF5' };
-    if (lvl >= 5) return { name: 'Liga Oro', icon: 'ribbon', color: '#EAB308', colorBg: '#FEFCE8' };
-    if (lvl >= 3) return { name: 'Liga Plata', icon: 'shield', color: '#94A3B8', colorBg: '#F8FAFC' };
-    return { name: 'Liga Bronce', icon: 'trophy', color: '#B45309', colorBg: '#FFFBEB' };
-  };
-
-  const weeklyXP = useMemo(() => {
-    const oneWeekAgo = new Date();
-    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-    return sessions
-      .filter(s => new Date(s.finished_at) >= oneWeekAgo)
-      .reduce((sum, s) => sum + (s.xp_earned ?? 0), 0);
-  }, [sessions]);
-  const league = getLeagueInfo(profile.level);
-
-  // Dynamic ranking of competitors
-  const competitors = useMemo(() => [
-    { name: 'Camila', xp: 750, avatar: 'loci' as MascotKey, avatarUrl: null, isUser: false },
-    { name: 'Carlos', xp: 620, avatar: 'swift' as MascotKey, avatarUrl: null, isUser: false },
-    { name: profile.name || 'Tú', xp: weeklyXP, avatar: profile.avatar || 'focus', avatarUrl: profile.avatar_url, isUser: true },
-    { name: 'Mateo', xp: 320, avatar: 'calm' as MascotKey, avatarUrl: null, isUser: false },
-    { name: 'Sofía', xp: 210, avatar: 'memo' as MascotKey, avatarUrl: null, isUser: false },
-  ].sort((a, b) => b.xp - a.xp), [profile.name, profile.avatar, profile.avatar_url, weeklyXP]);
-
-  const userRank = useMemo(() => competitors.findIndex(c => c.isUser) + 1, [competitors]);
+  // El tier de liga, la clasificación y la cuenta atrás los resuelve LeagueCard
+  // contra el servidor. Antes se calculaban aquí a partir de `profile.level` y
+  // de cuatro rivales inventados, así que subir de nivel te "ascendía de liga"
+  // sin haber competido con nadie.
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -495,92 +472,14 @@ export default function PerfilScreen() {
         </ScrollView>
 
         {/* ── Liga Competitiva Semanal ────────────────────────────────────── */}
+        {/* La maqueta anterior (rivales inventados, temporizador fijo "3d 12h" y
+            tier derivado de profile.level) se sustituye por LeagueCard, que lee
+            la cohorte real del servidor y se actualiza por Realtime. */}
         <View style={styles.sectionHeaderRow}>
           <Text style={styles.sectionTitle}>Liga Competitiva</Text>
-          <View style={[styles.sectionTitleRightBadge, { backgroundColor: league.color + '15' }]}>
-            <Text style={[styles.sectionTitleRightBadgeText, { color: league.color }]}>Semana Activa</Text>
-          </View>
         </View>
 
-        <View style={[styles.leagueCard, { borderColor: league.color + '25', shadowColor: league.color }]}>
-          <Pressable 
-            onPress={() => {
-              if (Platform.OS !== 'web') {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-              }
-              setLeagueExpanded(!leagueExpanded);
-            }}
-            style={[styles.leagueHeader, { backgroundColor: league.color + '0E' }]}
-          >
-            <View style={[styles.leagueIconCircle, { backgroundColor: league.color + '18' }]}>
-              <Ionicons name={league.icon as any} size={26} color={league.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.leagueName}>{league.name}</Text>
-              <Text style={styles.leagueWeeklyXP}>{weeklyXP} XP acumulados esta semana</Text>
-            </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={styles.leagueTimerBadge}>
-                <Ionicons name="time-outline" size={11} color={COLORS.muted} style={{ marginRight: 3 }} />
-                <Text style={styles.leagueTimerText}>3d 12h</Text>
-              </View>
-              <Ionicons 
-                name={leagueExpanded ? "chevron-up" : "chevron-down"} 
-                size={20} 
-                color={league.color} 
-              />
-            </View>
-          </Pressable>
-
-          {leagueExpanded && (
-            <>
-              <View style={styles.leagueLeaderboard}>
-                {competitors.map((comp, idx) => {
-                  const rank = idx + 1;
-                  return (
-                    <View key={comp.name} style={[styles.leaderboardRow, comp.isUser && [styles.leaderboardRowUser, { borderColor: themeColor + '30' }]]}>
-                      <Text style={styles.leaderboardRank}>
-                        {rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`}
-                      </Text>
-                      <View style={styles.leaderboardAvatarWrapper}>
-                        {comp.avatarUrl ? (
-                          <Image source={{ uri: comp.avatarUrl }} style={styles.leaderboardAvatarImg} />
-                        ) : (
-                          <MascotChar which={comp.avatar} size={24} breathing={false} blinking={false} />
-                        )}
-                      </View>
-                      <Text style={[styles.leaderboardName, comp.isUser && [styles.leaderboardNameUser, { color: themeColor }]]}>
-                        {comp.name}
-                      </Text>
-                      <Text style={styles.leaderboardXP}>{comp.xp} XP</Text>
-                    </View>
-                  );
-                })}
-              </View>
-
-              {/* Promotion / Demotion Zone Indicator */}
-              <View style={[
-                styles.zoneIndicator,
-                userRank <= 2 ? styles.zoneAscenso : userRank === 5 ? styles.zonePeligro : styles.zonePermanencia
-              ]}>
-                <Ionicons
-                  name={userRank <= 2 ? 'rocket-outline' : userRank === 5 ? 'alert-circle-outline' : 'shield-checkmark-outline'}
-                  size={15}
-                  color={userRank <= 2 ? '#16A34A' : userRank === 5 ? '#DC2626' : '#6B7280'}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={[
-                  styles.zoneIndicatorText,
-                  userRank <= 2 ? { color: '#16A34A' } : userRank === 5 ? { color: '#DC2626' } : { color: '#4B5563' }
-                ]}>
-                  {userRank <= 2 ? 'Zona de Ascenso (Top 2) 🚀 ¡Vas rumbo a subir de liga!' :
-                   userRank === 5 ? 'Zona de Descenso ⚠️ ¡Entrena más para conservar tu liga!' :
-                   'Zona de Permanencia 🛡️ Mantienes tu puesto en la liga.'}
-                </Text>
-              </View>
-            </>
-          )}
-        </View>
+        <LeagueCard />
 
         {/* ── Settings ─────────────────────────────────────────────────────── */}
         <Text style={styles.sectionTitle}>Configuración</Text>
@@ -1890,122 +1789,5 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.headingSemi,
     fontSize: 13,
     color: '#EF4444',
-  },
-  leagueCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    borderWidth: 1.5,
-    padding: 16,
-    marginBottom: 20,
-    overflow: 'hidden',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  leagueHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 12,
-    borderRadius: 16,
-    gap: 12,
-    marginBottom: 14,
-  },
-  leagueIconCircle: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  leagueName: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 16,
-    color: COLORS.ink,
-  },
-  leagueWeeklyXP: {
-    fontFamily: FONTS.body,
-    fontSize: 12,
-    color: COLORS.muted,
-    marginTop: 2,
-  },
-  leagueTimerBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: COLORS.canvas,
-    borderRadius: 8,
-  },
-  leagueTimerText: {
-    fontFamily: FONTS.headingSemi,
-    fontSize: 9,
-    color: COLORS.muted,
-  },
-  leagueLeaderboard: {
-    gap: 8,
-    marginBottom: 14,
-  },
-  leaderboardRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface + '20',
-  },
-  leaderboardRowUser: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1.5,
-  },
-  leaderboardRank: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 13,
-    color: COLORS.muted,
-    width: 28,
-    textAlign: 'center',
-  },
-  leaderboardAvatarWrapper: {
-    marginRight: 10,
-  },
-  leaderboardAvatarImg: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-  },
-  leaderboardName: {
-    fontFamily: FONTS.body,
-    fontSize: 13.5,
-    color: COLORS.inkLight,
-    flex: 1,
-  },
-  leaderboardNameUser: {
-    fontFamily: FONTS.headingBold,
-  },
-  leaderboardXP: {
-    fontFamily: FONTS.headingBold,
-    fontSize: 13,
-    color: COLORS.ink,
-  },
-  zoneIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderRadius: 12,
-    marginTop: 4,
-  },
-  zoneAscenso: {
-    backgroundColor: '#DCFCE7',
-  },
-  zonePermanencia: {
-    backgroundColor: '#F1F5F9',
-  },
-  zonePeligro: {
-    backgroundColor: '#FEE2E2',
-  },
-  zoneIndicatorText: {
-    fontFamily: FONTS.headingSemi,
-    fontSize: 10.5,
-    flex: 1,
   },
 });
