@@ -48,6 +48,22 @@ function makeClient(): SupabaseClient {
         }),
       },
       rpc: () => noopQuery(),
+      // Realtime también necesita un no-op: sin esto, cualquier pantalla que se
+      // suscriba (la liga) revienta con "supabase.channel is not a function"
+      // en cuanto faltan las variables de entorno.
+      channel: () => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ch: any = {};
+        ch.on = () => ch;
+        ch.subscribe = (cb?: (status: string) => void) => {
+          cb?.('CLOSED');
+          return ch;
+        };
+        ch.unsubscribe = async () => 'ok';
+        return ch;
+      },
+      removeChannel: async () => 'ok',
+      removeAllChannels: async () => [],
     } as unknown as SupabaseClient;
   }
 

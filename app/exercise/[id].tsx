@@ -23,6 +23,7 @@ import { ReadingLives } from '../../components/ReadingLives';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { adaptLevel } from '../../lib/adaptLevel';
+import { useLeagueStore } from '../../store/useLeagueStore';
 import { calibrate, type Calibration, type ReadingGoalId } from '../../lib/readingGoals';
 
 import { useProfileStore } from '../../store/useProfileStore';
@@ -256,6 +257,11 @@ export default function ExerciseScreen() {
     });
 
     await addXP(built.xpEarned);
+
+    // El mismo XP alimenta la liga semanal. Va por RPC (el cliente no puede
+    // escribir `weekly_xp`) y sin await: la clasificación llegará por Realtime
+    // y no debe retrasar la pantalla de resultado.
+    void useLeagueStore.getState().addXp(built.xpEarned);
 
     // Mark node complete in the learning path
     if (nodeId && built.passed) {
@@ -1068,6 +1074,9 @@ function ExerciseResult({ exercise, result, newAchievements, livesNote, calibrat
             onPress={async () => {
               consume('pw-xp2x');
               await addXP(result.xpEarned);
+              // El XP duplicado también cuenta para la liga; si no, el
+              // potenciador subiría el nivel pero no la clasificación.
+              void useLeagueStore.getState().addXp(result.xpEarned);
               setXp2xActivated(true);
             }}
             style={resultStyles.doubleXpCard}

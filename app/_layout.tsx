@@ -25,6 +25,7 @@ import { useLibraryStore } from '../store/useLibraryStore';
 import { useRewardsStore } from '../store/useRewardsStore';
 import { useSessionStore } from '../store/useSessionStore';
 import { useSubscriptionStore } from '../store/useSubscriptionStore';
+import { useLeagueStore } from '../store/useLeagueStore';
 import { scheduleDailyReminder } from '../lib/notifications';
 import { swr, TTL } from '../lib/cache';
 import { runInBackground, flushMutations } from '../lib/taskQueue';
@@ -76,6 +77,9 @@ export default function RootLayout() {
         // Al cerrar sesión hay que desvincular RevenueCat: si no, las compras
         // del usuario anterior quedan asociadas a quien entre después.
         void useSubscriptionStore.getState().reset();
+        // Y cerrar el canal de Realtime de la liga, o seguiría recibiendo
+        // eventos de la cohorte del usuario que acaba de salir.
+        useLeagueStore.getState().reset();
         router.replace('/(auth)/welcome');
       }
     });
