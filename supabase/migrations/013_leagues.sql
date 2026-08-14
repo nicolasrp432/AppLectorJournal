@@ -342,7 +342,12 @@ grant execute on function public.resolve_league_tier(uuid, date) to authenticate
 -- filas de su propia cohorte.
 do $$
 begin
-  if not exists (
+  -- Se comprueba primero que la publicación exista: en un proyecto donde
+  -- Realtime nunca se activó no está creada, y un ALTER PUBLICATION sobre algo
+  -- inexistente abortaría el script entero.
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    raise notice 'La publicación supabase_realtime no existe: activa Realtime en el panel de Supabase y vuelve a ejecutar este bloque.';
+  elsif not exists (
     select 1 from pg_publication_tables
      where pubname = 'supabase_realtime'
        and schemaname = 'public'

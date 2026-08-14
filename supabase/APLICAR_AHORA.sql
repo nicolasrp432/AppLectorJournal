@@ -1,3 +1,52 @@
+-- ============================================================================
+--  APLICAR AHORA — LectorApp
+-- ============================================================================
+--  Copia TODO este archivo y pegalo en:
+--      Supabase Dashboard -> SQL Editor -> New query -> Run
+--
+--  Es la union de las migraciones 012 y 013, en orden. Todo es idempotente:
+--  puedes ejecutarlo mas de una vez sin romper nada.
+--
+--  QUE HACE
+--  --------
+--  012  Cierra el agujero por el que cualquier usuario podia concederse premium
+--       y rellenarse las vidas usando la clave anon. Crea las columnas de
+--       suscripcion (y avatar_url), que nunca existieron pese a que el cliente
+--       las escribia desde el primer dia.
+--  013  Crea la liga competitiva semanal real y la publica en Realtime.
+--
+--  DESPUES DE EJECUTAR ESTO faltan 3 pasos que NO son SQL:
+--  -------------------------------------------------------
+--  1) Desplegar el webhook de RevenueCat sin verificacion de JWT (RevenueCat no
+--     envia un JWT de Supabase, asi que con la verificacion puesta lo rechaza):
+--         supabase functions deploy revenuecat-webhook --no-verify-jwt
+--
+--  2) Fijar los secretos:
+--         supabase secrets set REVENUECAT_WEBHOOK_SECRET="<cadena larga aleatoria>"
+--     y en tu .env / EAS:
+--         EXPO_PUBLIC_REVENUECAT_IOS_KEY=<clave iOS de RevenueCat>
+--         EXPO_PUBLIC_REVENUECAT_ANDROID_KEY=<clave Android de RevenueCat>
+--         EXPO_PUBLIC_REVENUECAT_ENTITLEMENT=<id del entitlement, p.ej. premium>
+--
+--  3) En RevenueCat -> Project Settings -> Integrations -> Webhooks:
+--         URL            https://<project-ref>.supabase.co/functions/v1/revenuecat-webhook
+--         Authorization  el MISMO valor que REVENUECAT_WEBHOOK_SECRET
+--
+--  COMPROBACION
+--  ------------
+--    select public.is_premium();           -- false en una cuenta gratuita
+--    select * from public.get_entitlement();
+--    select * from public.join_league();   -- te mete en la cohorte del ciclo actual
+--    select * from public.get_league_standings();
+--
+--  Si el bloque de Realtime avisa de que falta la publicacion supabase_realtime,
+--  activa Realtime en el panel de Supabase y vuelve a ejecutar ese ultimo bloque.
+--
+--  Hasta que no hagas los 3 pasos de arriba una compra NO concedera premium.
+--  Es intencional: preferible no conceder a nadie que concederselo a cualquiera.
+-- ============================================================================
+
+
 -- ==========================================================================
 --  BLOQUE 1 de 2 — 012_subscription_entitlements.sql
 -- ==========================================================================
@@ -589,7 +638,12 @@ grant execute on function public.resolve_league_tier(uuid, date) to authenticate
 -- filas de su propia cohorte.
 do $$
 begin
-  if not exists (
+  -- Se comprueba primero que la publicación exista: en un proyecto donde
+  -- Realtime nunca se activó no está creada, y un ALTER PUBLICATION sobre algo
+  -- inexistente abortaría el script entero.
+  if not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    raise notice 'La publicación supabase_realtime no existe: activa Realtime en el panel de Supabase y vuelve a ejecutar este bloque.';
+  elsif not exists (
     select 1 from pg_publication_tables
      where pubname = 'supabase_realtime'
        and schemaname = 'public'
@@ -604,5 +658,5 @@ alter table public.league_members replica identity full;
 
 
 -- ============================================================================
---  FIN. Si no hubo errores, ya esta todo el SQL aplicado.
+--  FIN. Si no hubo errores, el SQL ya esta aplicado por completo.
 -- ============================================================================
