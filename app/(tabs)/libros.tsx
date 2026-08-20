@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withSpring, withTiming } from 'react-native-reanimated';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { scheduleOnRN } from 'react-native-worklets';
-import { SPRING, TIMING } from '../../constants/motion';
+import Animated from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useDismissibleSheet } from '../../hooks/useDismissibleSheet';
 
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
@@ -348,75 +347,11 @@ function BookFormModal({
 
   // Bottom sheet arrastrable. Entra deslizando hacia arriba y se cierra
   // deslizando hacia abajo por el handle, por la X, por tap en el fondo o atrás.
-  //
-  // Antes esto era PanResponder + el `Animated` del core de RN. PanResponder
-  // procesa cada movimiento del dedo en el hilo de JS, así que el sheet se
-  // despegaba del dedo en cuanto la app hacía cualquier otra cosa, y no había
-  // forma de agarrarlo a media animación: la animación de cierre se tenía que
-  // terminar antes de que el sheet volviera a responder.
-  //
-  // Con Gesture.Pan() el arrastre entero vive en el hilo de UI, se puede
-  // interrumpir en cualquier instante, y la velocidad del dedo pasa al muelle
-  // en vez de descartarse al soltar.
+  // La mecánica del gesto (histéresis, goma en el borde, proyección de inercia)
+  // vive en useDismissibleSheet, compartida con los otros cinco sheets.
   const SHEET_MAX = Math.min(SCREEN_HEIGHT * 0.9, 760);
-  const translateY = useSharedValue(SCREEN_HEIGHT);
-  const onCloseRef = React.useRef(onClose);
-  onCloseRef.current = onClose;
-
-  const dismiss = React.useCallback(() => onCloseRef.current(), []);
-
-  const handleClose = React.useCallback(() => {
-    translateY.value = withTiming(SCREEN_HEIGHT, TIMING.exit, finished => {
-      if (finished) scheduleOnRN(dismiss);
-    });
-  }, [dismiss, translateY]);
-
-  React.useEffect(() => {
-    translateY.value = withSpring(0, SPRING.sheet);
-  }, []);
-
-  // El gesto se adjunta SOLO al handle superior, para no robarle el scroll al
-  // formulario.
-  const panGesture = React.useMemo(
-    () =>
-      Gesture.Pan()
-        // 10px de histéresis: el dedo tiene que declarar intención antes de
-        // que el sheet se mueva, si no cualquier roce lo arrastra.
-        .activeOffsetY(10)
-        .onUpdate(e => {
-          'worklet';
-          if (e.translationY > 0) {
-            translateY.value = e.translationY;
-          } else {
-            // Goma en el borde superior: resiste cada vez más en vez de
-            // frenar en seco, que se lee como "se ha colgado".
-            translateY.value = e.translationY * 0.15;
-          }
-        })
-        .onEnd(e => {
-          'worklet';
-          // Dónde acabaría el sheet si lo soltásemos con esta inercia. Es la
-          // misma proyección que usa el scroll: un lanzamiento corto pero
-          // rápido cierra, un arrastre largo y lento no.
-          const projected = translateY.value + (e.velocityY / 1000) * 0.998 / (1 - 0.998);
-          if (projected > SCREEN_HEIGHT * 0.25) {
-            translateY.value = withSpring(
-              SCREEN_HEIGHT,
-              { ...SPRING.sheet, velocity: e.velocityY },
-              finished => { if (finished) scheduleOnRN(dismiss); },
-            );
-          } else {
-            // La velocidad de salida del dedo entra en el muelle, así que no
-            // hay costura entre arrastrar y animar.
-            translateY.value = withSpring(0, { ...SPRING.sheet, velocity: e.velocityY });
-          }
-        }),
-    [dismiss, translateY],
-  );
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
+  const sheet = useDismissibleSheet({ onDismiss: onClose, height: SCREEN_HEIGHT });
+  const handleClose = sheet.close;
 
   // Si editamos y aún no está el contenido en memoria, cárgalo.
   React.useEffect(() => {
@@ -524,9 +459,9 @@ function BookFormModal({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
 
-        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX }, sheetStyle]}>
+        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX }, sheet.style]}>
           {/* Handle arrastrable (deslizar abajo para cerrar) */}
-          <GestureDetector gesture={panGesture}>
+          <GestureDetector gesture={sheet.gesture}>
             <View style={styles.dragZone}>
               <View style={styles.dragHandle} />
             </View>
@@ -725,7 +660,7 @@ const styles = StyleSheet.create({
   // Modal form
   modalTitle: { fontFamily: FONTS.heading, fontSize: 20, letterSpacing: -0.45, color: COLORS.ink },
   formSheet:  { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 28 },
-  dragZone:   { alignItems: 'center', paddingVertical: 8 },
+  dragZone:   { height: 44, alignItems: 'center', justifyContent: 'center' },
   dragHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.15)' },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   closeBtn:   { padding: 4 },
