@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontSize: 24, letterSpacing: -0.55,
     color: COLORS.ink,
     marginTop: 6,
     lineHeight: 30,
@@ -201,7 +201,7 @@ const styles = StyleSheet.create({
   },
   wpmValue: {
     fontFamily: FONTS.heading,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
   },
   wpmUnit: {
     fontFamily: FONTS.bodyLight,

@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontSize: 24, lineHeight: 30, letterSpacing: -0.55,
     color: COLORS.ink,
     textAlign: 'center',
     marginBottom: 8,
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
   },
   breathText: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     textAlign: 'center',
     marginBottom: 2,
   },

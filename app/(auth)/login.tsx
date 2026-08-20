@@ -200,9 +200,9 @@ function Field({
 const styles = StyleSheet.create({
   content:    { padding: 28, paddingBottom: 40, maxWidth: 480, width: '100%', alignSelf: 'center' },
   backBtn:    { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  backArrow:  { fontSize: 20, color: COLORS.ink },
+  backArrow: { fontSize: 20, letterSpacing: -0.45, color: COLORS.ink },
   mascot:     { alignItems: 'center', marginBottom: 8 },
-  title:      { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink, textAlign: 'center', marginBottom: 4 },
+  title: { fontFamily: FONTS.heading, fontSize: 26, lineHeight: 31, letterSpacing: -0.55, color: COLORS.ink, textAlign: 'center', marginBottom: 4 },
   sub:        { fontFamily: FONTS.bodyLight, fontSize: 14, color: COLORS.muted, textAlign: 'center', marginBottom: 28 },
   forgotRow:  { alignItems: 'flex-end', marginVertical: 10 },
   forgotText: { fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.focus },

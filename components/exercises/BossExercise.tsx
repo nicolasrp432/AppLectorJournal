@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-15deg' }],
   },
   damageLabelText: {
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     fontFamily: FONTS.heading,
     fontWeight: '900',
     textShadowColor: 'black',
@@ -878,7 +878,7 @@ const styles = StyleSheet.create({
   },
   introTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 28,
+    fontSize: 28, lineHeight: 34, letterSpacing: -0.6,
     color: '#fff',
     textAlign: 'center',
   },
@@ -950,7 +950,7 @@ const styles = StyleSheet.create({
   },
   damageText: {
     fontFamily: FONTS.heading,
-    fontSize: 32,
+    fontSize: 32, letterSpacing: -0.7,
     color: '#EF4444',
   },
   roundDesc: {
@@ -988,7 +988,7 @@ const styles = StyleSheet.create({
   },
   telegraphSkill: {
     fontFamily: FONTS.heading,
-    fontSize: 30,
+    fontSize: 30, letterSpacing: -0.65,
     color: '#fff',
     marginTop: 4,
   },
@@ -1077,7 +1077,7 @@ const bossStyles = StyleSheet.create({
   },
   wordText: {
     fontFamily: FONTS.heading,
-    fontSize: 44,
+    fontSize: 44, letterSpacing: -0.95,
     color: '#fff',
   },
   nextBtn: {
@@ -1117,7 +1117,7 @@ const bossStyles = StyleSheet.create({
   },
   digitText: {
     fontFamily: FONTS.heading,
-    fontSize: 28,
+    fontSize: 28, letterSpacing: -0.6,
     color: '#fff',
   },
   inputRow: {
@@ -1137,7 +1137,7 @@ const bossStyles = StyleSheet.create({
   },
   inputText: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     color: '#fff',
   },
   numpad: {
@@ -1158,7 +1158,7 @@ const bossStyles = StyleSheet.create({
   },
   numKeyText: {
     fontFamily: FONTS.heading,
-    fontSize: 20,
+    fontSize: 20, letterSpacing: -0.45,
     color: '#fff',
   },
   textCard: {

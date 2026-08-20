@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   closeBtn: {

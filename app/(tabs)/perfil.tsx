@@ -1249,7 +1249,7 @@ const styles = StyleSheet.create({
   avatarWrap:  { width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.focus + '20', alignItems: 'center', justifyContent: 'center' },
   avatarImg:   { width: 88, height: 88, borderRadius: 44 },
   avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  name:        { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
+  name: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink },
   heroProBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1297,7 +1297,7 @@ const styles = StyleSheet.create({
   statsGrid:    { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard:     { flex: 1, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.border, padding: 12, alignItems: 'center' },
   statIconRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statValue:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  statValue: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   statLabel:    { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: 2 },
 
   sectionTitle: { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, marginBottom: 10 },
@@ -1344,7 +1344,7 @@ const styles = StyleSheet.create({
   },
   bottomSheetTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   bottomSheetSubtitle: {
@@ -1425,7 +1425,7 @@ const styles = StyleSheet.create({
   },
   mascotModalTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   mascotCarousel: {
@@ -1755,7 +1755,7 @@ const styles = StyleSheet.create({
   },
   proGoldTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: '#fff',
   },
   proGoldSub: {

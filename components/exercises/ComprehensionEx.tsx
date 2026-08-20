@@ -347,7 +347,7 @@ const styles = StyleSheet.create({
   },
   passageTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: COLORS.ink,
     marginTop: 4,
   },
@@ -452,7 +452,7 @@ const styles = StyleSheet.create({
   },
   qText: {
     fontFamily: FONTS.heading,
-    fontSize: 19,
+    fontSize: 19, letterSpacing: -0.2,
     color: COLORS.ink,
     lineHeight: 26,
   },

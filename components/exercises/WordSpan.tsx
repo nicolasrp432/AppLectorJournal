@@ -324,13 +324,13 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     fontFamily: FONTS.heading,
-    fontSize: 34,
+    fontSize: 34, letterSpacing: -0.75,
     color: '#fff',
     textAlign: 'center',
   },
   counter:    { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 2 },
   waitBox:    { padding: 32, alignItems: 'center' },
-  waitText:   { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  waitText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   storyCard:  {
     backgroundColor: '#FAF5FF',
     borderRadius: 20,

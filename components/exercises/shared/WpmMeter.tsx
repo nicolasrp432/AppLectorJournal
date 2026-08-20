@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
   },
   wpmValue: {
     fontFamily: FONTS.heading || 'System',
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     lineHeight: 24,
     fontWeight: '800',
   },

@@ -5,63 +5,30 @@ import { COLORS } from '../../constants/colors';
 import * as haptics from '../../lib/haptics';
 import { TabIcon, TAB_LABELS, TABS, type TabBarProps } from './GlassNavbarShared';
 
-// Web variant: reanimated is stubbed on web (animations resolve instantly), so
-// the sliding pill would jump. Here we drive the slide with a real CSS
-// transition on the pill's box, which react-native-web forwards to the DOM.
+// Variante web. Antes esta existía porque reanimated está stubbeado en web y la
+// píldora deslizante habría dado un salto, así que el deslizamiento se hacía con
+// una transición CSS real sobre left/top/width/height.
+//
+// Ya no hay deslizamiento en ninguna plataforma (ver el comentario en
+// GlassNavbar.tsx), así que este archivo se queda solo por el cristal: en web el
+// desenfoque es backdrop-filter, no expo-blur.
 
 export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: TabBarProps) {
-  const [layouts, setLayouts] = React.useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
-
-  const handleTabLayout = (tabName: string, x: number, y: number, width: number, height: number) => {
-    setLayouts(prev => {
-      const current = prev[tabName];
-      if (current && current.x === x && current.width === width && current.height === height) {
-        return prev;
-      }
-      return { ...prev, [tabName]: { x, y, width, height } };
-    });
-  };
-
-  const activeTabName = TABS[state.index];
-  const layout = layouts[activeTabName];
-
-  // CSS-transition driven pill — glides smoothly between tabs on web.
-  const indicatorStyle: any = layout
-    ? {
-        position: 'absolute',
-        left: layout.x,
-        top: layout.y,
-        width: layout.width,
-        height: layout.height,
-        borderRadius: 20,
-        backgroundColor: accentColor,
-        boxShadow: `0 6px 16px ${accentColor}55`,
-        transitionProperty: 'left, top, width, height',
-        transitionDuration: '340ms',
-        transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
-      }
-    : { opacity: 0 };
-
   return (
     <View style={[styles.container, webGlass]}>
       <View style={styles.inner}>
-        <View style={indicatorStyle} pointerEvents="none" />
-
-        {TABS.map((tabName, i) => {
-          const active = state.index === i;
-          return (
-            <NavTab
-              key={tabName}
-              id={tabName}
-              active={active}
-              onLayout={(x, y, w, h) => handleTabLayout(tabName, x, y, w, h)}
-              onPress={() => {
-                haptics.tap();
-                navigation.navigate(tabName);
-              }}
-            />
-          );
-        })}
+        {TABS.map((tabName, i) => (
+          <NavTab
+            key={tabName}
+            id={tabName}
+            active={state.index === i}
+            accentColor={accentColor}
+            onPress={() => {
+              haptics.tap();
+              navigation.navigate(tabName);
+            }}
+          />
+        ))}
       </View>
     </View>
   );
@@ -70,47 +37,46 @@ export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: T
 function NavTab({
   id,
   active,
+  accentColor,
   onPress,
-  onLayout,
 }: {
   id: string;
   active: boolean;
+  accentColor: string;
   onPress: () => void;
-  onLayout: (x: number, y: number, width: number, height: number) => void;
 }) {
   const pillStyle: any = {
-    backgroundColor: 'transparent',
+    backgroundColor: active ? accentColor : 'transparent',
     borderRadius: 20,
     paddingVertical: 9,
     paddingHorizontal: active ? 16 : 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    // Smooth the icon/label reflow as the active pill grows.
-    transitionProperty: 'padding',
-    transitionDuration: '300ms',
-    transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)',
+    ...(active ? { boxShadow: `0 6px 16px ${accentColor}55` } : null),
   };
 
   return (
-    <View
-      onLayout={e => {
-        const { x, y, width, height } = e.nativeEvent.layout;
-        onLayout(x, y, width, height);
-      }}
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={TAB_LABELS[id]}
+      onPress={onPress}
+      // El equivalente en web del scale de nativo: instantáneo al pulsar.
+      style={({ pressed }: { pressed: boolean }) =>
+        pressed ? { transform: [{ scale: 0.97 }] } : null
+      }
     >
-      <Pressable onPress={onPress}>
-        <View style={pillStyle}>
-          <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={28} />
-          {active && <Text style={styles.label}>{TAB_LABELS[id]}</Text>}
-        </View>
-      </Pressable>
-    </View>
+      <View style={pillStyle}>
+        <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={28} />
+        {active && <Text style={styles.label}>{TAB_LABELS[id]}</Text>}
+      </View>
+    </Pressable>
   );
 }
 
-// Liquid-glass look on web: translucent fill + backdrop blur (web-only CSS keys,
-// not part of RN's ViewStyle, so kept as a plain cast object).
+// Liquid-glass en web: relleno translúcido + desenfoque de fondo (claves CSS
+// que no forman parte del ViewStyle de RN, de ahí el objeto casteado).
 const webGlass: any = {
   backgroundColor: 'rgba(255,255,255,0.72)',
   backdropFilter: 'blur(20px)',

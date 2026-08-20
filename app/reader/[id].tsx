@@ -735,12 +735,12 @@ const styles = StyleSheet.create({
   header:           { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8 },
   topBar:           { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10 },
   backBtn:          { width: 38, height: 38, borderRadius: 12, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  backIcon:         { fontSize: 18, color: COLORS.ink },
+  backIcon: { fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   progressText:     { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, minWidth: 34, textAlign: 'right' },
 
   setupScroll:      { padding: 24 },
   mascotRow:        { alignItems: 'center', marginBottom: 16 },
-  bookTitle:        { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, textAlign: 'center', lineHeight: 28, marginBottom: 4 },
+  bookTitle: { fontFamily: FONTS.heading, fontSize: 22, letterSpacing: -0.5, color: COLORS.ink, textAlign: 'center', lineHeight: 28, marginBottom: 4 },
   bookAuthor:       { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', marginBottom: 4 },
   bookMeta:         { fontFamily: FONTS.body, fontSize: 12, color: COLORS.subtle, textAlign: 'center', marginBottom: 24 },
 
@@ -752,9 +752,9 @@ const styles = StyleSheet.create({
 
   wpmRow:           { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 24 },
   wpmBtn:           { width: 44, height: 44, borderRadius: 12, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  wpmBtnText:       { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, lineHeight: 28 },
+  wpmBtnText: { fontFamily: FONTS.heading, fontSize: 22, letterSpacing: -0.5, color: COLORS.ink, lineHeight: 28 },
   wpmDisplay:       { alignItems: 'center', minWidth: 80 },
-  wpmValue:         { fontFamily: FONTS.heading, fontSize: 28 },
+  wpmValue: { fontFamily: FONTS.heading, fontSize: 28, letterSpacing: -0.6 },
   wpmUnit:          { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1 },
 
   noContentBox:     { backgroundColor: COLORS.surface, borderRadius: 18, padding: 24, alignItems: 'center', marginTop: 16, gap: 16 },
@@ -767,11 +767,11 @@ const styles = StyleSheet.create({
   focusLines:       { flexDirection: 'row', alignItems: 'center', gap: 16 },
   focusLine:        { width: 3, height: 48, borderRadius: 2, opacity: 0.6 },
   wordBox:          { minWidth: 220, alignItems: 'center', paddingHorizontal: 12 },
-  rsvpWord:         { fontFamily: FONTS.heading, fontSize: 36, textAlign: 'center' },
+  rsvpWord: { fontFamily: FONTS.heading, fontSize: 36, letterSpacing: -0.8, textAlign: 'center' },
   rsvpCounter:      { fontFamily: FONTS.body, fontSize: 11, color: COLORS.subtle, marginTop: 24 },
   rsvpControls:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 16, paddingBottom: 8 },
   playBtn:          { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
-  playBtnText:      { fontSize: 22, color: '#fff' },
+  playBtnText: { fontSize: 22, letterSpacing: -0.5, color: '#fff' },
 
   // Scroll reading
   scrollReadContent:{ padding: 24 },
@@ -787,15 +787,15 @@ const styles = StyleSheet.create({
   doneScroll:       { padding: 24, alignItems: 'center' },
   doneMascot:       { marginBottom: 16 },
   doneLabel:        { fontFamily: FONTS.headingSemi, fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
-  doneTitle:        { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, textAlign: 'center', marginBottom: 24 },
+  doneTitle: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink, textAlign: 'center', marginBottom: 24 },
   statsGrid:        { flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' },
   statCard:         { flex: 1, minWidth: '44%', backgroundColor: COLORS.white, borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
-  statValue:        { fontFamily: FONTS.heading, fontSize: 20 },
+  statValue: { fontFamily: FONTS.heading, fontSize: 20, letterSpacing: -0.45 },
   statLabel:        { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 4 },
 
   // Empty state
   emptyCenter:      { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
-  emptyText:        { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.muted },
+  emptyText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.muted },
 
   // Quiz styling
   quizScroll:       { padding: 24 },
@@ -812,6 +812,6 @@ const styles = StyleSheet.create({
   optionText:       { fontFamily: FONTS.body, fontSize: 14, color: COLORS.ink, flex: 1, lineHeight: 20 },
   
   quizLoadingBox:   { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  quizLoadingText:  { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink, marginTop: 16, textAlign: 'center' },
+  quizLoadingText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink, marginTop: 16, textAlign: 'center' },
   quizLoadingSub:   { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, marginTop: 8, textAlign: 'center', lineHeight: 20 },
 });

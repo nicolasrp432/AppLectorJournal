@@ -1071,7 +1071,7 @@ const styles = StyleSheet.create({
   },
   introTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 26,
+    fontSize: 26, lineHeight: 31, letterSpacing: -0.55,
     marginTop: 16,
     textAlign: 'center',
   },
@@ -1162,7 +1162,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   gameContainer: {
@@ -1185,7 +1185,7 @@ const styles = StyleSheet.create({
   },
   configTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: COLORS.ink,
     textAlign: 'center',
     marginBottom: 8,
@@ -1739,10 +1739,10 @@ const styles = StyleSheet.create({
   },
   successHeadline: {
     fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontSize: 24, lineHeight: 30,
     color: COLORS.focus,
     marginTop: 20,
-    letterSpacing: 1,
+    letterSpacing: -0.55,
   },
   successDescription: {
     fontFamily: FONTS.body,
@@ -1780,7 +1780,7 @@ const styles = StyleSheet.create({
   },
   rewardXPAmount: {
     fontFamily: FONTS.headingBold,
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     color: '#D97706',
   },
   rewardXPLabel: {

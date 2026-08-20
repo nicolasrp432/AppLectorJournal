@@ -113,7 +113,7 @@ const schulteStyles = StyleSheet.create({
   grid:           { flexDirection: 'row', flexWrap: 'wrap', width: 108, gap: 3, position: 'relative' },
   cell:           { width: 33, height: 33, borderRadius: 8, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
   cellText:       { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
-  pointer:        { position: 'absolute', left: 18, top: 16, fontSize: 18 },
+  pointer: { position: 'absolute', left: 18, top: 16, fontSize: 18, letterSpacing: -0.2 },
 });
 
 // ── RSVP: words flash one by one ──────────────────────────────────────────────
@@ -168,7 +168,7 @@ function DemoRSVP({ accent }: { accent: string }) {
 const rsvpStyles = StyleSheet.create({
   box:          { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 12, borderWidth: 1.5, borderRadius: 14, backgroundColor: COLORS.white, marginBottom: 10 },
   line:         { width: 2, height: 28, borderRadius: 1, opacity: 0.7 },
-  word:         { fontFamily: FONTS.heading, fontSize: 24, minWidth: 120, textAlign: 'center' },
+  word: { fontFamily: FONTS.heading, fontSize: 24, letterSpacing: -0.55, minWidth: 120, textAlign: 'center' },
   progressDots: { flexDirection: 'row', gap: 4, alignItems: 'center' },
   dot:          { width: 6, height: 6, borderRadius: 3, backgroundColor: COLORS.border },
 });
@@ -276,7 +276,7 @@ function DemoLoci({ accent }: { accent: string }) {
 const lociStyles = StyleSheet.create({
   grid:      { flexDirection: 'row', flexWrap: 'wrap', gap: 6, width: 180 },
   room:      { width: 84, height: 60, borderRadius: 12, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center', gap: 2 },
-  roomEmoji: { fontSize: 18 },
+  roomEmoji: { fontSize: 18, letterSpacing: -0.2 },
   roomLabel: { fontFamily: FONTS.headingSemi, fontSize: 7, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
   objBubble: { position: 'absolute', top: -8, right: -8, width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
 });
@@ -475,7 +475,7 @@ const readingTestStyles = StyleSheet.create({
   docLine:      { height: 6, backgroundColor: COLORS.border, borderRadius: 3 },
   scanner:      { position: 'absolute', left: 0, right: 0, height: 3, opacity: 0.8 },
   speedo:       { width: 75, height: 75, borderRadius: 38, borderWidth: 2, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center' },
-  speedoVal:    { fontFamily: FONTS.heading, fontSize: 20, lineHeight: 22 },
+  speedoVal: { fontFamily: FONTS.heading, fontSize: 20, letterSpacing: -0.45, lineHeight: 22 },
   speedoLabel:  { fontFamily: FONTS.headingSemi, fontSize: 8, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5 },
 });
 

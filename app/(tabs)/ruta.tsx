@@ -1706,7 +1706,7 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
 const styles = StyleSheet.create({
   safe:           { flex: 1, backgroundColor: COLORS.canvas },
   header:         { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  headerTitle:    { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
+  headerTitle: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink },
   notifBadge:     { position: 'absolute', top: -3, right: -3, backgroundColor: '#EF4444', borderRadius: 999, minWidth: 16, height: 16, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2, borderWidth: 1.5, borderColor: COLORS.canvas },
   notifBadgeText: { color: '#FFF', fontSize: 8, fontFamily: FONTS.headingBold, lineHeight: 12 },
   xpBadge:        { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
@@ -1749,7 +1749,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
     fontSize: 18,
     color: '#fff',
-    letterSpacing: 0.5,
+    letterSpacing: -0.2,
   },
   lockOverlaySub: {
     fontFamily: FONTS.body,
@@ -1957,7 +1957,7 @@ const styles = StyleSheet.create({
   },
   previewTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 20,
+    fontSize: 20, letterSpacing: -0.45,
     color: '#1E293B',
     marginTop: 2,
   },
@@ -2106,7 +2106,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
     fontSize: 20,
     color: '#1E293B',
-    letterSpacing: 1,
+    letterSpacing: -0.45,
   },
   chestSubtitle: {
     fontFamily: FONTS.bodyBold,
@@ -2161,7 +2161,7 @@ const styles = StyleSheet.create({
   },
   xpRewardText: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: '#78350F',
   },
   chestTipTitle: {
@@ -2239,7 +2239,7 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: '#0F172A',
     textAlign: 'center',
     marginTop: 4,
@@ -2373,7 +2373,7 @@ const styles = StyleSheet.create({
   },
   aiBentoTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: '#FFF',
     marginBottom: 4,
   },
@@ -2495,7 +2495,7 @@ const styles = StyleSheet.create({
   },
   warmupExTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: '#FFF',
     marginBottom: 4,
   },

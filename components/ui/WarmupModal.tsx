@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
   },
   warmupExTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: '#FFF',
     marginBottom: 4,
   },

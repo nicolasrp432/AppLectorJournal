@@ -212,7 +212,7 @@ const styles = StyleSheet.create({
   eyebrow:   { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.subtle, textTransform: 'uppercase', letterSpacing: 1.2 },
   xpBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   xpText:    { fontFamily: FONTS.heading, fontSize: 13, color: '#78350F' },
-  title:     { fontFamily: FONTS.heading, fontSize: 24, color: COLORS.ink },
+  title: { fontFamily: FONTS.heading, fontSize: 24, lineHeight: 30, letterSpacing: -0.55, color: COLORS.ink },
   pill:      { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: COLORS.surface, borderRadius: 999, marginRight: 6 },
   pillActive:{ backgroundColor: COLORS.ink },
   pillText:  { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.4 },

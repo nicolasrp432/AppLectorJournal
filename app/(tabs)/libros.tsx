@@ -640,7 +640,7 @@ const CATALOG: CatalogItem[] = [
 const styles = StyleSheet.create({
   safe:       { flex: 1, backgroundColor: COLORS.canvas },
   header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title:      { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink },
+  title: { fontFamily: FONTS.heading, fontSize: 26, lineHeight: 31, letterSpacing: -0.55, color: COLORS.ink },
   addBtn:     { backgroundColor: COLORS.focus, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { fontFamily: FONTS.heading, fontSize: 13, color: '#fff' },
   tabs:       { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 12, gap: 8 },
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
   bookCard:   { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1.5, padding: 12, marginBottom: 12, gap: 12 },
   cover:      { width: 72, height: 96, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   coverImg:   { width: '100%', height: '100%' },
-  coverInitial: { fontFamily: FONTS.heading, fontSize: 32, color: '#fff' },
+  coverInitial: { fontFamily: FONTS.heading, fontSize: 32, letterSpacing: -0.7, color: '#fff' },
   bookInfo:   { flex: 1, justifyContent: 'center' },
   bookTitle:  { fontFamily: FONTS.headingSemi, fontSize: 15, color: COLORS.ink, lineHeight: 20 },
   bookAuthor: { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, marginTop: 2 },
@@ -662,7 +662,7 @@ const styles = StyleSheet.create({
   badge:        { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
   badgeText:    { fontFamily: FONTS.headingSemi, fontSize: 9 },
   emptyState:   { alignItems: 'center', paddingTop: 60, gap: 8 },
-  emptyText:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  emptyText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   emptyHint:    { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
   loadMore:     { marginTop: 8, paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: COLORS.border },
   loadMoreText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.focus },
@@ -680,7 +680,7 @@ const styles = StyleSheet.create({
   sheetItemText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.ink },
 
   // Modal form
-  modalTitle: { fontFamily: FONTS.heading, fontSize: 20, color: COLORS.ink },
+  modalTitle: { fontFamily: FONTS.heading, fontSize: 20, letterSpacing: -0.45, color: COLORS.ink },
   formSheet:  { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 28 },
   dragZone:   { alignItems: 'center', paddingVertical: 8 },
   dragHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.15)' },
