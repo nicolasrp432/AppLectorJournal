@@ -152,8 +152,6 @@ export default function PerfilScreen() {
     });
   }, []);
 
-  if (!profile) return null;
-
   // Real Calculated Stats — memoizadas para no recalcular en cada render
   const totalMinutes = useMemo(
     () => Math.round(sessions.reduce((s, x) => s + (x.time_seconds || 0), 0) / 60),
@@ -179,16 +177,16 @@ export default function PerfilScreen() {
   }, [progress]);
 
   const ACHIEVEMENTS: Achievement[] = useMemo(() => [
-    { id: 'streak7',    title: 'Racha 7',      icon: 'flame',           lib: 'Ionicons',              desc: '7 días seguidos', color: '#EF4444', cond: profile.streak >= 7 },
+    { id: 'streak7',    title: 'Racha 7',      icon: 'flame',           lib: 'Ionicons',              desc: '7 días seguidos', color: '#EF4444', cond: (profile?.streak ?? 0) >= 7 },
     { id: 'firstbook',  title: 'Primer libro', icon: 'library',         lib: 'Ionicons',              desc: 'Lee tu primer libro', color: '#3B82F6', cond: booksFinished >= 1 },
     { id: 'wpm300',     title: '300 WPM',      icon: 'flash',           lib: 'Ionicons',              desc: 'Alcanza 300 WPM', color: '#F97316', cond: maxWpm >= 300 },
     { id: 'loci',       title: 'Maestro Loci', icon: 'school',          lib: 'Ionicons',              desc: 'Completa método Loci', color: '#8B5CF6', cond: (progress.loci?.mastery ?? 0) >= 0.8 },
     { id: 'comp90',     title: '90% comp.',    icon: 'brain',           lib: 'MaterialCommunityIcons', desc: '90% comprensión', color: '#22C55E', cond: (progress.comprehension?.best_score ?? 0) >= 0.9 },
-    { id: 'level10',    title: 'Nivel 10',     icon: 'trophy',          lib: 'Ionicons',              desc: 'Llega al nivel 10', color: '#D97706', cond: profile.level >= 10 },
+    { id: 'level10',    title: 'Nivel 10',     icon: 'trophy',          lib: 'Ionicons',              desc: 'Llega al nivel 10', color: '#D97706', cond: (profile?.level ?? 0) >= 10 },
     { id: 'sessions50', title: '50 sesiones',  icon: 'radio-button-on', lib: 'Ionicons',              desc: '50 ejercicios', color: '#EAB308', cond: sessions.length >= 50 },
     { id: 'schulte7',   title: 'Schulte 7×7',  icon: 'grid',            lib: 'Ionicons',              desc: 'Cuadrícula 7×7', color: '#16A34A', cond: (progress.schulte?.current_level ?? 0) >= 5 },
     { id: 'wpm500',     title: '500 WPM',      icon: 'rocket',          lib: 'Ionicons',              desc: 'Alcanza 500 WPM', color: '#DC2626', cond: maxWpm >= 500 },
-  ], [profile.streak, profile.level, booksFinished, maxWpm, progress, sessions.length]);
+  ], [profile?.streak, profile?.level, booksFinished, maxWpm, progress, sessions.length]);
 
   const handlePickAvatar = async () => {
     setAvatarMenuVisible(false);
@@ -210,7 +208,7 @@ export default function PerfilScreen() {
     const mime = asset.mimeType ?? 'image/jpeg';
     const url = await uploadAvatar(asset.uri, mime, asset.base64 ?? undefined);
     setUploading(false);
-    if (!url && profile.id !== 'local') {
+    if (!url && profile?.id !== 'local') {
       Alert.alert('Error', 'No se pudo subir la foto. Verifica tu conexión.');
     }
   };
@@ -222,6 +220,7 @@ export default function PerfilScreen() {
   };
 
   const startEdit = () => {
+    if (!profile) return;
     setEditName(profile.name);
     setEditBio(profile.bio);
     setEditing(true);
@@ -292,9 +291,16 @@ export default function PerfilScreen() {
     }
   };
 
-  const isGuest = profile.id === 'local';
   const isPremiumRC = useSubscriptionStore(s => s.isPremium);
   const isProfilePremium = useProfileStore(s => s.isPremium());
+
+  // Ultimo hook del componente. El `return null` vivia 140 lineas mas arriba,
+  // con ocho hooks por debajo: en cuanto `profile` pasaba de null a cargado,
+  // React veia dos renders con distinto numero de hooks y eso es un crash, no
+  // un aviso de lint. Ahora ningun hook queda por debajo de este punto.
+  if (!profile) return null;
+
+  const isGuest = profile.id === 'local';
   const isPremium = isPremiumRC || isProfilePremium;
 
   // El tier de liga, la clasificación y la cuenta atrás los resuelve LeagueCard

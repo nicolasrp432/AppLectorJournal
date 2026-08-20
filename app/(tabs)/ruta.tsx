@@ -35,6 +35,8 @@ import { AIChatbot } from '../../components/ui/AIChatbot';
 import { WarmupModal } from '../../components/ui/WarmupModal';
 import { SPRING, TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useDismissibleSheet } from '../../hooks/useDismissibleSheet';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { PRESS_SCALE_LARGE } from '../../constants/motion';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -1355,7 +1357,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   completed: string[];
 }) {
   const [chestState, setChestState] = React.useState<'closed' | 'opened'>('closed');
-  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
+  const sheet = useDismissibleSheet({ visible: !!node, onDismiss: onClose, height: SCREEN_HEIGHT });
   const giftRotate = useSharedValue(0);
 
   const isAlreadyCompleted = node ? completed.includes(node.id) : false;
@@ -1364,7 +1366,6 @@ function ChestModal({ node, onClose, onClaim, completed }: {
     if (node) {
       const alreadyClaimed = completed.includes(node.id);
       setChestState(alreadyClaimed ? 'opened' : 'closed');
-      sheetTranslateY.value = withSpring(0, SPRING.sheet);
       if (!alreadyClaimed) {
         giftRotate.value = withRepeat(
           withSequence(withTiming(-5, { duration: 150 }), withTiming(5, { duration: 150 })),
@@ -1374,16 +1375,8 @@ function ChestModal({ node, onClose, onClaim, completed }: {
       } else {
         giftRotate.value = 0;
       }
-    } else {
-      sheetTranslateY.value = SCREEN_HEIGHT;
     }
   }, [node, completed]);
-
-  if (!node) return null;
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslateY.value }],
-  }));
 
   const giftAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -1391,6 +1384,8 @@ function ChestModal({ node, onClose, onClaim, completed }: {
       { scale: chestState === 'opened' ? withSpring(1.2, SPRING.momentum) : withSpring(1, SPRING.momentum) }
     ],
   }));
+
+  if (!node) return null;
 
   const handleOpen = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -1424,8 +1419,12 @@ function ChestModal({ node, onClose, onClaim, completed }: {
       <View style={styles.modalOverlay}>
         <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
-        <Animated.View style={[styles.chestBottomSheet, sheetAnimatedStyle]}>
-          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(0, 0, 0, 0.15)' }]} />
+        <Animated.View style={[styles.chestBottomSheet, sheet.style]}>
+          <GestureDetector gesture={sheet.gesture}>
+            <View style={styles.sheetDragZone}>
+              <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(0, 0, 0, 0.15)' }]} />
+            </View>
+          </GestureDetector>
           
           <Text style={styles.chestHeader}>REGALO NEURONAL</Text>
           <Text style={styles.chestSubtitle}>Zona {node.id.includes('z1') ? '1' : node.id.includes('z2') ? '2' : '3'}</Text>
@@ -1478,21 +1477,13 @@ function ExercisePreviewSheet({
   node: ZoneNode | null;
   onClose: () => void;
 }) {
-  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
+  const sheet = useDismissibleSheet({ visible: !!node, onDismiss: onClose, height: SCREEN_HEIGHT });
 
   useEffect(() => {
-    if (node) {
-      sheetTranslateY.value = withSpring(0, SPRING.sheet);
-      
-      const backAction = () => {
-        onClose();
-        return true;
-      };
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-      return () => backHandler.remove();
-    } else {
-      sheetTranslateY.value = SCREEN_HEIGHT;
-    }
+    if (!node) return;
+    const backAction = () => { onClose(); return true; };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
   }, [node]);
 
   if (!node || !node.exId) return null;
@@ -1514,10 +1505,6 @@ function ExercisePreviewSheet({
       })
     : null;
   const difficultyTag = difficulty ? boostLabel(difficulty) : null;
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslateY.value }],
-  }));
 
   const handleStart = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
@@ -1553,8 +1540,12 @@ function ExercisePreviewSheet({
         <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        <Animated.View style={[styles.bottomSheet, { backgroundColor: COLORS.canvas }, sheetAnimatedStyle]}>
-          <View style={styles.bottomSheetHandle} />
+        <Animated.View style={[styles.bottomSheet, { backgroundColor: COLORS.canvas }, sheet.style]}>
+          <GestureDetector gesture={sheet.gesture}>
+            <View style={styles.sheetDragZone}>
+              <View style={styles.bottomSheetHandle} />
+            </View>
+          </GestureDetector>
           
           <View style={styles.previewHeader}>
             <View style={[styles.previewIconCircle, { backgroundColor: node.color }]}>
@@ -1617,17 +1608,16 @@ function ExercisePreviewSheet({
 
 // ─── WELCOME MODAL COMPONENT (FOR NEW USERS) ──────────────────────────────────
 function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
+  const sheet = useDismissibleSheet({ visible, onDismiss: onClose, height: SCREEN_HEIGHT });
   const reduceMotion = useReducedMotion();
   const mascotBounce = useSharedValue(0);
   const mascotRotate = useSharedValue(0);
 
   useEffect(() => {
-    if (visible) {
-      sheetTranslateY.value = withSpring(0, SPRING.sheet);
-      
-      // Rebote del mascot: decorativo, se apaga con movimiento reducido.
-      if (!reduceMotion) mascotBounce.value = withRepeat(
+    if (visible && !reduceMotion) {
+      // Rebote y balanceo del mascot: decorativos, se apagan con movimiento
+      // reducido.
+      mascotBounce.value = withRepeat(
         withSequence(
           withSpring(-14, SPRING.momentum),
           withSpring(0, SPRING.momentum)
@@ -1644,16 +1634,8 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
         -1,
         true
       );
-    } else {
-      sheetTranslateY.value = SCREEN_HEIGHT;
     }
-  }, [visible]);
-
-  if (!visible) return null;
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslateY.value }],
-  }));
+  }, [visible, reduceMotion]);
 
   const mascotStyle = useAnimatedStyle(() => ({
     transform: [
@@ -1661,6 +1643,8 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
       { rotate: `${mascotRotate.value}deg` }
     ],
   }));
+
+  if (!visible) return null;
 
   const handleDismiss = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
@@ -1673,8 +1657,12 @@ function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => v
         <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
         <Pressable style={StyleSheet.absoluteFill} onPress={handleDismiss} />
         
-        <Animated.View style={[styles.welcomeBottomSheet, sheetAnimatedStyle, { paddingTop: 30 }]}>
-          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(0, 0, 0, 0.15)', marginBottom: 15 }]} />
+        <Animated.View style={[styles.welcomeBottomSheet, sheet.style, { paddingTop: 30 }]}>
+          <GestureDetector gesture={sheet.gesture}>
+            <View style={styles.sheetDragZone}>
+              <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(0, 0, 0, 0.15)' }]} />
+            </View>
+          </GestureDetector>
           
           <Animated.View style={[styles.welcomeMascotWrap, mascotStyle, { marginBottom: 15 }]}>
             <MascotChar which="focus" size={100} expression="wow" />
@@ -1921,13 +1909,22 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
   },
+  // La zona que recibe el gesto de arrastre, no el handle. El handle mide 5px
+  // de alto: como area tactil es inagarrable, asi que la zona es de 44pt y el
+  // handle solo la dibuja.
+  sheetDragZone: {
+    height: 44,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   bottomSheetHandle: {
     width: 48,
     height: 5,
     backgroundColor: '#CBD5E1',
     borderRadius: 99,
     alignSelf: 'center',
-    marginBottom: 20,
   },
   previewHeader: {
     flexDirection: 'row',
