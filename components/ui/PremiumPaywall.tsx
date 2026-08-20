@@ -409,7 +409,7 @@ const styles = StyleSheet.create({
   },
   proTitle: {
     fontFamily: FONTS.heading || 'System',
-    fontSize: 32,
+    fontSize: 32, lineHeight: 36, letterSpacing: -0.7,
     color: COLORS.ink,
   },
   proSubtitle: {

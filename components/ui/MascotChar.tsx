@@ -16,6 +16,8 @@ import Animated, {
   useSharedValue, useAnimatedStyle,
   withRepeat, withSequence, withTiming, withSpring
 } from 'react-native-reanimated';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Shape = 'tallPill' | 'bean' | 'round' | 'spark' | 'cloud' | 'droplet' | 'hex' | 'arch';
@@ -46,7 +48,7 @@ const MASCOTS: Record<MascotKey, { shape: Shape; defaultExp: Expression }> = {
 };
 
 // spring stiffness and damping parameters
-const SPRING_CONFIG = { damping: 13, stiffness: 110 };
+const SPRING_CONFIG = SPRING.smooth;
 
 interface CharShapeProps {
   which: MascotKey;
@@ -100,14 +102,17 @@ export function CharShape({
   const blinkScaleY = useSharedValue(1.0);
 
   // Body Squash, Stretch & Jump parameters
+  const reduceMotion = useReducedMotion();
   const bodyScaleX = useSharedValue(1.0);
   const bodyScaleY = useSharedValue(1.0);
   const bodyTranslateY = useSharedValue(0);
   const shadowScaleX = useSharedValue(1.0);
 
   // ─── Continuous Breathing Loop ───
+  // La respiracion es decorativa y va siempre: con movimiento reducido se corta
+  // igual que con `breathing={false}`.
   useEffect(() => {
-    if (!breathing) {
+    if (!breathing || reduceMotion) {
       bodyScaleY.value = 1.0;
       bodyScaleX.value = 1.0;
       shadowScaleX.value = 1.0;
@@ -140,7 +145,7 @@ export function CharShape({
       -1,
       false,
     );
-  }, [breathing]);
+  }, [breathing, reduceMotion]);
 
   // ─── Random Natural Blinking ───
   useEffect(() => {
@@ -326,20 +331,20 @@ export function CharShape({
   const handlePress = () => {
     bodyScaleX.value = withSequence(
       withTiming(1.15, { duration: 90 }),
-      withSpring(1.0, { damping: 9, stiffness: 120 }),
+      withSpring(1.0, SPRING.momentum),
     );
     bodyScaleY.value = withSequence(
       withTiming(0.81, { duration: 90 }),
-      withSpring(1.0, { damping: 9, stiffness: 120 }),
+      withSpring(1.0, SPRING.momentum),
     );
     shadowScaleX.value = withSequence(
       withTiming(1.22, { duration: 90 }),
-      withSpring(1.0, { damping: 10 }),
+      withSpring(1.0, SPRING.momentum),
     );
     bodyTranslateY.value = withSequence(
       withTiming(5, { duration: 90 }),
-      withSpring(-22, { damping: 7, stiffness: 80 }),
-      withSpring(0, { damping: 11, stiffness: 110 }),
+      withSpring(-22, SPRING.momentum),
+      withSpring(0, SPRING.momentum),
     );
   };
 

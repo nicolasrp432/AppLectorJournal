@@ -205,14 +205,14 @@ const styles = StyleSheet.create({
   principleText:   { fontFamily: FONTS.body, fontSize: 12.5, color: COLORS.muted, marginTop: 4, lineHeight: 18 },
 
   stepTag:         { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.loci, textTransform: 'uppercase', letterSpacing: 1.2, marginBottom: 8 },
-  title:           { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, lineHeight: 30 },
+  title: { fontFamily: FONTS.heading, fontSize: 22, letterSpacing: -0.5, color: COLORS.ink, lineHeight: 30 },
   subtitle:        { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, lineHeight: 20, marginTop: 8 },
   input:           { fontFamily: FONTS.body, fontSize: 15, borderWidth: 2, borderColor: COLORS.border, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 16, color: COLORS.ink, backgroundColor: COLORS.white, marginTop: 16, minHeight: 56, textAlignVertical: 'top' },
 
   recallRoom:      { fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.ink },
 
   resultBox:       { alignItems: 'center', marginVertical: 24, gap: 8 },
-  resultTitle:     { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, marginTop: 8 },
+  resultTitle: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink, marginTop: 8 },
   resultSub:       { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 20 },
   reviewList:      { gap: 10, marginTop: 8 },
   reviewRow:       { flexDirection: 'row', alignItems: 'center', gap: 8 },

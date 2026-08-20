@@ -358,7 +358,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontSize: 24, lineHeight: 30, letterSpacing: -0.55,
     color: COLORS.ink,
     textAlign: 'center',
     marginBottom: 8,
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   passageTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: COLORS.ink,
     marginTop: 4,
   },
@@ -442,7 +442,7 @@ const styles = StyleSheet.create({
   },
   placeholderTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
     marginBottom: 8,
   },
@@ -516,7 +516,7 @@ const styles = StyleSheet.create({
   },
   qText: {
     fontFamily: FONTS.heading,
-    fontSize: 19,
+    fontSize: 19, letterSpacing: -0.2,
     color: COLORS.ink,
     lineHeight: 26,
   },
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontFamily: FONTS.headingBold,
-    fontSize: 32,
+    fontSize: 32, letterSpacing: -0.7,
     lineHeight: 36,
   },
   statUnit: {

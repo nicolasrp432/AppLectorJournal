@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal, KeyboardAvoidingView, Platform, Dimensions, Animated, PanResponder } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, TextInput, ActivityIndicator, Image, Modal, KeyboardAvoidingView, Platform, Dimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Animated from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
+import { useDismissibleSheet } from '../../hooks/useDismissibleSheet';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 import { router } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
@@ -22,6 +23,8 @@ import { PushButton } from '../../components/ui/PushButton';
 import { CATALOG_CONTENT } from '../../constants/catalogContent';
 import { countWords } from '../../lib/text';
 import type { LibraryItem } from '../../types/db';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const COVER_COLORS = [COLORS.focus, COLORS.calm, COLORS.swift, COLORS.joy, COLORS.loci, COLORS.memo];
 
@@ -342,40 +345,13 @@ function BookFormModal({
   const [coverOpen, setCoverOpen]   = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
 
-  // Bottom sheet arrastrable (RN Animated + PanResponder; compatible con web,
-  // sin worklets de Reanimated). Entra deslizando hacia arriba y se cierra
+  // Bottom sheet arrastrable. Entra deslizando hacia arriba y se cierra
   // deslizando hacia abajo por el handle, por la X, por tap en el fondo o atrás.
+  // La mecánica del gesto (histéresis, goma en el borde, proyección de inercia)
+  // vive en useDismissibleSheet, compartida con los otros cinco sheets.
   const SHEET_MAX = Math.min(SCREEN_HEIGHT * 0.9, 760);
-  const translateY = React.useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-  const onCloseRef = React.useRef(onClose);
-  onCloseRef.current = onClose;
-
-  const handleClose = React.useCallback(() => {
-    Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 220, useNativeDriver: USE_NATIVE_DRIVER })
-      .start(() => onCloseRef.current());
-  }, [translateY]);
-
-  React.useEffect(() => {
-    Animated.spring(translateY, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, speed: 14, bounciness: 4 }).start();
-  }, []);
-
-  // El PanResponder se adjunta SOLO al handle superior (no a todo el sheet),
-  // para no robarle el scroll al formulario.
-  const panResponder = React.useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 4,
-      onPanResponderMove: (_, g) => { if (g.dy > 0) translateY.setValue(g.dy); },
-      onPanResponderRelease: (_, g) => {
-        if (g.dy > 120 || g.vy > 0.8) {
-          Animated.timing(translateY, { toValue: SCREEN_HEIGHT, duration: 200, useNativeDriver: USE_NATIVE_DRIVER })
-            .start(() => onCloseRef.current());
-        } else {
-          Animated.spring(translateY, { toValue: 0, useNativeDriver: USE_NATIVE_DRIVER, speed: 14, bounciness: 4 }).start();
-        }
-      },
-    })
-  ).current;
+  const sheet = useDismissibleSheet({ onDismiss: onClose, height: SCREEN_HEIGHT });
+  const handleClose = sheet.close;
 
   // Si editamos y aún no está el contenido en memoria, cárgalo.
   React.useEffect(() => {
@@ -483,11 +459,13 @@ function BookFormModal({
       >
         <Pressable style={StyleSheet.absoluteFill} onPress={handleClose} />
 
-        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX, transform: [{ translateY }] }]}>
+        <Animated.View style={[styles.formSheet, { maxHeight: SHEET_MAX }, sheet.style]}>
           {/* Handle arrastrable (deslizar abajo para cerrar) */}
-          <View style={styles.dragZone} {...panResponder.panHandlers}>
-            <View style={styles.dragHandle} />
-          </View>
+          <GestureDetector gesture={sheet.gesture}>
+            <View style={styles.dragZone}>
+              <View style={styles.dragHandle} />
+            </View>
+          </GestureDetector>
 
           {/* Cabecera con X */}
           <View style={styles.formHeader}>
@@ -640,7 +618,7 @@ const CATALOG: CatalogItem[] = [
 const styles = StyleSheet.create({
   safe:       { flex: 1, backgroundColor: COLORS.canvas },
   header:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 },
-  title:      { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink },
+  title: { fontFamily: FONTS.heading, fontSize: 26, lineHeight: 31, letterSpacing: -0.55, color: COLORS.ink },
   addBtn:     { backgroundColor: COLORS.focus, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { fontFamily: FONTS.heading, fontSize: 13, color: '#fff' },
   tabs:       { flexDirection: 'row', paddingHorizontal: 20, marginBottom: 12, gap: 8 },
@@ -652,7 +630,7 @@ const styles = StyleSheet.create({
   bookCard:   { flexDirection: 'row', backgroundColor: COLORS.white, borderRadius: 18, borderWidth: 1.5, padding: 12, marginBottom: 12, gap: 12 },
   cover:      { width: 72, height: 96, borderRadius: 12, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   coverImg:   { width: '100%', height: '100%' },
-  coverInitial: { fontFamily: FONTS.heading, fontSize: 32, color: '#fff' },
+  coverInitial: { fontFamily: FONTS.heading, fontSize: 32, letterSpacing: -0.7, color: '#fff' },
   bookInfo:   { flex: 1, justifyContent: 'center' },
   bookTitle:  { fontFamily: FONTS.headingSemi, fontSize: 15, color: COLORS.ink, lineHeight: 20 },
   bookAuthor: { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, marginTop: 2 },
@@ -662,7 +640,7 @@ const styles = StyleSheet.create({
   badge:        { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
   badgeText:    { fontFamily: FONTS.headingSemi, fontSize: 9 },
   emptyState:   { alignItems: 'center', paddingTop: 60, gap: 8 },
-  emptyText:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  emptyText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   emptyHint:    { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
   loadMore:     { marginTop: 8, paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFF', borderWidth: 1, borderColor: COLORS.border },
   loadMoreText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.focus },
@@ -680,9 +658,9 @@ const styles = StyleSheet.create({
   sheetItemText: { fontFamily: FONTS.headingSemi, fontSize: 14, color: COLORS.ink },
 
   // Modal form
-  modalTitle: { fontFamily: FONTS.heading, fontSize: 20, color: COLORS.ink },
+  modalTitle: { fontFamily: FONTS.heading, fontSize: 20, letterSpacing: -0.45, color: COLORS.ink },
   formSheet:  { backgroundColor: COLORS.white, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 24, paddingTop: 6, paddingBottom: 28 },
-  dragZone:   { alignItems: 'center', paddingVertical: 8 },
+  dragZone:   { height: 44, alignItems: 'center', justifyContent: 'center' },
   dragHandle: { width: 44, height: 5, borderRadius: 3, backgroundColor: 'rgba(0,0,0,0.15)' },
   formHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   closeBtn:   { padding: 4 },

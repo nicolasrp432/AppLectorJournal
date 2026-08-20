@@ -11,11 +11,8 @@ import {
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-} from 'react-native-reanimated';
+import Animated from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import * as Haptics from 'expo-haptics';
 import { router } from 'expo-router';
 import { COLORS } from '../../constants/colors';
@@ -23,6 +20,7 @@ import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
 import { selectWarmupExercises } from '../../lib/dailyWarmup';
 import { MascotChar } from './MascotChar';
+import { useDismissibleSheet } from '../../hooks/useDismissibleSheet';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -37,23 +35,17 @@ export function WarmupModal({
   onClose,
   allProgress,
 }: WarmupModalProps) {
-  const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
+  const sheet = useDismissibleSheet({ visible, onDismiss: onClose, height: SCREEN_HEIGHT });
 
   useEffect(() => {
-    if (visible) {
-      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
-      
-      const backAction = () => {
-        onClose();
-        return true;
-      };
-      const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
-      return () => backHandler.remove();
-    } else {
-      sheetTranslateY.value = SCREEN_HEIGHT;
-    }
-  }, [visible]);
+    if (!visible) return;
+    const backAction = () => { onClose(); return true; };
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', backAction);
+    return () => backHandler.remove();
+  }, [visible, onClose]);
 
+  // Este return temprano estaba ANTES del useAnimatedStyle de abajo, que es una
+  // violacion de las reglas de hooks. Ahora todos los hooks quedan por encima.
   if (!visible) return null;
 
   const suggested = selectWarmupExercises(allProgress);
@@ -63,10 +55,6 @@ export function WarmupModal({
 
   const progress = allProgress[firstExId] || { mastery: 0, total_sessions: 0, best_score: 0, current_level: 1 };
   const masteryPercent = Math.round((progress.mastery ?? 0) * 100);
-
-  const sheetAnimatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslateY.value }],
-  }));
 
   const handleStart = () => {
     onClose();
@@ -82,8 +70,12 @@ export function WarmupModal({
         <BlurView intensity={25} style={StyleSheet.absoluteFill} tint="dark" />
         <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
 
-        <Animated.View style={[styles.warmupBottomSheet, sheetAnimatedStyle]}>
-          <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} />
+        <Animated.View style={[styles.warmupBottomSheet, sheet.style]}>
+          <GestureDetector gesture={sheet.gesture}>
+            <View style={styles.dragZone}>
+              <View style={[styles.bottomSheetHandle, { backgroundColor: 'rgba(255, 255, 255, 0.2)' }]} />
+            </View>
+          </GestureDetector>
           
           <View style={styles.warmupHeaderRow}>
             <Ionicons name="flash" size={20} color="#F97316" />
@@ -173,13 +165,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 24,
   },
+  // La zona de arrastre, no el handle. El handle mide 5px de alto: como area
+  // tactil es inagarrable, asi que la zona que recibe el gesto es de 44pt y el
+  // handle solo la dibuja.
+  dragZone: {
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   bottomSheetHandle: {
     width: 48,
     height: 5,
     backgroundColor: '#CBD5E1',
     borderRadius: 99,
     alignSelf: 'center',
-    marginBottom: 20,
   },
   warmupBottomSheet: {
     width: '100%',
@@ -256,7 +256,7 @@ const styles = StyleSheet.create({
   },
   warmupExTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: '#FFF',
     marginBottom: 4,
   },

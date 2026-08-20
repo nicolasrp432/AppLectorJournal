@@ -82,10 +82,10 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   logoText: {
-    fontFamily: FONTS.heading, fontSize: 18, color: '#fff',
+    fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: '#fff',
   },
   brandName: {
-    fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink,
+    fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink,
   },
   hero: {
     flex: 1,

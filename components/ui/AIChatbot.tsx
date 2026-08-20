@@ -26,6 +26,8 @@ import { FONTS } from '../../constants/typography';
 import { MascotChar } from './MascotChar';
 import { EXERCISES } from '../../constants/exercises';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -91,7 +93,7 @@ function ChatMessage({ message, accent }: { message: Message; accent: string }) 
 
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 250 });
-    translateY.value = withSpring(0, { damping: 15 });
+    translateY.value = withSpring(0, SPRING.smooth);
   }, []);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -132,10 +134,12 @@ function ChatMessage({ message, accent }: { message: Message; accent: string }) 
 
 function TypingIndicator({ accent }: { accent: string }) {
   const dot1 = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
   const dot2 = useSharedValue(0);
   const dot3 = useSharedValue(0);
 
   useEffect(() => {
+    if (reduceMotion) return;
     dot1.value = withRepeat(
       withSequence(withTiming(-5, { duration: 300 }), withTiming(0, { duration: 300 })),
       -1,

@@ -9,6 +9,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { COLORS } from '../../../constants/colors';
 import { FONTS } from '../../../constants/typography';
+import { SPRING } from '../../../constants/motion';
 
 interface Props {
   wpm: number;
@@ -28,7 +29,7 @@ export function WpmMeter({
   const animatedWpm = useSharedValue(minWpm);
 
   useEffect(() => {
-    animatedWpm.value = withSpring(wpm, { damping: 15, stiffness: 90 });
+    animatedWpm.value = withSpring(wpm, SPRING.smooth);
   }, [wpm]);
 
   // Dimensions
@@ -222,7 +223,7 @@ const styles = StyleSheet.create({
   },
   wpmValue: {
     fontFamily: FONTS.heading || 'System',
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     lineHeight: 24,
     fontWeight: '800',
   },

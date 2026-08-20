@@ -49,6 +49,7 @@ import { ReadingSpeedTest } from '../../components/exercises/ReadingSpeedTest';
 import { FocusCircle } from '../../components/exercises/FocusCircle';
 
 import type { ExerciseId } from '../../types/db';
+import { TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
 
 type Phase = 'intro' | 'playing' | 'result';
 
@@ -585,16 +586,17 @@ function SelectPill({ label, selected, onPress, color }: {
   });
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.92, { damping: 10, stiffness: 200 });
+    scale.value = withTiming(PRESS_SCALE, TIMING.press);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 10, stiffness: 200 });
+    scale.value = withTiming(1, TIMING.press);
     onPress();
   };
 
   return (
     <Pressable
+      pressRetentionOffset={PRESS_RETENTION}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={{ margin: 2 }}
@@ -1363,13 +1365,13 @@ const introStyles = StyleSheet.create({
   safe:       { flex: 1 },
   header:     { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 4 },
   backBtn:    { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.white, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: COLORS.border },
-  backIcon:   { fontSize: 20, color: COLORS.ink },
+  backIcon: { fontSize: 20, letterSpacing: -0.45, color: COLORS.ink },
   xpBadge:    { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, flexDirection: 'row', gap: 4, alignItems: 'center' },
   xpText:     { fontFamily: FONTS.heading, fontSize: 12 },
   scroll:     { padding: 20 },
   titleBlock: { alignItems: 'center', marginBottom: 20 },
   category:   { fontFamily: FONTS.headingSemi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5 },
-  title:      { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink, marginTop: 4, textAlign: 'center' },
+  title: { fontFamily: FONTS.heading, fontSize: 26, lineHeight: 31, letterSpacing: -0.55, color: COLORS.ink, marginTop: 4, textAlign: 'center' },
   demoWrap:   { marginBottom: 16, borderRadius: 18, overflow: 'hidden' },
   metaRow:    { flexDirection: 'row', gap: 8, marginBottom: 16 },
   whyCard:    { backgroundColor: COLORS.white, borderRadius: 18, padding: 16, borderWidth: 1, marginBottom: 20, flexDirection: 'row', gap: 12 },
@@ -1438,15 +1440,15 @@ const resultStyles = StyleSheet.create({
   hero:         { alignItems: 'center', marginBottom: 24 },
   heroCircle:   { width: 130, height: 130, borderRadius: 65, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   heroLabel:    { fontFamily: FONTS.headingSemi, fontSize: 11, textTransform: 'uppercase', letterSpacing: 2, marginBottom: 4 },
-  heroTitle:    { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink, textAlign: 'center' },
+  heroTitle: { fontFamily: FONTS.heading, fontSize: 26, lineHeight: 31, letterSpacing: -0.55, color: COLORS.ink, textAlign: 'center' },
   statsGrid:    { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
   statCard:     { flex: 1, minWidth: '44%', backgroundColor: COLORS.white, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: COLORS.border },
-  statValue:    { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
+  statValue: { fontFamily: FONTS.heading, fontSize: 22, letterSpacing: -0.5, color: COLORS.ink },
   statUnit:     { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
   statLabel:    { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 4 },
   xpCard:       { backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   xpLabel:      { fontFamily: FONTS.headingSemi, fontSize: 10, color: '#92400E', textTransform: 'uppercase', letterSpacing: 1 },
-  xpValue:      { fontFamily: FONTS.heading, fontSize: 20, color: '#78350F' },
+  xpValue: { fontFamily: FONTS.heading, fontSize: 20, letterSpacing: -0.45, color: '#78350F' },
   insightCard:  { backgroundColor: COLORS.white, borderRadius: 18, padding: 16, borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', gap: 12 },
   livesNote:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, backgroundColor: '#FEF2F2', borderRadius: 14, borderWidth: 1, borderColor: '#FECACA', paddingVertical: 10, paddingHorizontal: 14 },
   livesNoteText: { fontFamily: FONTS.headingSemi, fontSize: 13, color: '#991B1B' },
@@ -1528,7 +1530,7 @@ const limitStyles = StyleSheet.create({
   },
   limitTitle: {
     fontFamily: FONTS.heading || 'System',
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: '#1E3A8A',
     textAlign: 'center',
     marginBottom: 12,

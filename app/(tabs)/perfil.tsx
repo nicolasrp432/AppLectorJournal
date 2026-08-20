@@ -30,6 +30,7 @@ import { scheduleDailyReminder, cancelDailyReminder } from '../../lib/notificati
 import { supabase } from '../../lib/supabase';
 import { REWARDS } from '../../constants/rewards';
 import * as Haptics from 'expo-haptics';
+import { PRESS_SCALE_LARGE } from '../../constants/motion';
 
 type IconLib = 'Ionicons' | 'MaterialCommunityIcons';
 
@@ -151,8 +152,6 @@ export default function PerfilScreen() {
     });
   }, []);
 
-  if (!profile) return null;
-
   // Real Calculated Stats — memoizadas para no recalcular en cada render
   const totalMinutes = useMemo(
     () => Math.round(sessions.reduce((s, x) => s + (x.time_seconds || 0), 0) / 60),
@@ -178,16 +177,16 @@ export default function PerfilScreen() {
   }, [progress]);
 
   const ACHIEVEMENTS: Achievement[] = useMemo(() => [
-    { id: 'streak7',    title: 'Racha 7',      icon: 'flame',           lib: 'Ionicons',              desc: '7 días seguidos', color: '#EF4444', cond: profile.streak >= 7 },
+    { id: 'streak7',    title: 'Racha 7',      icon: 'flame',           lib: 'Ionicons',              desc: '7 días seguidos', color: '#EF4444', cond: (profile?.streak ?? 0) >= 7 },
     { id: 'firstbook',  title: 'Primer libro', icon: 'library',         lib: 'Ionicons',              desc: 'Lee tu primer libro', color: '#3B82F6', cond: booksFinished >= 1 },
     { id: 'wpm300',     title: '300 WPM',      icon: 'flash',           lib: 'Ionicons',              desc: 'Alcanza 300 WPM', color: '#F97316', cond: maxWpm >= 300 },
     { id: 'loci',       title: 'Maestro Loci', icon: 'school',          lib: 'Ionicons',              desc: 'Completa método Loci', color: '#8B5CF6', cond: (progress.loci?.mastery ?? 0) >= 0.8 },
     { id: 'comp90',     title: '90% comp.',    icon: 'brain',           lib: 'MaterialCommunityIcons', desc: '90% comprensión', color: '#22C55E', cond: (progress.comprehension?.best_score ?? 0) >= 0.9 },
-    { id: 'level10',    title: 'Nivel 10',     icon: 'trophy',          lib: 'Ionicons',              desc: 'Llega al nivel 10', color: '#D97706', cond: profile.level >= 10 },
+    { id: 'level10',    title: 'Nivel 10',     icon: 'trophy',          lib: 'Ionicons',              desc: 'Llega al nivel 10', color: '#D97706', cond: (profile?.level ?? 0) >= 10 },
     { id: 'sessions50', title: '50 sesiones',  icon: 'radio-button-on', lib: 'Ionicons',              desc: '50 ejercicios', color: '#EAB308', cond: sessions.length >= 50 },
     { id: 'schulte7',   title: 'Schulte 7×7',  icon: 'grid',            lib: 'Ionicons',              desc: 'Cuadrícula 7×7', color: '#16A34A', cond: (progress.schulte?.current_level ?? 0) >= 5 },
     { id: 'wpm500',     title: '500 WPM',      icon: 'rocket',          lib: 'Ionicons',              desc: 'Alcanza 500 WPM', color: '#DC2626', cond: maxWpm >= 500 },
-  ], [profile.streak, profile.level, booksFinished, maxWpm, progress, sessions.length]);
+  ], [profile?.streak, profile?.level, booksFinished, maxWpm, progress, sessions.length]);
 
   const handlePickAvatar = async () => {
     setAvatarMenuVisible(false);
@@ -209,7 +208,7 @@ export default function PerfilScreen() {
     const mime = asset.mimeType ?? 'image/jpeg';
     const url = await uploadAvatar(asset.uri, mime, asset.base64 ?? undefined);
     setUploading(false);
-    if (!url && profile.id !== 'local') {
+    if (!url && profile?.id !== 'local') {
       Alert.alert('Error', 'No se pudo subir la foto. Verifica tu conexión.');
     }
   };
@@ -221,6 +220,7 @@ export default function PerfilScreen() {
   };
 
   const startEdit = () => {
+    if (!profile) return;
     setEditName(profile.name);
     setEditBio(profile.bio);
     setEditing(true);
@@ -291,9 +291,16 @@ export default function PerfilScreen() {
     }
   };
 
-  const isGuest = profile.id === 'local';
   const isPremiumRC = useSubscriptionStore(s => s.isPremium);
   const isProfilePremium = useProfileStore(s => s.isPremium());
+
+  // Ultimo hook del componente. El `return null` vivia 140 lineas mas arriba,
+  // con ocho hooks por debajo: en cuanto `profile` pasaba de null a cargado,
+  // React veia dos renders con distinto numero de hooks y eso es un crash, no
+  // un aviso de lint. Ahora ningun hook queda por debajo de este punto.
+  if (!profile) return null;
+
+  const isGuest = profile.id === 'local';
   const isPremium = isPremiumRC || isProfilePremium;
 
   // El tier de liga, la clasificación y la cuenta atrás los resuelve LeagueCard
@@ -632,7 +639,7 @@ export default function PerfilScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.bottomSheetCancelBtn,
-                pressed && { opacity: 0.8 }
+                pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
               ]}
               onPress={() => setAvatarMenuVisible(false)}
             >
@@ -784,7 +791,7 @@ export default function PerfilScreen() {
               style={({ pressed }) => [
                 styles.diagnosticCloseBtn,
                 { backgroundColor: themeColor },
-                pressed && { opacity: 0.9 }
+                pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
               ]}
               onPress={() => setDiagnosticVisible(false)}
             >
@@ -1215,7 +1222,7 @@ export default function PerfilScreen() {
                   style={({ pressed }) => [
                     styles.diagnosticCloseBtn,
                     { backgroundColor: themeColor + '15', borderWidth: 1.5, borderColor: themeColor, marginTop: 12, height: 44 },
-                    pressed && { opacity: 0.8 }
+                    pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
                   ]}
                   onPress={() => {
                     setAboutModalVisible(false);
@@ -1248,7 +1255,7 @@ const styles = StyleSheet.create({
   avatarWrap:  { width: 88, height: 88, borderRadius: 44, backgroundColor: COLORS.focus + '20', alignItems: 'center', justifyContent: 'center' },
   avatarImg:   { width: 88, height: 88, borderRadius: 44 },
   avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: COLORS.white, borderWidth: 1.5, borderColor: COLORS.border, alignItems: 'center', justifyContent: 'center' },
-  name:        { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink },
+  name: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink },
   heroProBadge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1296,7 +1303,7 @@ const styles = StyleSheet.create({
   statsGrid:    { flexDirection: 'row', gap: 10, marginBottom: 20 },
   statCard:     { flex: 1, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1.5, borderColor: COLORS.border, padding: 12, alignItems: 'center' },
   statIconRow:  { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  statValue:    { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  statValue: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   statLabel:    { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: 2 },
 
   sectionTitle: { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, marginBottom: 10 },
@@ -1343,7 +1350,7 @@ const styles = StyleSheet.create({
   },
   bottomSheetTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   bottomSheetSubtitle: {
@@ -1424,7 +1431,7 @@ const styles = StyleSheet.create({
   },
   mascotModalTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   mascotCarousel: {
@@ -1754,7 +1761,7 @@ const styles = StyleSheet.create({
   },
   proGoldTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: '#fff',
   },
   proGoldSub: {

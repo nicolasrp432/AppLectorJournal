@@ -6,8 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, runOnJS
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -16,6 +17,9 @@ import { FONTS } from '../../constants/typography';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { SPRING } from '../../constants/motion';
+import { PRESS_SCALE, PRESS_SCALE_LARGE } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const W = Math.min(SCREEN_WIDTH, 520);
@@ -120,7 +124,7 @@ function LessonIntro({ lesson, lessonId, onStart, onBack }: { lesson: LessonData
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 15 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 400 });
   }, []);
 
@@ -168,7 +172,7 @@ function LessonIntro({ lesson, lessonId, onStart, onBack }: { lesson: LessonData
         <Pressable
           style={({ pressed }) => [
             styles.ctaBtn,
-            { backgroundColor: lesson.color, transform: [{ scale: pressed ? 0.98 : 1 }] }
+            { backgroundColor: lesson.color, transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
           ]}
           onPress={onStart}
         >
@@ -187,6 +191,7 @@ const PERIPHERAL_WORDS = [
   'AGIL', 'LECTOR', 'NEURONA', 'VELOZ', 'VISUAL'
 ];
 function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; accent: string }) {
+  const reduceMotion = useReducedMotion();
   const [isConfiguring, setIsConfiguring] = useState(true);
   const [focusMode, setFocusMode] = useState<'free' | '30s' | '60s' | '120s'>('free');
   const [playing, setPlaying] = useState(false);
@@ -237,7 +242,9 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
   // Center button pulse when active
   useEffect(() => {
     if (playing) {
-      pulseScale.value = withRepeat(
+      // El pulso indica "reproduciendo". Con movimiento reducido se queda en 1:
+      // el estado ya se ve por el icono de pausa.
+      pulseScale.value = reduceMotion ? 1 : withRepeat(
         withSequence(
           withTiming(1.2, { duration: 600 }),
           withTiming(1, { duration: 600 })
@@ -275,13 +282,13 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
       // Trigger reanimated flash entrance
       flashScale.value = 0.8;
       flashOpacity.value = 0;
-      flashScale.value = withSpring(1.05, { damping: 12 });
+      flashScale.value = withSpring(1.05, SPRING.smooth);
       flashOpacity.value = withSequence(
         withTiming(1, { duration: 200 }),
         withTiming(1, { duration: 600 }), // Hold visible
         withTiming(0, { duration: 150 }, (finished) => {
           if (finished) {
-            runOnJS(setCount)(count + 1);
+            scheduleOnRN(setCount, count + 1);
           }
         })
       );
@@ -525,7 +532,7 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
     if (activeRoom || quizActive) {
       cardScale.value = 0.9;
       cardOpacity.value = 0;
-      cardScale.value = withSpring(1, { damping: 14 });
+      cardScale.value = withSpring(1, SPRING.smooth);
       cardOpacity.value = withTiming(1, { duration: 250 });
     }
   }, [activeRoom, quizActive]);
@@ -652,7 +659,7 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
         <Pressable
           style={({ pressed }) => [
             styles.quizTriggerBtn,
-            { transform: [{ scale: pressed ? 0.98 : 1 }] }
+            { transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
           ]}
           onPress={() => {
             setActiveRoom(null);
@@ -756,18 +763,23 @@ function SpeedMetronomeGame({ onComplete, accent }: { onComplete: () => void; ac
     const delay = (60 / wpm) * 1000 * 2.2;
 
     const interval = setInterval(() => {
-      setChunkIndex((prev) => {
-        if (prev >= SEMANTIC_CHUNKS.length - 1) {
-          setIsPlaying(false);
-          runOnJS(onComplete)();
-          return prev;
-        }
-        return prev + 1;
-      });
+      setChunkIndex((prev) => Math.min(prev + 1, SEMANTIC_CHUNKS.length - 1));
     }, delay);
 
     return () => clearInterval(interval);
   }, [isPlaying, wpm]);
+
+  // El final se detecta FUERA del updater. Antes `setIsPlaying(false)` y
+  // `onComplete()` vivian dentro de `setChunkIndex(prev => ...)`, y React puede
+  // invocar ese updater mas de una vez: la leccion podia darse por terminada
+  // dos veces. (El `runOnJS` que lo envolvia tampoco pintaba nada: el intervalo
+  // ya corre en el runtime de RN, no en un worklet.)
+  useEffect(() => {
+    if (isPlaying && chunkIndex >= SEMANTIC_CHUNKS.length - 1) {
+      setIsPlaying(false);
+      onComplete();
+    }
+  }, [isPlaying, chunkIndex]);
 
   return (
     <View style={styles.gameContainer}>
@@ -823,7 +835,7 @@ function SpeedMetronomeGame({ onComplete, accent }: { onComplete: () => void; ac
         <Pressable
           style={({ pressed }) => [
             styles.metronomePlayBtn,
-            { backgroundColor: isPlaying ? COLORS.ink : accent, transform: [{ scale: pressed ? 0.95 : 1 }] }
+            { backgroundColor: isPlaying ? COLORS.ink : accent, transform: [{ scale: pressed ? PRESS_SCALE : 1 }] }
           ]}
           onPress={() => setIsPlaying(!isPlaying)}
         >
@@ -874,7 +886,7 @@ function LessonSuccess({ lesson, onFinish }: { lesson: LessonData; onFinish: () 
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 10, stiffness: 80 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 600 });
   }, []);
 
@@ -912,7 +924,7 @@ function LessonSuccess({ lesson, onFinish }: { lesson: LessonData; onFinish: () 
           <Pressable
             style={({ pressed }) => [
               styles.successCtaBtn,
-              { backgroundColor: lesson.color, transform: [{ scale: pressed ? 0.97 : 1 }] }
+              { backgroundColor: lesson.color, transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
             ]}
             onPress={onFinish}
           >
@@ -934,12 +946,16 @@ function LessonVisualExplanation({ lessonId }: { lessonId: string }) {
 }
 
 function FocalVisionIntroAnimation() {
+  const reduceMotion = useReducedMotion();
   const pulse = useSharedValue(1);
   const wordsOpacity = useSharedValue(0.2);
   useEffect(() => {
+    // Sin movimiento: el texto periferico se deja legible en vez de latir, que
+    // es lo que la animacion queria demostrar de todos modos.
+    if (reduceMotion) { wordsOpacity.value = 1; return; }
     pulse.value = withRepeat(withSequence(withTiming(1.2, { duration: 1200 }), withTiming(1, { duration: 1200 })), -1, true);
     wordsOpacity.value = withRepeat(withSequence(withTiming(1, { duration: 1200 }), withTiming(0.2, { duration: 1200 })), -1, true);
-  }, []);
+  }, [reduceMotion]);
   const outerFrameStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }], borderColor: COLORS.focus }));
   const textStyle = useAnimatedStyle(() => ({ opacity: wordsOpacity.value }));
   return (
@@ -1061,7 +1077,7 @@ const styles = StyleSheet.create({
   },
   introTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 26,
+    fontSize: 26, lineHeight: 31, letterSpacing: -0.55,
     marginTop: 16,
     textAlign: 'center',
   },
@@ -1152,7 +1168,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   gameContainer: {
@@ -1175,7 +1191,7 @@ const styles = StyleSheet.create({
   },
   configTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, lineHeight: 28, letterSpacing: -0.5,
     color: COLORS.ink,
     textAlign: 'center',
     marginBottom: 8,
@@ -1729,10 +1745,10 @@ const styles = StyleSheet.create({
   },
   successHeadline: {
     fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontSize: 24, lineHeight: 30,
     color: COLORS.focus,
     marginTop: 20,
-    letterSpacing: 1,
+    letterSpacing: -0.55,
   },
   successDescription: {
     fontFamily: FONTS.body,
@@ -1770,7 +1786,7 @@ const styles = StyleSheet.create({
   },
   rewardXPAmount: {
     fontFamily: FONTS.headingBold,
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     color: '#D97706',
   },
   rewardXPLabel: {

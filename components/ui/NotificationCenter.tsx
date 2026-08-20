@@ -5,13 +5,14 @@ import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
-  withSpring,
-  runOnJS,
 } from 'react-native-reanimated';
+import { GestureDetector } from 'react-native-gesture-handler';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useNotificationStore, NotificationItem } from '../../store/useNotificationStore';
 import { useDailyMissionStore } from '../../store/useDailyMissionStore';
+import { TIMING } from '../../constants/motion';
+import { useDismissibleSheet } from '../../hooks/useDismissibleSheet';
 
 interface Props {
   visible: boolean;
@@ -29,34 +30,27 @@ export function NotificationCenter({ visible, onClose }: Props) {
   const hasMore = useNotificationStore(s => s.hasMore);
   const dailyMission = useDailyMissionStore(s => s.mission);
 
-  // Animation values
   const backdropOpacity = useSharedValue(0);
-  const sheetTranslateY = useSharedValue(600);
+  // El sheet ocupa como mucho 600px, asi que esa es la distancia de salida.
+  const sheet = useDismissibleSheet({ visible, onDismiss: onClose, height: 600 });
 
   useEffect(() => {
-    if (visible) {
-      fetchNotifications();
-      backdropOpacity.value = withTiming(0.5, { duration: 300 });
-      sheetTranslateY.value = withSpring(0, { damping: 20, stiffness: 90 });
-    }
-    // Close animation is handled exclusively by handleClose()
-    // to prevent infinite render loops on web where withTiming is synchronous
+    if (!visible) return;
+    fetchNotifications();
+    backdropOpacity.value = withTiming(0.5, TIMING.enter);
   }, [visible]);
 
+  // Antes esto era `setTimeout(() => onClose(), 280)`: una espera fija que
+  // adivinaba cuando terminaba la animacion. `sheet.close()` avisa desde el
+  // callback de la propia animacion, asi que no hay numero que adivinar ni que
+  // mantener sincronizado con la duracion.
   const handleClose = () => {
-    backdropOpacity.value = withTiming(0, { duration: 250 });
-    sheetTranslateY.value = withTiming(600, { duration: 250 });
-    // Defer onClose to next frame so the closing animation values settle
-    // before the parent unmounts/hides the Modal via visible=false
-    setTimeout(() => onClose(), 280);
+    backdropOpacity.value = withTiming(0, TIMING.exit);
+    sheet.close();
   };
 
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: backdropOpacity.value,
-  }));
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: sheetTranslateY.value }],
   }));
 
   const getCategoryStyles = (category: string) => {
@@ -161,9 +155,13 @@ export function NotificationCenter({ visible, onClose }: Props) {
         </Animated.View>
 
         {/* Sliding Bottom Sheet */}
-        <Animated.View style={[styles.sheet, sheetStyle]}>
+        <Animated.View style={[styles.sheet, sheet.style]}>
           <View style={styles.sheetHeader}>
-            <View style={styles.notch} />
+            <GestureDetector gesture={sheet.gesture}>
+              <View style={styles.dragZone}>
+                <View style={styles.notch} />
+              </View>
+            </GestureDetector>
             <View style={styles.headerTitleRow}>
               <Text style={styles.headerTitle}>Centro de Notificaciones</Text>
               <Pressable style={styles.closeBtn} onPress={handleClose} hitSlop={12}>
@@ -242,12 +240,18 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
   },
+  // Zona tactil de 44pt alrededor del notch, que solo mide 4px de alto.
+  dragZone: {
+    height: 44,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   notch: {
     width: 38,
     height: 4,
     borderRadius: 2,
     backgroundColor: '#CBD5E1',
-    marginBottom: 12,
   },
   headerTitleRow: {
     flexDirection: 'row',
@@ -258,7 +262,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontFamily: FONTS.headingBold,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: COLORS.ink,
   },
   closeBtn: {

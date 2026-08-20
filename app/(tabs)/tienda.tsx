@@ -1,5 +1,8 @@
-import React, { useState, useRef } from 'react';
-import { View, Text, FlatList, ScrollView, Pressable, StyleSheet, Animated } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, FlatList, ScrollView, Pressable, StyleSheet } from 'react-native';
+import Animated, { useSharedValue, useAnimatedStyle, withSequence, withTiming, withDelay } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
+import { TIMING } from '../../constants/motion';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { REWARDS } from '../../constants/rewards';
@@ -36,7 +39,7 @@ const TYPE_ICON: Record<RewardType, string> = {
 export default function TiendaScreen() {
   const [filter, setFilter] = useState<Filter>('all');
   const [toast,  setToast]  = useState<{ msg: string; kind: 'ok' | 'err' | 'lock' } | null>(null);
-  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastOpacity = useSharedValue(0);
 
   const profile    = useProfileStore(s => s.profile);
   const { addXP }  = useProfileStore();
@@ -47,12 +50,16 @@ export default function TiendaScreen() {
 
   const showToast = (msg: string, kind: 'ok' | 'err' | 'lock') => {
     setToast({ msg, kind });
-    Animated.sequence([
-      Animated.timing(toastOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
-      Animated.delay(1400),
-      Animated.timing(toastOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start(() => setToast(null));
+    const clear = () => setToast(null);
+    toastOpacity.value = withSequence(
+      withTiming(1, TIMING.enter),
+      withDelay(1400, withTiming(0, TIMING.exit, finished => {
+        if (finished) scheduleOnRN(clear);
+      })),
+    );
   };
+
+  const toastStyle = useAnimatedStyle(() => ({ opacity: toastOpacity.value }));
 
   const handleAction = async (r: RewardItem) => {
     if (r.locked) { showToast(`Requiere: ${r.requires}`, 'lock'); return; }
@@ -136,7 +143,7 @@ export default function TiendaScreen() {
 
       {/* Toast */}
       {toast && (
-        <Animated.View style={[styles.toast, { opacity: toastOpacity },
+        <Animated.View style={[styles.toast, toastStyle,
           toast.kind === 'err' ? styles.toastErr : toast.kind === 'lock' ? styles.toastLock : styles.toastOk,
         ]}>
           <Text style={styles.toastText}>{toast.msg}</Text>
@@ -212,7 +219,7 @@ const styles = StyleSheet.create({
   eyebrow:   { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.subtle, textTransform: 'uppercase', letterSpacing: 1.2 },
   xpBadge:   { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', borderWidth: 1.5, borderColor: '#FCD34D', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   xpText:    { fontFamily: FONTS.heading, fontSize: 13, color: '#78350F' },
-  title:     { fontFamily: FONTS.heading, fontSize: 24, color: COLORS.ink },
+  title: { fontFamily: FONTS.heading, fontSize: 24, lineHeight: 30, letterSpacing: -0.55, color: COLORS.ink },
   pill:      { paddingHorizontal: 14, paddingVertical: 7, backgroundColor: COLORS.surface, borderRadius: 999, marginRight: 6 },
   pillActive:{ backgroundColor: COLORS.ink },
   pillText:  { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.4 },

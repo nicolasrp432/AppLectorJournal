@@ -22,6 +22,7 @@ import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
 import { levelProgress } from '../../lib/xpEngine';
 import type { ExerciseId, Session } from '../../types/db';
+import { PRESS_SCALE, PRESS_SCALE_LARGE } from '../../constants/motion';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -456,7 +457,7 @@ export default function ProgresoScreen() {
           }}
           style={({ pressed }) => [
             styles.warmupBannerCard,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+            pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
           ]}
         >
           <ExpoLinearGradient
@@ -574,7 +575,7 @@ export default function ProgresoScreen() {
           onPress={() => router.push('/flashcards' as any)}
           style={({ pressed }) => [
             styles.flashcardBannerCard,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+            pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
           ]}
         >
           <ExpoLinearGradient
@@ -608,7 +609,7 @@ export default function ProgresoScreen() {
                 style={({ pressed }) => [
                   styles.freePracticeCard,
                   { borderColor: meta.color + '30' },
-                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] }
+                  pressed && { transform: [{ scale: PRESS_SCALE }] }
                 ]}
               >
                 <ExpoLinearGradient
@@ -666,7 +667,7 @@ export default function ProgresoScreen() {
 const styles = StyleSheet.create({
   safe:      { flex: 1, backgroundColor: COLORS.canvas },
   scroll:    { padding: 20 },
-  title:     { fontFamily: FONTS.heading, fontSize: 26, color: COLORS.ink, marginBottom: 16 },
+  title: { fontFamily: FONTS.heading, fontSize: 26, lineHeight: 31, letterSpacing: -0.55, color: COLORS.ink, marginBottom: 16 },
   levelCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: COLORS.focus + '40', marginBottom: 16 },
   radarCard: { backgroundColor: COLORS.white, borderRadius: 20, padding: 16, borderWidth: 1.5, borderColor: COLORS.border, marginBottom: 16, alignItems: 'center', justifyContent: 'center' },
   levelRow:  { flexDirection: 'row', justifyContent: 'space-between' },
@@ -674,7 +675,7 @@ const styles = StyleSheet.create({
   levelXP:   { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
   kpiGrid:   { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
   kpiCard:   { flex: 1, minWidth: '45%', backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1.5, padding: 14 },
-  kpiValue:  { fontFamily: FONTS.heading, fontSize: 22 },
+  kpiValue: { fontFamily: FONTS.heading, fontSize: 22, letterSpacing: -0.5 },
   kpiUnit:   { fontSize: 13, fontFamily: FONTS.body },
   kpiLabel:  { fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, marginTop: 2 },
   sectionTitle:{ fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, marginBottom: 10 },
@@ -910,7 +911,7 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 17,
+    fontSize: 17, letterSpacing: -0.2,
     color: '#FFFFFF',
     marginBottom: 4,
   },

@@ -15,6 +15,8 @@ import { usePrefsStore } from '../../store/usePrefsStore';
 import { useLociStore } from '../../store/useLociStore';
 import { supabase } from '../../lib/supabase';
 import { matchesRecall, scoreToQuality } from '../../lib/loci';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const ROOM_THEMES = {
   casa: [
@@ -583,18 +585,21 @@ function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHint
   onRoomPress: (id: string) => void;
 }) {
   const scale = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
   const glow = useSharedValue(0);
 
   useEffect(() => {
     if (isHighlight) {
-      scale.value = withSpring(1.08, { damping: 8 });
-      glow.value = withRepeat(
+      scale.value = withSpring(1.08, SPRING.smooth);
+      // El halo marca cual es el locus activo: con movimiento reducido se queda
+      // encendido en vez de pulsar, porque apagarlo perderia la informacion.
+      glow.value = reduceMotion ? 1 : withRepeat(
         withTiming(1, { duration: 700 }),
         -1,
         true
       );
     } else {
-      scale.value = withSpring(1, { damping: 10 });
+      scale.value = withSpring(1, SPRING.smooth);
       glow.value = withTiming(0, { duration: 200 });
     }
   }, [isHighlight]);
@@ -662,7 +667,7 @@ function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHint
         onPress={() => {
           scale.value = withSequence(
             withTiming(0.9, { duration: 60 }),
-            withSpring(1.1, { damping: 5 })
+            withSpring(1.1, SPRING.momentum)
           );
           onRoomPress(room.id);
         }}
@@ -699,7 +704,7 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 8, stiffness: 120 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 250 });
   }, []);
 
@@ -773,17 +778,17 @@ const styles = StyleSheet.create({
   selfPacedHint:     { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 12 },
   selfPacedHintText: { flex: 1, fontFamily: FONTS.body, fontSize: 11, color: COLORS.muted, lineHeight: 15 },
   roomCueBubble:     { flexDirection: 'row', alignItems: 'center', gap: 8, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 22, borderRadius: 16, borderWidth: 2, backgroundColor: COLORS.white },
-  roomCueText:       { fontFamily: FONTS.heading, fontSize: 18 },
+  roomCueText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2 },
   freeRecallPrompt:  { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, marginTop: 4 },
   distractorWrap:    { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 24 },
   distractorHeader:  { alignItems: 'center', gap: 8 },
-  distractorTitle:   { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  distractorTitle: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   distractorSub:     { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 19, maxWidth: 320 },
   distractorTimer:   { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderRadius: 999, paddingVertical: 6, paddingHorizontal: 14, marginTop: 4 },
   distractorTimerText:{ fontFamily: FONTS.headingSemi, fontSize: 13 },
   distractorGrid:    { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12, maxWidth: 280 },
   distractorCell:    { width: 72, height: 72, borderRadius: 16, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 1 },
-  distractorCellText:{ fontFamily: FONTS.heading, fontSize: 24 },
+  distractorCellText: { fontFamily: FONTS.heading, fontSize: 24, letterSpacing: -0.55 },
   distractorSkip:    { paddingVertical: 8, paddingHorizontal: 16 },
   distractorSkipText:{ fontFamily: FONTS.headingSemi, fontSize: 13, color: COLORS.muted },
   itemBank:          { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, paddingHorizontal: 20, paddingVertical: 8 },
@@ -799,8 +804,8 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 4,
   },
-  wordBubbleText:{ fontFamily: FONTS.heading, fontSize: 18, color: '#fff' },
-  arrow:        { fontSize: 22 },
+  wordBubbleText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: '#fff' },
+  arrow: { fontSize: 22, letterSpacing: -0.5 },
   roomBubble:   { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 14, borderWidth: 2, backgroundColor: COLORS.white },
   roomBubbleText:{ fontFamily: FONTS.heading, fontSize: 14 },
   storyCard:  {
@@ -848,7 +853,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   storyCardEmoji: {
-    fontSize: 42,
+    fontSize: 42, letterSpacing: -0.9,
   },
   storyCardTextCol: {
     flex: 1,

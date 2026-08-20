@@ -365,7 +365,7 @@ const styles = StyleSheet.create({
   loadingBox:       { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   loadingText:      { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted },
 
-  emptyTitle:       { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink, textAlign: 'center' },
+  emptyTitle: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink, textAlign: 'center' },
   emptySub:         { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', lineHeight: 20, marginBottom: 12 },
 
   listContainer:    { padding: 24 },
@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
   slideRoomText:    { fontFamily: FONTS.headingSemi, fontSize: 11, color: '#fff', textTransform: 'uppercase', letterSpacing: 0.8 },
   
   slideInfo:        { padding: 20 },
-  slideConcept:     { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  slideConcept: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   slideStory:       { fontFamily: FONTS.body, fontSize: 14, color: COLORS.muted, marginTop: 8, lineHeight: 22 },
 
   indicatorsRow:    { flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 20 },

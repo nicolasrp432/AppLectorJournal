@@ -8,6 +8,8 @@ import { ExerciseTopBar } from './ExerciseTopBar';
 import { pickWords } from '../../constants/passages';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 type Phase = 'show' | 'recall';
 
@@ -192,6 +194,7 @@ export function WordSpanExercise({ level = 6, showMs = 1100, distractorCount = 4
 
 // Hovering floating Word Bubble in Phase: show
 function WordBubble({ word, accent }: { word: string; accent: string }) {
+  const reduceMotion = useReducedMotion();
   const scale = useSharedValue(0.4);
   const opacity = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -199,11 +202,12 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
   const rotateY = useSharedValue(180);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 7, stiffness: 150 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 250 });
-    rotateY.value = withSpring(0, { damping: 12, stiffness: 90 });
+    rotateY.value = withSpring(0, SPRING.smooth);
     
-    // Gentle float loop (eased so it glides instead of snapping at the ends)
+    // Flotacion ociosa: decorativa, se apaga con movimiento reducido.
+    if (reduceMotion) return;
     const floatEase = Easing.inOut(Easing.sin);
     translateY.value = withRepeat(
       withSequence(
@@ -223,7 +227,7 @@ function WordBubble({ word, accent }: { word: string; accent: string }) {
       -1,
       true
     );
-  }, [word]);
+  }, [word, reduceMotion]);
 
   const style = useAnimatedStyle(() => ({
     transform: [
@@ -252,10 +256,10 @@ function RecallSlot({ word, index, accent }: { word: string; index: number; acce
   useEffect(() => {
     if (word) {
       translateY.value = 30;
-      translateY.value = withSpring(0, { damping: 10, stiffness: 150 });
+      translateY.value = withSpring(0, SPRING.smooth);
       scale.value = withSequence(
-        withSpring(1.2, { damping: 5, stiffness: 220 }),
-        withSpring(1, { damping: 8, stiffness: 160 })
+        withSpring(1.2, SPRING.momentum),
+        withSpring(1, SPRING.momentum)
       );
     }
   }, [word]);
@@ -283,7 +287,7 @@ function WordOption({ word, selected, accent, onPress }: { word: string; selecte
   const handlePress = () => {
     scale.value = withSequence(
       withTiming(0.9, { duration: 50 }),
-      withSpring(1, { damping: 6 })
+      withSpring(1, SPRING.smooth)
     );
     onPress();
   };
@@ -320,13 +324,13 @@ const styles = StyleSheet.create({
   },
   bubbleText: {
     fontFamily: FONTS.heading,
-    fontSize: 34,
+    fontSize: 34, letterSpacing: -0.75,
     color: '#fff',
     textAlign: 'center',
   },
   counter:    { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 2 },
   waitBox:    { padding: 32, alignItems: 'center' },
-  waitText:   { fontFamily: FONTS.heading, fontSize: 18, color: COLORS.ink },
+  waitText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2, color: COLORS.ink },
   storyCard:  {
     backgroundColor: '#FAF5FF',
     borderRadius: 20,

@@ -387,7 +387,7 @@ const styles = StyleSheet.create({
   loadingTitle:     { fontFamily: FONTS.heading, fontSize: 16, color: COLORS.ink, marginTop: 24, textAlign: 'center', lineHeight: 24 },
   progressCounter:  { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, textAlign: 'center', marginTop: 8 },
 
-  title:            { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, marginBottom: 4 },
+  title: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink, marginBottom: 4 },
   subtitle:         { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, lineHeight: 20, marginBottom: 24 },
   
   conceptList:      { gap: 16 },
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   authorInputMultiline: { minHeight: 72, textAlignVertical: 'top' },
 
   successBox:       { alignItems: 'center', marginVertical: 32 },
-  successTitle:     { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, marginTop: 16 },
+  successTitle: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink, marginTop: 16 },
   successSub:       { fontFamily: FONTS.body, fontSize: 13, color: COLORS.muted, textAlign: 'center', marginTop: 8, lineHeight: 20 },
   sectionTitle:     { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 16 },
 

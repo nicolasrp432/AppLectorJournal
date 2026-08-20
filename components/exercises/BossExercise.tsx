@@ -8,14 +8,16 @@ import Animated, {
   withSequence,
   withDelay,
   withRepeat,
-  runOnJS,
   Easing,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { FONTS } from '../../constants/typography';
 import { COLORS } from '../../constants/colors';
 import { MascotChar } from '../ui/MascotChar';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const BOSS_ACCENT = '#DC2626';
 
@@ -37,11 +39,13 @@ const CHALLENGES = [
 
 // Spark Particle component for background fire effect
 function FireSpark({ size, delay, left }: { size: number; delay: number; left: number }) {
+  const reduceMotion = useReducedMotion();
   const y = useSharedValue(150);
   const opacity = useSharedValue(0);
   const scale = useSharedValue(1);
 
   useEffect(() => {
+    if (reduceMotion) return;
     y.value = withDelay(delay, withRepeat(withTiming(0, { duration: 3000 }), -1, false));
     opacity.value = withDelay(delay, withRepeat(
       withSequence(
@@ -95,7 +99,7 @@ function FloatingDamageLabel({ text, color, x, y, onComplete }: DamageLabelProps
 
   useEffect(() => {
     progress.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }, () => {
-      runOnJS(onComplete)();
+      scheduleOnRN(onComplete);
     });
   }, []);
 
@@ -179,7 +183,7 @@ export function BossExercise({ level = 1, onFinish, onQuit }: Props) {
       // 2. Player jump attack
       playerJump.value = withSequence(
         withTiming(15, { duration: 120 }),
-        withSpring(0, { damping: 10 })
+        withSpring(0, SPRING.smooth)
       );
 
       // 3. Sword slash visual (single eased sweep, no double-snap)
@@ -506,7 +510,7 @@ function BossSpeedRound({
     timerProgress.value = 1;
     timerProgress.value = withTiming(0, { duration: reactMs, easing: Easing.linear }, (finished) => {
       if (finished) {
-        runOnJS(handleTimeout)();
+        scheduleOnRN(handleTimeout);
       }
     });
   }, [idx]);
@@ -820,7 +824,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-15deg' }],
   },
   damageLabelText: {
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     fontFamily: FONTS.heading,
     fontWeight: '900',
     textShadowColor: 'black',
@@ -874,7 +878,7 @@ const styles = StyleSheet.create({
   },
   introTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 28,
+    fontSize: 28, lineHeight: 34, letterSpacing: -0.6,
     color: '#fff',
     textAlign: 'center',
   },
@@ -946,7 +950,7 @@ const styles = StyleSheet.create({
   },
   damageText: {
     fontFamily: FONTS.heading,
-    fontSize: 32,
+    fontSize: 32, letterSpacing: -0.7,
     color: '#EF4444',
   },
   roundDesc: {
@@ -984,7 +988,7 @@ const styles = StyleSheet.create({
   },
   telegraphSkill: {
     fontFamily: FONTS.heading,
-    fontSize: 30,
+    fontSize: 30, letterSpacing: -0.65,
     color: '#fff',
     marginTop: 4,
   },
@@ -1073,7 +1077,7 @@ const bossStyles = StyleSheet.create({
   },
   wordText: {
     fontFamily: FONTS.heading,
-    fontSize: 44,
+    fontSize: 44, letterSpacing: -0.95,
     color: '#fff',
   },
   nextBtn: {
@@ -1113,7 +1117,7 @@ const bossStyles = StyleSheet.create({
   },
   digitText: {
     fontFamily: FONTS.heading,
-    fontSize: 28,
+    fontSize: 28, letterSpacing: -0.6,
     color: '#fff',
   },
   inputRow: {
@@ -1133,7 +1137,7 @@ const bossStyles = StyleSheet.create({
   },
   inputText: {
     fontFamily: FONTS.heading,
-    fontSize: 22,
+    fontSize: 22, letterSpacing: -0.5,
     color: '#fff',
   },
   numpad: {
@@ -1154,7 +1158,7 @@ const bossStyles = StyleSheet.create({
   },
   numKeyText: {
     fontFamily: FONTS.heading,
-    fontSize: 20,
+    fontSize: 20, letterSpacing: -0.45,
     color: '#fff',
   },
   textCard: {

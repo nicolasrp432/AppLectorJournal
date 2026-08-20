@@ -10,6 +10,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import type { MascotKey } from '../../types/db';
+import { SPRING } from '../../constants/motion';
 
 /**
  * Fila de clasificación reutilizable.
@@ -35,7 +36,7 @@ export function LeaderboardRow({
       if (!reduceMotion) {
         flash.value = withSequence(
           withTiming(1, { duration: 180 }),
-          withSpring(0, { damping: 14, stiffness: 90 }),
+          withSpring(0, SPRING.momentum),
         );
       }
     }

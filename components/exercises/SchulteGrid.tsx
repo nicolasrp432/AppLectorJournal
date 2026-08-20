@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   pillLabel:   { fontFamily: FONTS.headingSemi, fontSize: 9, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 2 },
   targetRow:   { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 16 },
   targetLabel: { fontFamily: FONTS.headingSemi, fontSize: 11, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1.5 },
-  targetNumber:{ fontFamily: FONTS.heading, fontSize: 56, lineHeight: 64 },
+  targetNumber: { fontFamily: FONTS.heading, fontSize: 56, letterSpacing: -1.25, lineHeight: 64 },
   gridWrapper: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 },
   gridCard:    { backgroundColor: COLORS.white, borderRadius: 24, padding: 14 },
   cellWrapper: { borderRadius: 12, position: 'relative', alignItems: 'center', justifyContent: 'center' },

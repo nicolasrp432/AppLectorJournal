@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bolt: { fontSize: 24 },
+  bolt: { fontSize: 24, letterSpacing: -0.55 },
   textBlock: { flex: 1 },
   label: {
     fontFamily: FONTS.headingSemi,
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
   },
   amount: {
     fontFamily: FONTS.heading,
-    fontSize: 24,
+    fontSize: 24, letterSpacing: -0.55,
     color: '#fff',
     marginTop: 1,
   },

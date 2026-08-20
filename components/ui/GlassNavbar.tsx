@@ -2,86 +2,54 @@ import React from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, ViewStyle } from 'react-native';
 import { BlurView } from 'expo-blur';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withTiming,
+  useSharedValue, useAnimatedStyle, withTiming,
 } from 'react-native-reanimated';
 import { FONTS } from '../../constants/typography';
 import { COLORS } from '../../constants/colors';
+import { TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
 import * as haptics from '../../lib/haptics';
 import { TabIcon, TAB_LABELS, TABS, type TabBarProps } from './GlassNavbarShared';
 
-// Glassy spring tuned for a fluid glide (no snap) on native.
-const SLIDE_SPRING = { damping: 17, stiffness: 110, mass: 0.9 } as const;
-
+/**
+ * Barra de pestañas.
+ *
+ * POR QUÉ LA PÍLDORA YA NO SE DESLIZA
+ * -----------------------------------
+ * Antes había un indicador que se movía con muelle entre las cinco pestañas,
+ * lo que obligaba a medir el layout de cada pestaña, guardarlo en estado de
+ * React (un re-render de toda la barra por medición) y animar cuatro valores
+ * compartidos: left, top, width y height.
+ *
+ * Dos motivos para quitarlo:
+ *
+ *  1. Las pestañas son pares, no una jerarquía. Deslizar entre ellas sugiere
+ *     una profundidad o un orden que no existe: ir de Perfil a Ruta no es
+ *     "volver atrás cuatro sitios", es saltar a otro sitio.
+ *
+ *  2. El usuario cambia de pestaña decenas de veces por sesión. En esa
+ *     frecuencia, cualquier animación es un peaje que se paga una y otra vez,
+ *     y la respuesta correcta es que no haya ninguna: la píldora simplemente
+ *     está donde tiene que estar en el frame siguiente.
+ *
+ * Al quitarla desaparecen también el estado de layouts, los cuatro valores
+ * compartidos y el efecto que los sincronizaba. La píldora es ahora el fondo
+ * de la propia pestaña activa.
+ */
 export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: TabBarProps) {
-  const [layouts, setLayouts] = React.useState<Record<string, { x: number; y: number; width: number; height: number }>>({});
-
-  const handleTabLayout = (tabName: string, x: number, y: number, width: number, height: number) => {
-    setLayouts(prev => {
-      const current = prev[tabName];
-      if (current && current.x === x && current.width === width && current.height === height) {
-        return prev;
-      }
-      return { ...prev, [tabName]: { x, y, width, height } };
-    });
-  };
-
-  const activeTabName = TABS[state.index];
-  const indicatorX = useSharedValue(0);
-  const indicatorY = useSharedValue(0);
-  const indicatorW = useSharedValue(0);
-  const indicatorH = useSharedValue(0);
-
-  React.useEffect(() => {
-    const layout = layouts[activeTabName];
-    if (layout) {
-      indicatorX.value = withSpring(layout.x, SLIDE_SPRING);
-      indicatorY.value = withSpring(layout.y, SLIDE_SPRING);
-      indicatorW.value = withSpring(layout.width, SLIDE_SPRING);
-      indicatorH.value = withSpring(layout.height, SLIDE_SPRING);
-    }
-  }, [activeTabName, layouts]);
-
-  const indicatorStyle = useAnimatedStyle(() => {
-    if (indicatorW.value === 0) {
-      return { opacity: 0 };
-    }
-    return {
-      position: 'absolute',
-      left: indicatorX.value,
-      top: indicatorY.value,
-      width: indicatorW.value,
-      height: indicatorH.value,
-      borderRadius: 20,
-      backgroundColor: accentColor,
-      opacity: 1,
-      shadowColor: accentColor,
-      shadowOffset: { width: 0, height: 6 },
-      shadowOpacity: 0.35,
-      shadowRadius: 10,
-      elevation: 5,
-    };
-  });
-
   const Inner = (
     <View style={styles.inner}>
-      {/* Sliding Glassmorphic/Solid background pill */}
-      <Animated.View style={indicatorStyle} />
-
-      {TABS.map((tabName, i) => {
-        const active = state.index === i;
-        return (
-          <NavTab
-            key={tabName}
-            id={tabName}
-            active={active}
-            onLayout={(x, y, w, h) => handleTabLayout(tabName, x, y, w, h)}
-            onPress={() => {
-              haptics.tap();
-              navigation.navigate(tabName);
-            }}
-          />
-        );
-      })}
+      {TABS.map((tabName, i) => (
+        <NavTab
+          key={tabName}
+          id={tabName}
+          active={state.index === i}
+          accentColor={accentColor}
+          onPress={() => {
+            haptics.tap();
+            navigation.navigate(tabName);
+          }}
+        />
+      ))}
     </View>
   );
 
@@ -103,13 +71,13 @@ export function GlassNavbar({ state, navigation, accentColor = COLORS.focus }: T
 function NavTab({
   id,
   active,
+  accentColor,
   onPress,
-  onLayout,
 }: {
   id: string;
   active: boolean;
+  accentColor: string;
   onPress: () => void;
-  onLayout: (x: number, y: number, width: number, height: number) => void;
 }) {
   const scale = useSharedValue(1);
 
@@ -118,35 +86,41 @@ function NavTab({
   }));
 
   const pillStyle: ViewStyle = {
-    backgroundColor: 'transparent',
+    backgroundColor: active ? accentColor : 'transparent',
     borderRadius: 20,
     paddingVertical: 9,
     paddingHorizontal: active ? 16 : 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    ...(active
+      ? {
+          shadowColor: accentColor,
+          shadowOffset: { width: 0, height: 6 },
+          shadowOpacity: 0.35,
+          shadowRadius: 10,
+          elevation: 5,
+        }
+      : null),
   };
 
   return (
-    <View
-      onLayout={e => {
-        const { x, y, width, height } = e.nativeEvent.layout;
-        onLayout(x, y, width, height);
-      }}
+    <Pressable
+      accessibilityRole="tab"
+      accessibilityState={{ selected: active }}
+      accessibilityLabel={TAB_LABELS[id]}
+      pressRetentionOffset={PRESS_RETENTION}
+      onPressIn={() => { scale.value = withTiming(PRESS_SCALE, TIMING.press); }}
+      onPressOut={() => { scale.value = withTiming(1, TIMING.press); }}
+      onPress={onPress}
     >
-      <Pressable
-        onPressIn={() => { scale.value = withTiming(0.9, { duration: 80 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 8, stiffness: 300 }); }}
-        onPress={onPress}
-      >
-        <Animated.View style={[pillStyle, animStyle]}>
-          <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={28} />
-          {active && (
-            <Text style={styles.label}>{TAB_LABELS[id]}</Text>
-          )}
-        </Animated.View>
-      </Pressable>
-    </View>
+      <Animated.View style={[pillStyle, animStyle]}>
+        <TabIcon name={id} color={active ? '#fff' : COLORS.muted} size={28} />
+        {active && (
+          <Text style={styles.label}>{TAB_LABELS[id]}</Text>
+        )}
+      </Animated.View>
+    </Pressable>
   );
 }
 

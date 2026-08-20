@@ -150,9 +150,9 @@ function Field({
 const styles = StyleSheet.create({
   content: { padding: 28, paddingBottom: 40, maxWidth: 480, width: '100%', alignSelf: 'center' },
   backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
-  backArrow: { fontSize: 20, color: COLORS.ink },
+  backArrow: { fontSize: 20, letterSpacing: -0.45, color: COLORS.ink },
   mascot: { alignItems: 'center', marginBottom: 12 },
-  title: { fontFamily: FONTS.heading, fontSize: 24, color: COLORS.ink, textAlign: 'center', marginBottom: 8 },
+  title: { fontFamily: FONTS.heading, fontSize: 24, lineHeight: 30, letterSpacing: -0.55, color: COLORS.ink, textAlign: 'center', marginBottom: 8 },
   sub: { fontFamily: FONTS.bodyLight, fontSize: 14, color: COLORS.muted, textAlign: 'center', marginBottom: 28, lineHeight: 20 },
   errorText: { fontFamily: FONTS.body, fontSize: 13, color: '#DC2626', textAlign: 'center', marginTop: 12 },
   successCard: {
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
   },
   successTitle: {
     fontFamily: FONTS.heading,
-    fontSize: 18,
+    fontSize: 18, letterSpacing: -0.2,
     color: '#15803D',
     marginBottom: 10,
     textAlign: 'center',

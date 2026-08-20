@@ -4,8 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
-  withSequence,
   withTiming,
   withSpring,
 } from 'react-native-reanimated';
@@ -18,6 +16,7 @@ import { simpleHash } from '../../lib/text';
 import { dedupe } from '../../lib/taskQueue';
 import { ReadingGoalStep } from './ReadingGoalStep';
 import type { ReadingGoalId } from '../../lib/readingGoals';
+import { SPRING } from '../../constants/motion';
 
 type Mode = 'rsvp' | 'guide' | 'chunk';
 // 'goal' va antes de 'config': declarar para qué se lee recalibra la
@@ -45,8 +44,8 @@ function PageFlipWrapper({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 500 });
-    translateY.value = withSpring(0, { damping: 15, stiffness: 75 });
-    rotateX.value = withSpring(0, { damping: 15, stiffness: 75 });
+    translateY.value = withSpring(0, SPRING.smooth);
+    rotateX.value = withSpring(0, SPRING.smooth);
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({
@@ -546,11 +545,11 @@ const rsvpStyles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 34,
     color: '#475569',
-    letterSpacing: 0.5,
+    letterSpacing: -0.75,
   },
   wordTextORP: {
     fontFamily: FONTS.heading,
-    fontSize: 36,
+    fontSize: 36, letterSpacing: -0.8,
     fontWeight: '900',
     marginHorizontal: 2,
   },
@@ -559,13 +558,13 @@ const rsvpStyles = StyleSheet.create({
 const guideStyles = StyleSheet.create({
   content:  { padding: 22, paddingBottom: 200 },
   pacer:    { position: 'absolute', left: 8, right: 8, top: 0, height: 34, borderLeftWidth: 3, borderRadius: 8 },
-  text:     { fontFamily: FONTS.body, fontSize: 18, lineHeight: 34, color: COLORS.ink },
-  word:     { fontFamily: FONTS.body, fontSize: 18, lineHeight: 34 },
+  text: { fontFamily: FONTS.body, fontSize: 18, letterSpacing: -0.2, lineHeight: 34, color: COLORS.ink },
+  word: { fontFamily: FONTS.body, fontSize: 18, letterSpacing: -0.2, lineHeight: 34 },
 });
 
 const chunkStyles = StyleSheet.create({
   container: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24 },
-  text:      { fontFamily: FONTS.body, fontSize: 28, color: COLORS.ink, textAlign: 'center', borderBottomWidth: 2, paddingBottom: 6 },
+  text: { fontFamily: FONTS.body, fontSize: 28, letterSpacing: -0.6, color: COLORS.ink, textAlign: 'center', borderBottomWidth: 2, paddingBottom: 6 },
 });
 
 const styles = StyleSheet.create({
@@ -573,7 +572,7 @@ const styles = StyleSheet.create({
   scroll:        { padding: 20 },
   configHeader:  { alignItems: 'center', marginBottom: 20 },
   eyebrow:       { fontFamily: FONTS.headingSemi, fontSize: 10, textTransform: 'uppercase', letterSpacing: 1.5, marginBottom: 2 },
-  configTitle:   { fontFamily: FONTS.heading, fontSize: 22, color: COLORS.ink, marginTop: 4 },
+  configTitle: { fontFamily: FONTS.heading, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: COLORS.ink, marginTop: 4 },
   configMeta:    { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted, marginTop: 4 },
   sectionLabel:  { fontFamily: FONTS.headingSemi, fontSize: 10, color: COLORS.muted, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
   modeRow:       { flexDirection: 'row', gap: 8, marginBottom: 16 },
@@ -582,7 +581,7 @@ const styles = StyleSheet.create({
   modeBtnDesc:   { fontFamily: FONTS.body, fontSize: 10, color: COLORS.muted, marginTop: 2 },
   wpmCard:       { backgroundColor: COLORS.white, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: COLORS.border, marginBottom: 14 },
   wpmRow:        { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-  wpmValue:      { fontFamily: FONTS.heading, fontSize: 22 },
+  wpmValue: { fontFamily: FONTS.heading, fontSize: 22, letterSpacing: -0.5 },
   wpmUnit:       { fontFamily: FONTS.body, fontSize: 12, color: COLORS.muted },
   wpmControls:   { flexDirection: 'row', gap: 6, flexWrap: 'wrap', marginBottom: 10 },
   wpmPill:       { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: COLORS.surface },
@@ -591,7 +590,7 @@ const styles = StyleSheet.create({
   stepBtn:       { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: COLORS.surface, borderRadius: 10 },
   stepBtnText:   { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
   wpmDisplay:    { paddingHorizontal: 16 },
-  wpmDisplayText:{ fontFamily: FONTS.heading, fontSize: 18 },
+  wpmDisplayText: { fontFamily: FONTS.heading, fontSize: 18, letterSpacing: -0.2 },
   chunkRow:      { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
   chunkBtn:      { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: COLORS.surface },
   chunkBtnText:  { fontFamily: FONTS.heading, fontSize: 13, color: COLORS.ink },
@@ -697,7 +696,7 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.heading,
     fontSize: 14,
   },
-  questionText:  { fontFamily: FONTS.heading, fontSize: 19, color: COLORS.ink, lineHeight: 26, marginTop: 8 },
+  questionText: { fontFamily: FONTS.heading, fontSize: 19, letterSpacing: -0.2, color: COLORS.ink, lineHeight: 26, marginTop: 8 },
   optionBtn:     { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, backgroundColor: COLORS.white, borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.border },
   optionCorrect: { backgroundColor: '#DCFCE7', borderColor: '#22C55E' },
   optionWrong:   { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },

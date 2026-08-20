@@ -6,6 +6,7 @@ import Animated, {
 import { darken } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import * as haptics from '../../lib/haptics';
+import { TIMING, PRESS_RETENTION } from '../../constants/motion';
 
 type Size = 'sm' | 'md' | 'lg';
 
@@ -64,12 +65,13 @@ export function PushButton({
 
   return (
     <Pressable
+      pressRetentionOffset={PRESS_RETENTION}
       disabled={disabled}
       onPressIn={() => {
-        pressed.value = withTiming(1, { duration: 80 });
+        pressed.value = withTiming(1, TIMING.press);
         haptics.tap();
       }}
-      onPressOut={() => { pressed.value = withTiming(0, { duration: 80 }); }}
+      onPressOut={() => { pressed.value = withTiming(0, TIMING.press); }}
       onPress={onPress}
       style={[full && styles.full, style]}
     >
