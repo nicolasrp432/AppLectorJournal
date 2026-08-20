@@ -6,8 +6,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence, runOnJS
+  useSharedValue, useAnimatedStyle, withTiming, withSpring, withRepeat, withSequence
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { MascotChar } from '../../components/ui/MascotChar';
 import { ProgressBar } from '../../components/ui/ProgressBar';
@@ -287,7 +288,7 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
         withTiming(1, { duration: 600 }), // Hold visible
         withTiming(0, { duration: 150 }, (finished) => {
           if (finished) {
-            runOnJS(setCount)(count + 1);
+            scheduleOnRN(setCount, count + 1);
           }
         })
       );
@@ -762,18 +763,23 @@ function SpeedMetronomeGame({ onComplete, accent }: { onComplete: () => void; ac
     const delay = (60 / wpm) * 1000 * 2.2;
 
     const interval = setInterval(() => {
-      setChunkIndex((prev) => {
-        if (prev >= SEMANTIC_CHUNKS.length - 1) {
-          setIsPlaying(false);
-          runOnJS(onComplete)();
-          return prev;
-        }
-        return prev + 1;
-      });
+      setChunkIndex((prev) => Math.min(prev + 1, SEMANTIC_CHUNKS.length - 1));
     }, delay);
 
     return () => clearInterval(interval);
   }, [isPlaying, wpm]);
+
+  // El final se detecta FUERA del updater. Antes `setIsPlaying(false)` y
+  // `onComplete()` vivian dentro de `setChunkIndex(prev => ...)`, y React puede
+  // invocar ese updater mas de una vez: la leccion podia darse por terminada
+  // dos veces. (El `runOnJS` que lo envolvia tampoco pintaba nada: el intervalo
+  // ya corre en el runtime de RN, no en un worklet.)
+  useEffect(() => {
+    if (isPlaying && chunkIndex >= SEMANTIC_CHUNKS.length - 1) {
+      setIsPlaying(false);
+      onComplete();
+    }
+  }, [isPlaying, chunkIndex]);
 
   return (
     <View style={styles.gameContainer}>

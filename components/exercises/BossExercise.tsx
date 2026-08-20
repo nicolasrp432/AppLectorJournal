@@ -8,9 +8,9 @@ import Animated, {
   withSequence,
   withDelay,
   withRepeat,
-  runOnJS,
   Easing,
 } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { FONTS } from '../../constants/typography';
@@ -99,7 +99,7 @@ function FloatingDamageLabel({ text, color, x, y, onComplete }: DamageLabelProps
 
   useEffect(() => {
     progress.value = withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }, () => {
-      runOnJS(onComplete)();
+      scheduleOnRN(onComplete);
     });
   }, []);
 
@@ -510,7 +510,7 @@ function BossSpeedRound({
     timerProgress.value = 1;
     timerProgress.value = withTiming(0, { duration: reactMs, easing: Easing.linear }, (finished) => {
       if (finished) {
-        runOnJS(handleTimeout)();
+        scheduleOnRN(handleTimeout);
       }
     });
   }, [idx]);

@@ -6,7 +6,6 @@ import Animated, {
   useAnimatedStyle,
   withTiming,
   withSpring,
-  runOnJS,
 } from 'react-native-reanimated';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
