@@ -12,6 +12,7 @@ import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import { useNotificationStore, NotificationItem } from '../../store/useNotificationStore';
 import { useDailyMissionStore } from '../../store/useDailyMissionStore';
+import { SPRING } from '../../constants/motion';
 
 interface Props {
   visible: boolean;
@@ -37,7 +38,7 @@ export function NotificationCenter({ visible, onClose }: Props) {
     if (visible) {
       fetchNotifications();
       backdropOpacity.value = withTiming(0.5, { duration: 300 });
-      sheetTranslateY.value = withSpring(0, { damping: 20, stiffness: 90 });
+      sheetTranslateY.value = withSpring(0, SPRING.sheet);
     }
     // Close animation is handled exclusively by handleClose()
     // to prevent infinite render loops on web where withTiming is synchronous

@@ -23,6 +23,7 @@ import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
 import { selectWarmupExercises } from '../../lib/dailyWarmup';
 import { MascotChar } from './MascotChar';
+import { SPRING } from '../../constants/motion';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -41,7 +42,7 @@ export function WarmupModal({
 
   useEffect(() => {
     if (visible) {
-      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
+      sheetTranslateY.value = withSpring(0, SPRING.sheet);
       
       const backAction = () => {
         onClose();

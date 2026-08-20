@@ -9,7 +9,7 @@ import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
 import * as Haptics from 'expo-haptics';
 import Animated, {
-  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming, withDelay, useAnimatedRef, useScrollViewOffset, SharedValue, useAnimatedProps,
+  useSharedValue, useAnimatedStyle, withSpring, withRepeat, withSequence, withTiming, withDelay, useAnimatedRef, useScrollViewOffset, SharedValue, useAnimatedProps, Easing,
 } from 'react-native-reanimated';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -33,6 +33,9 @@ import { selectWarmupExercises } from '../../lib/dailyWarmup';
 import { EXERCISES } from '../../constants/exercises';
 import { AIChatbot } from '../../components/ui/AIChatbot';
 import { WarmupModal } from '../../components/ui/WarmupModal';
+import { SPRING, TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { PRESS_SCALE_LARGE } from '../../constants/motion';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const W    = Math.min(SCREEN_WIDTH, 520) - 40;
@@ -257,10 +260,12 @@ function ForestBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> })
 }
 
 function FloatingLeaf({ left, top }: { left: number; top: number }) {
+  const reduceMotion = useReducedMotion();
   const floatY = useSharedValue(0);
   const rot = useSharedValue(0);
 
   useEffect(() => {
+    if (reduceMotion) return;
     floatY.value = withRepeat(
       withSequence(
         withTiming(16, { duration: 2500 }),
@@ -274,7 +279,7 @@ function FloatingLeaf({ left, top }: { left: number; top: number }) {
       -1,
       false
     );
-  }, []);
+  }, [reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     position: 'absolute',
@@ -322,10 +327,16 @@ function CosmosBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> })
 }
 
 function TwinklingStar({ left, top }: { left: number; top: number }) {
+  const reduceMotion = useReducedMotion();
   const scale = useSharedValue(0.5);
   const opacity = useSharedValue(0.2);
 
   useEffect(() => {
+    if (reduceMotion) {
+      scale.value = 0.9;
+      opacity.value = 0.5;
+      return;
+    }
     scale.value = withRepeat(
       withSequence(
         withTiming(1.3, { duration: 1600 }),
@@ -342,7 +353,7 @@ function TwinklingStar({ left, top }: { left: number; top: number }) {
       -1,
       true
     );
-  }, []);
+  }, [reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     position: 'absolute',
@@ -381,20 +392,25 @@ function CyberBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }) 
 }
 
 function SpeedLine({ left }: { left: number }) {
-  const floatY = useSharedValue(-200);
+  const reduceMotion = useReducedMotion();
+  const floatY = useSharedValue(0);
 
   useEffect(() => {
+    if (reduceMotion) return;
     floatY.value = withRepeat(
-      withTiming(800, { duration: 3000 }),
+      withTiming(1000, { duration: 3000, easing: Easing.linear }),
       -1,
       false
     );
-  }, []);
+  }, [reduceMotion]);
 
+  // `top` es estatico y el movimiento va por transform: animar `top` re-ejecuta
+  // Yoga en cada frame; `translateY` vive en el compositor y es gratis.
   const animStyle = useAnimatedStyle(() => ({
     position: 'absolute',
     left,
-    top: floatY.value,
+    top: -200,
+    transform: [{ translateY: floatY.value }],
     opacity: 0.12,
   }));
 
@@ -426,23 +442,26 @@ function CafeRainBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> 
 }
 
 function RainDrop({ left, speed, delay }: { left: number; speed: number; delay: number }) {
-  const dropY = useSharedValue(-100);
+  const reduceMotion = useReducedMotion();
+  const dropY = useSharedValue(0);
 
+  // Antes esto se reiniciaba con un setInterval por gota: seis temporizadores del
+  // hilo de JS pilotando una animacion del hilo de UI, que se desincronizan en
+  // cuanto la app hace cualquier otra cosa. withRepeat + withDelay hace el bucle
+  // entero dentro del runtime de UI, sin tocar JS ni una vez.
   useEffect(() => {
-    dropY.value = withTiming(800, { duration: speed });
-    
-    const interval = setInterval(() => {
-      dropY.value = -100;
-      dropY.value = withTiming(800, { duration: speed });
-    }, speed + delay + 100);
-
-    return () => clearInterval(interval);
-  }, []);
+    if (reduceMotion) return;
+    dropY.value = withDelay(
+      delay,
+      withRepeat(withTiming(900, { duration: speed, easing: Easing.linear }), -1, false)
+    );
+  }, [reduceMotion, delay, speed]);
 
   const animStyle = useAnimatedStyle(() => ({
     position: 'absolute',
     left,
-    top: dropY.value,
+    top: -100,
+    transform: [{ translateY: dropY.value }],
     opacity: 0.18,
   }));
 
@@ -474,11 +493,20 @@ function LibraryBackdrop({ scrollOffset }: { scrollOffset: SharedValue<number> }
 }
 
 function FloatingMote({ left, top, size }: { left: number; top: number; size: number }) {
+  const reduceMotion = useReducedMotion();
   const floatY = useSharedValue(0);
   const driftX = useSharedValue(0);
   const opacity = useSharedValue(0.1);
 
+  // Tres bucles infinitos por mota x 6 motas = 18 animaciones perpetuas. Ademas
+  // el ciclo de 3000+3000 ms da 0.167 Hz, que es justo la frecuencia que la guia
+  // de accesibilidad de Apple señala como problematica. Con reduced motion se
+  // queda estatica y visible, no desaparece: el fondo es un objeto comprado.
   useEffect(() => {
+    if (reduceMotion) {
+      opacity.value = 0.22;
+      return;
+    }
     floatY.value = withRepeat(
       withSequence(withTiming(15, { duration: 3000 }), withTiming(-15, { duration: 3000 })),
       -1,
@@ -494,12 +522,13 @@ function FloatingMote({ left, top, size }: { left: number; top: number; size: nu
       -1,
       true
     );
-  }, []);
+  }, [reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
     position: 'absolute',
-    left: left + driftX.value,
-    top: top + floatY.value,
+    left,
+    top,
+    transform: [{ translateX: driftX.value }, { translateY: floatY.value }],
     opacity: opacity.value,
   }));
 
@@ -679,7 +708,7 @@ export default function RutaScreen() {
           }}
           style={({ pressed }) => [
             styles.warmupBannerCard,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+            pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
           ]}
         >
           <LinearGradient
@@ -727,7 +756,7 @@ export default function RutaScreen() {
           }}
           style={({ pressed }) => [
             styles.aiBentoCard,
-            { transform: [{ scale: pressed ? 0.98 : 1 }] }
+            { transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
           ]}
         >
           <LinearGradient
@@ -1195,7 +1224,7 @@ function NodeButton({
 
   useEffect(() => {
     if (isCompleted) {
-      checkScale.value = withSpring(1.0, { damping: 7, stiffness: 120 });
+      checkScale.value = withSpring(1.0, SPRING.smooth);
     } else {
       checkScale.value = 0;
     }
@@ -1282,8 +1311,9 @@ function NodeButton({
   return (
     <Pressable
       style={{ position: 'absolute', left: x - RADIUS, top: y - RADIUS, zIndex: 5 }}
-      onPressIn={() => { scale.value = withTiming(0.9, { duration: 80 }); }}
-      onPressOut={() => { scale.value = withSpring(1, { damping: 6, stiffness: 300 }); }}
+      pressRetentionOffset={PRESS_RETENTION}
+      onPressIn={() => { scale.value = withTiming(PRESS_SCALE, TIMING.press); }}
+      onPressOut={() => { scale.value = withTiming(1, TIMING.press); }}
       onPress={onPress}
     >
       {/* Pulse halo for current node */}
@@ -1334,7 +1364,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
     if (node) {
       const alreadyClaimed = completed.includes(node.id);
       setChestState(alreadyClaimed ? 'opened' : 'closed');
-      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
+      sheetTranslateY.value = withSpring(0, SPRING.sheet);
       if (!alreadyClaimed) {
         giftRotate.value = withRepeat(
           withSequence(withTiming(-5, { duration: 150 }), withTiming(5, { duration: 150 })),
@@ -1358,7 +1388,7 @@ function ChestModal({ node, onClose, onClaim, completed }: {
   const giftAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
       { rotate: `${giftRotate.value}deg` },
-      { scale: chestState === 'opened' ? withSpring(1.2) : withSpring(1) }
+      { scale: chestState === 'opened' ? withSpring(1.2, SPRING.momentum) : withSpring(1, SPRING.momentum) }
     ],
   }));
 
@@ -1452,7 +1482,7 @@ function ExercisePreviewSheet({
 
   useEffect(() => {
     if (node) {
-      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
+      sheetTranslateY.value = withSpring(0, SPRING.sheet);
       
       const backAction = () => {
         onClose();
@@ -1588,17 +1618,19 @@ function ExercisePreviewSheet({
 // ─── WELCOME MODAL COMPONENT (FOR NEW USERS) ──────────────────────────────────
 function WelcomeModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const sheetTranslateY = useSharedValue(SCREEN_HEIGHT);
+  const reduceMotion = useReducedMotion();
   const mascotBounce = useSharedValue(0);
   const mascotRotate = useSharedValue(0);
 
   useEffect(() => {
     if (visible) {
-      sheetTranslateY.value = withSpring(0, { damping: 16, stiffness: 100 });
+      sheetTranslateY.value = withSpring(0, SPRING.sheet);
       
-      mascotBounce.value = withRepeat(
+      // Rebote del mascot: decorativo, se apaga con movimiento reducido.
+      if (!reduceMotion) mascotBounce.value = withRepeat(
         withSequence(
-          withSpring(-14, { damping: 10, stiffness: 80 }),
-          withSpring(0, { damping: 10, stiffness: 80 })
+          withSpring(-14, SPRING.momentum),
+          withSpring(0, SPRING.momentum)
         ),
         -1,
         true

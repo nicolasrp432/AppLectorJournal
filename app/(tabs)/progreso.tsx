@@ -22,6 +22,7 @@ import { FONTS } from '../../constants/typography';
 import { EXERCISES } from '../../constants/exercises';
 import { levelProgress } from '../../lib/xpEngine';
 import type { ExerciseId, Session } from '../../types/db';
+import { PRESS_SCALE, PRESS_SCALE_LARGE } from '../../constants/motion';
 
 const SCREEN_W = Dimensions.get('window').width;
 
@@ -456,7 +457,7 @@ export default function ProgresoScreen() {
           }}
           style={({ pressed }) => [
             styles.warmupBannerCard,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+            pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
           ]}
         >
           <ExpoLinearGradient
@@ -574,7 +575,7 @@ export default function ProgresoScreen() {
           onPress={() => router.push('/flashcards' as any)}
           style={({ pressed }) => [
             styles.flashcardBannerCard,
-            pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }
+            pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
           ]}
         >
           <ExpoLinearGradient
@@ -608,7 +609,7 @@ export default function ProgresoScreen() {
                 style={({ pressed }) => [
                   styles.freePracticeCard,
                   { borderColor: meta.color + '30' },
-                  pressed && { opacity: 0.85, transform: [{ scale: 0.96 }] }
+                  pressed && { transform: [{ scale: PRESS_SCALE }] }
                 ]}
               >
                 <ExpoLinearGradient

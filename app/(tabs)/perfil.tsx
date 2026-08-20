@@ -30,6 +30,7 @@ import { scheduleDailyReminder, cancelDailyReminder } from '../../lib/notificati
 import { supabase } from '../../lib/supabase';
 import { REWARDS } from '../../constants/rewards';
 import * as Haptics from 'expo-haptics';
+import { PRESS_SCALE_LARGE } from '../../constants/motion';
 
 type IconLib = 'Ionicons' | 'MaterialCommunityIcons';
 
@@ -632,7 +633,7 @@ export default function PerfilScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.bottomSheetCancelBtn,
-                pressed && { opacity: 0.8 }
+                pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
               ]}
               onPress={() => setAvatarMenuVisible(false)}
             >
@@ -784,7 +785,7 @@ export default function PerfilScreen() {
               style={({ pressed }) => [
                 styles.diagnosticCloseBtn,
                 { backgroundColor: themeColor },
-                pressed && { opacity: 0.9 }
+                pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
               ]}
               onPress={() => setDiagnosticVisible(false)}
             >
@@ -1215,7 +1216,7 @@ export default function PerfilScreen() {
                   style={({ pressed }) => [
                     styles.diagnosticCloseBtn,
                     { backgroundColor: themeColor + '15', borderWidth: 1.5, borderColor: themeColor, marginTop: 12, height: 44 },
-                    pressed && { opacity: 0.8 }
+                    pressed && { transform: [{ scale: PRESS_SCALE_LARGE }] }
                   ]}
                   onPress={() => {
                     setAboutModalVisible(false);

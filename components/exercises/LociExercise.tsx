@@ -15,6 +15,8 @@ import { usePrefsStore } from '../../store/usePrefsStore';
 import { useLociStore } from '../../store/useLociStore';
 import { supabase } from '../../lib/supabase';
 import { matchesRecall, scoreToQuality } from '../../lib/loci';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const ROOM_THEMES = {
   casa: [
@@ -583,18 +585,21 @@ function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHint
   onRoomPress: (id: string) => void;
 }) {
   const scale = useSharedValue(1);
+  const reduceMotion = useReducedMotion();
   const glow = useSharedValue(0);
 
   useEffect(() => {
     if (isHighlight) {
-      scale.value = withSpring(1.08, { damping: 8 });
-      glow.value = withRepeat(
+      scale.value = withSpring(1.08, SPRING.smooth);
+      // El halo marca cual es el locus activo: con movimiento reducido se queda
+      // encendido en vez de pulsar, porque apagarlo perderia la informacion.
+      glow.value = reduceMotion ? 1 : withRepeat(
         withTiming(1, { duration: 700 }),
         -1,
         true
       );
     } else {
-      scale.value = withSpring(1, { damping: 10 });
+      scale.value = withSpring(1, SPRING.smooth);
       glow.value = withTiming(0, { duration: 200 });
     }
   }, [isHighlight]);
@@ -662,7 +667,7 @@ function HouseRoomCard({ room, idx, phase, accent, isHighlight, hasBadge, isHint
         onPress={() => {
           scale.value = withSequence(
             withTiming(0.9, { duration: 60 }),
-            withSpring(1.1, { damping: 5 })
+            withSpring(1.1, SPRING.momentum)
           );
           onRoomPress(room.id);
         }}
@@ -699,7 +704,7 @@ function LociStoryCard({ text, roomId, imageUri, isLoading }: { text: string; ro
   const [imageFailed, setImageFailed] = useState(false);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 8, stiffness: 120 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 250 });
   }, []);
 

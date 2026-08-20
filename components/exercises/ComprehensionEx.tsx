@@ -16,6 +16,7 @@ import { useRewardsStore } from '../../store/useRewardsStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
 import { simpleHash } from '../../lib/text';
 import { dedupe } from '../../lib/taskQueue';
+import { SPRING } from '../../constants/motion';
 
 type Phase = 'read' | 'quiz';
 
@@ -90,7 +91,7 @@ export function ComprehensionExercise({ accent = '#EAB308', onFinish, onQuit }: 
     if (phase === 'read' && sentences.length > 0) {
       // 12px padding top + estimated Y index offset per card
       const targetY = activeSentence * 74 + 18;
-      rulerY.value = withSpring(targetY, { damping: 15, stiffness: 90 });
+      rulerY.value = withSpring(targetY, SPRING.smooth);
     }
   }, [activeSentence, phase, sentences.length]);
 

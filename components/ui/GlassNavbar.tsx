@@ -8,6 +8,7 @@ import { FONTS } from '../../constants/typography';
 import { COLORS } from '../../constants/colors';
 import * as haptics from '../../lib/haptics';
 import { TabIcon, TAB_LABELS, TABS, type TabBarProps } from './GlassNavbarShared';
+import { TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
 
 // Glassy spring tuned for a fluid glide (no snap) on native.
 const SLIDE_SPRING = { damping: 17, stiffness: 110, mass: 0.9 } as const;
@@ -135,8 +136,9 @@ function NavTab({
       }}
     >
       <Pressable
-        onPressIn={() => { scale.value = withTiming(0.9, { duration: 80 }); }}
-        onPressOut={() => { scale.value = withSpring(1, { damping: 8, stiffness: 300 }); }}
+        pressRetentionOffset={PRESS_RETENTION}
+        onPressIn={() => { scale.value = withTiming(PRESS_SCALE, TIMING.press); }}
+        onPressOut={() => { scale.value = withTiming(1, TIMING.press); }}
         onPress={onPress}
       >
         <Animated.View style={[pillStyle, animStyle]}>

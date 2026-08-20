@@ -6,6 +6,8 @@ import Animated, {
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
 import type { ExerciseId } from '../../types/db';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 interface ExerciseDemoProps {
   kind: ExerciseId | 'rsvp';
@@ -127,7 +129,7 @@ function DemoRSVP({ accent }: { accent: string }) {
     const id = setInterval(() => {
       scale.value = 0.7;
       opacity.value = 0;
-      scale.value = withSpring(1, { damping: 10, stiffness: 300 });
+      scale.value = withSpring(1, SPRING.smooth);
       opacity.value = withTiming(1, { duration: 120 });
       setIdx(i => (i + 1) % RSVP_WORDS.length);
     }, 450);
@@ -343,6 +345,7 @@ const BOSS_SKILLS = [
 ];
 
 function DemoBoss({ accent }: { accent: string }) {
+  const reduceMotion = useReducedMotion();
   const [round, setRound] = useState(0);
   const [telegraph, setTelegraph] = useState(true); // true = avisa, false = golpe
   const hp = useSharedValue(1);
@@ -362,7 +365,9 @@ function DemoBoss({ accent }: { accent: string }) {
   // Telegraph pulses the ring; a hit drains a chunk of the boss HP.
   useEffect(() => {
     if (telegraph) {
-      ring.value = withRepeat(
+      // El pulso avisa del ataque entrante: es informacion, no adorno. Con
+      // movimiento reducido el anillo se queda expandido en vez de pulsar.
+      ring.value = reduceMotion ? 1.12 : withRepeat(
         withSequence(
           withTiming(1.12, { duration: 460, easing: Easing.inOut(Easing.quad) }),
           withTiming(1, { duration: 460, easing: Easing.inOut(Easing.quad) }),
@@ -371,7 +376,7 @@ function DemoBoss({ accent }: { accent: string }) {
       ring.value = withTiming(1, { duration: 150 });
       hp.value = withTiming(Math.max(0, hp.value - 0.34), { duration: 420, easing: Easing.out(Easing.cubic) });
     }
-  }, [telegraph]);
+  }, [telegraph, reduceMotion]);
 
   const ringStyle = useAnimatedStyle(() => ({ transform: [{ scale: ring.value }] }));
   const hpStyle = useAnimatedStyle(() => ({ width: `${hp.value * 100}%` as any }));

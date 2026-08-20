@@ -4,8 +4,6 @@ import { Ionicons } from '@expo/vector-icons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
-  withRepeat,
-  withSequence,
   withTiming,
   withSpring,
 } from 'react-native-reanimated';
@@ -18,6 +16,7 @@ import { simpleHash } from '../../lib/text';
 import { dedupe } from '../../lib/taskQueue';
 import { ReadingGoalStep } from './ReadingGoalStep';
 import type { ReadingGoalId } from '../../lib/readingGoals';
+import { SPRING } from '../../constants/motion';
 
 type Mode = 'rsvp' | 'guide' | 'chunk';
 // 'goal' va antes de 'config': declarar para qué se lee recalibra la
@@ -45,8 +44,8 @@ function PageFlipWrapper({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     opacity.value = withTiming(1, { duration: 500 });
-    translateY.value = withSpring(0, { damping: 15, stiffness: 75 });
-    rotateX.value = withSpring(0, { damping: 15, stiffness: 75 });
+    translateY.value = withSpring(0, SPRING.smooth);
+    rotateX.value = withSpring(0, SPRING.smooth);
   }, []);
 
   const animatedStyle = useAnimatedStyle(() => ({

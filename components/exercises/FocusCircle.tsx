@@ -12,6 +12,7 @@ import { ExerciseTopBar } from './ExerciseTopBar';
 import { MascotChar } from '../ui/MascotChar';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -30,6 +31,7 @@ export function FocusCircle({ accent = '#22C55E', durationSeconds = 60, onFinish
   const [breathText, setBreathText] = useState('Inhala con calma...');
 
   const circleScale = useSharedValue(1.0);
+  const reduceMotion = useReducedMotion();
   const breathingPulse = useSharedValue(1.0);
   const playStart = useRef(Date.now());
 
@@ -39,15 +41,18 @@ export function FocusCircle({ accent = '#22C55E', durationSeconds = 60, onFinish
     // Slowly expand the green circle from scale 1.0 to 3.8 over the course of the duration
     circleScale.value = withTiming(3.8, { duration: durationSeconds * 1000 });
 
-    // Breathing pulse for the outer indicator ring (pulsing every 4s)
-    breathingPulse.value = withRepeat(
-      withSequence(
-        withTiming(1.3, { duration: 2000 }),
-        withTiming(1.0, { duration: 2000 })
-      ),
-      -1,
-      true
-    );
+    // Pulso de respiracion del anillo exterior. Es decorativo: con movimiento
+    // reducido se queda quieto y el circulo que crece sigue marcando el tiempo.
+    if (!reduceMotion) {
+      breathingPulse.value = withRepeat(
+        withSequence(
+          withTiming(1.3, { duration: 2000 }),
+          withTiming(1.0, { duration: 2000 })
+        ),
+        -1,
+        true
+      );
+    }
 
     // Countdown and Breathing text interval
     const timer = setInterval(() => {

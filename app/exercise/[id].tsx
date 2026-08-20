@@ -49,6 +49,7 @@ import { ReadingSpeedTest } from '../../components/exercises/ReadingSpeedTest';
 import { FocusCircle } from '../../components/exercises/FocusCircle';
 
 import type { ExerciseId } from '../../types/db';
+import { TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
 
 type Phase = 'intro' | 'playing' | 'result';
 
@@ -585,16 +586,17 @@ function SelectPill({ label, selected, onPress, color }: {
   });
 
   const handlePressIn = () => {
-    scale.value = withSpring(0.92, { damping: 10, stiffness: 200 });
+    scale.value = withTiming(PRESS_SCALE, TIMING.press);
   };
 
   const handlePressOut = () => {
-    scale.value = withSpring(1, { damping: 10, stiffness: 200 });
+    scale.value = withTiming(1, TIMING.press);
     onPress();
   };
 
   return (
     <Pressable
+      pressRetentionOffset={PRESS_RETENTION}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
       style={{ margin: 2 }}

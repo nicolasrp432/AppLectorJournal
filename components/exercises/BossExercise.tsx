@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { FONTS } from '../../constants/typography';
 import { COLORS } from '../../constants/colors';
 import { MascotChar } from '../ui/MascotChar';
+import { SPRING } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const BOSS_ACCENT = '#DC2626';
 
@@ -37,11 +39,13 @@ const CHALLENGES = [
 
 // Spark Particle component for background fire effect
 function FireSpark({ size, delay, left }: { size: number; delay: number; left: number }) {
+  const reduceMotion = useReducedMotion();
   const y = useSharedValue(150);
   const opacity = useSharedValue(0);
   const scale = useSharedValue(1);
 
   useEffect(() => {
+    if (reduceMotion) return;
     y.value = withDelay(delay, withRepeat(withTiming(0, { duration: 3000 }), -1, false));
     opacity.value = withDelay(delay, withRepeat(
       withSequence(
@@ -179,7 +183,7 @@ export function BossExercise({ level = 1, onFinish, onQuit }: Props) {
       // 2. Player jump attack
       playerJump.value = withSequence(
         withTiming(15, { duration: 120 }),
-        withSpring(0, { damping: 10 })
+        withSpring(0, SPRING.smooth)
       );
 
       // 3. Sword slash visual (single eased sweep, no double-snap)

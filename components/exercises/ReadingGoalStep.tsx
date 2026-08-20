@@ -10,6 +10,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 import * as haptics from '../../lib/haptics';
 import { COLORS } from '../../constants/colors';
 import { FONTS } from '../../constants/typography';
+import { SPRING, TIMING, PRESS_SCALE, PRESS_RETENTION } from '../../constants/motion';
 
 /**
  * Paso previo a una lectura: el usuario declara para qué va a leer.
@@ -87,7 +88,7 @@ function GoalCard({
       enter.value = 1;
       return;
     }
-    enter.value = withDelay(index * 70, withSpring(1, { damping: 15, stiffness: 130 }));
+    enter.value = withDelay(index * 70, withSpring(1, SPRING.smooth));
   }, [index, reduceMotion]);
 
   const animStyle = useAnimatedStyle(() => ({
@@ -103,11 +104,12 @@ function GoalCard({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`${label}. ${prompt}. Ritmo sugerido ${wpm} palabras por minuto.`}
+        pressRetentionOffset={PRESS_RETENTION}
         onPressIn={() => {
-          press.value = withTiming(0.97, { duration: 90 });
+          press.value = withTiming(PRESS_SCALE, TIMING.press);
         }}
         onPressOut={() => {
-          press.value = withSpring(1, { damping: 14, stiffness: 200 });
+          press.value = withTiming(1, TIMING.press);
         }}
         onPress={onPress}
         style={styles.card}

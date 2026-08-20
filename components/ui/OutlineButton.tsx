@@ -3,6 +3,7 @@ import { Platform, Pressable, Text, StyleSheet, ViewStyle } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
 import { FONTS } from '../../constants/typography';
 import * as haptics from '../../lib/haptics';
+import { TIMING, PRESS_RETENTION } from '../../constants/motion';
 
 interface Props {
   children: React.ReactNode;
@@ -42,8 +43,9 @@ export function OutlineButton({
 
   return (
     <Pressable
-      onPressIn={() => { pressed.value = withTiming(1, { duration: 80 }); haptics.tap(); }}
-      onPressOut={() => { pressed.value = withTiming(0, { duration: 80 }); }}
+      pressRetentionOffset={PRESS_RETENTION}
+      onPressIn={() => { pressed.value = withTiming(1, TIMING.press); haptics.tap(); }}
+      onPressOut={() => { pressed.value = withTiming(0, TIMING.press); }}
       onPress={onPress}
       style={full ? styles.full : undefined}
     >

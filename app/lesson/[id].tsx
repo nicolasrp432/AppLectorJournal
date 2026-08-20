@@ -16,6 +16,9 @@ import { FONTS } from '../../constants/typography';
 import { useProfileStore } from '../../store/useProfileStore';
 import { useNodeStore } from '../../store/useNodeStore';
 import { supabase, invokeEdgeFunction } from '../../lib/supabase';
+import { SPRING } from '../../constants/motion';
+import { PRESS_SCALE, PRESS_SCALE_LARGE } from '../../constants/motion';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const W = Math.min(SCREEN_WIDTH, 520);
@@ -120,7 +123,7 @@ function LessonIntro({ lesson, lessonId, onStart, onBack }: { lesson: LessonData
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 15 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 400 });
   }, []);
 
@@ -168,7 +171,7 @@ function LessonIntro({ lesson, lessonId, onStart, onBack }: { lesson: LessonData
         <Pressable
           style={({ pressed }) => [
             styles.ctaBtn,
-            { backgroundColor: lesson.color, transform: [{ scale: pressed ? 0.98 : 1 }] }
+            { backgroundColor: lesson.color, transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
           ]}
           onPress={onStart}
         >
@@ -187,6 +190,7 @@ const PERIPHERAL_WORDS = [
   'AGIL', 'LECTOR', 'NEURONA', 'VELOZ', 'VISUAL'
 ];
 function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; accent: string }) {
+  const reduceMotion = useReducedMotion();
   const [isConfiguring, setIsConfiguring] = useState(true);
   const [focusMode, setFocusMode] = useState<'free' | '30s' | '60s' | '120s'>('free');
   const [playing, setPlaying] = useState(false);
@@ -237,7 +241,9 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
   // Center button pulse when active
   useEffect(() => {
     if (playing) {
-      pulseScale.value = withRepeat(
+      // El pulso indica "reproduciendo". Con movimiento reducido se queda en 1:
+      // el estado ya se ve por el icono de pausa.
+      pulseScale.value = reduceMotion ? 1 : withRepeat(
         withSequence(
           withTiming(1.2, { duration: 600 }),
           withTiming(1, { duration: 600 })
@@ -275,7 +281,7 @@ function PeripheralVisionGame({ onComplete, accent }: { onComplete: () => void; 
       // Trigger reanimated flash entrance
       flashScale.value = 0.8;
       flashOpacity.value = 0;
-      flashScale.value = withSpring(1.05, { damping: 12 });
+      flashScale.value = withSpring(1.05, SPRING.smooth);
       flashOpacity.value = withSequence(
         withTiming(1, { duration: 200 }),
         withTiming(1, { duration: 600 }), // Hold visible
@@ -525,7 +531,7 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
     if (activeRoom || quizActive) {
       cardScale.value = 0.9;
       cardOpacity.value = 0;
-      cardScale.value = withSpring(1, { damping: 14 });
+      cardScale.value = withSpring(1, SPRING.smooth);
       cardOpacity.value = withTiming(1, { duration: 250 });
     }
   }, [activeRoom, quizActive]);
@@ -652,7 +658,7 @@ function LociMemoryPalace({ onComplete, accent }: { onComplete: () => void; acce
         <Pressable
           style={({ pressed }) => [
             styles.quizTriggerBtn,
-            { transform: [{ scale: pressed ? 0.98 : 1 }] }
+            { transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
           ]}
           onPress={() => {
             setActiveRoom(null);
@@ -823,7 +829,7 @@ function SpeedMetronomeGame({ onComplete, accent }: { onComplete: () => void; ac
         <Pressable
           style={({ pressed }) => [
             styles.metronomePlayBtn,
-            { backgroundColor: isPlaying ? COLORS.ink : accent, transform: [{ scale: pressed ? 0.95 : 1 }] }
+            { backgroundColor: isPlaying ? COLORS.ink : accent, transform: [{ scale: pressed ? PRESS_SCALE : 1 }] }
           ]}
           onPress={() => setIsPlaying(!isPlaying)}
         >
@@ -874,7 +880,7 @@ function LessonSuccess({ lesson, onFinish }: { lesson: LessonData; onFinish: () 
   const opacity = useSharedValue(0);
 
   useEffect(() => {
-    scale.value = withSpring(1, { damping: 10, stiffness: 80 });
+    scale.value = withSpring(1, SPRING.smooth);
     opacity.value = withTiming(1, { duration: 600 });
   }, []);
 
@@ -912,7 +918,7 @@ function LessonSuccess({ lesson, onFinish }: { lesson: LessonData; onFinish: () 
           <Pressable
             style={({ pressed }) => [
               styles.successCtaBtn,
-              { backgroundColor: lesson.color, transform: [{ scale: pressed ? 0.97 : 1 }] }
+              { backgroundColor: lesson.color, transform: [{ scale: pressed ? PRESS_SCALE_LARGE : 1 }] }
             ]}
             onPress={onFinish}
           >
@@ -934,12 +940,16 @@ function LessonVisualExplanation({ lessonId }: { lessonId: string }) {
 }
 
 function FocalVisionIntroAnimation() {
+  const reduceMotion = useReducedMotion();
   const pulse = useSharedValue(1);
   const wordsOpacity = useSharedValue(0.2);
   useEffect(() => {
+    // Sin movimiento: el texto periferico se deja legible en vez de latir, que
+    // es lo que la animacion queria demostrar de todos modos.
+    if (reduceMotion) { wordsOpacity.value = 1; return; }
     pulse.value = withRepeat(withSequence(withTiming(1.2, { duration: 1200 }), withTiming(1, { duration: 1200 })), -1, true);
     wordsOpacity.value = withRepeat(withSequence(withTiming(1, { duration: 1200 }), withTiming(0.2, { duration: 1200 })), -1, true);
-  }, []);
+  }, [reduceMotion]);
   const outerFrameStyle = useAnimatedStyle(() => ({ transform: [{ scale: pulse.value }], borderColor: COLORS.focus }));
   const textStyle = useAnimatedStyle(() => ({ opacity: wordsOpacity.value }));
   return (
