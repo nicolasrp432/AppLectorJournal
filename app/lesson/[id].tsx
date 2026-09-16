@@ -890,7 +890,7 @@ function LessonSuccess({ lesson, onFinish }: { lesson: LessonData; onFinish: () 
         <View style={styles.sparkBackground} />
 
         <Animated.View style={[styles.successCard, animatedStyle]}>
-          <MascotChar which={lesson.mascot} size={130} expression="happy" />
+          <MascotChar which={lesson.mascot} size={130} expression="happy" motion="celebrate" />
 
           <Text style={styles.successHeadline}>¡LECCIÓN SUPERADA!</Text>
           <Text style={styles.successDescription}>

@@ -301,7 +301,7 @@ export function BossExercise({ level = 1, onFinish, onQuit }: Props) {
           {/* Active Player Mascot on Left */}
           <View style={styles.playerSide}>
             <Animated.View style={playerAnimatedStyle}>
-              <MascotChar which="focus" size={75} expression={bossHP === 0 ? 'happy' : 'calm'} />
+              <MascotChar which="focus" size={75} expression={bossHP === 0 ? 'happy' : 'calm'} motion={bossHP === 0 ? 'celebrate' : 'focus'} />
             </Animated.View>
             <Text style={styles.sideLabel}>Tú (Lector)</Text>
 
@@ -321,6 +321,7 @@ export function BossExercise({ level = 1, onFinish, onQuit }: Props) {
                 which="boss"
                 size={82}
                 expression={bossHP === 0 ? 'defeated' : bossHP < 40 ? 'angry' : 'serious'}
+                motion={bossHP === 0 ? 'defeat' : 'coach'}
               />
             </Animated.View>
             <Text style={styles.sideLabel}>Guardián 👹</Text>

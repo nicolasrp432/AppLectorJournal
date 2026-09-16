@@ -112,7 +112,7 @@ export function FocusCircle({ accent = '#22C55E', durationSeconds = 60, onFinish
         <ExerciseTopBar progress={0} accent={accent} onQuit={onQuit} title="Círculo de Enfoque" />
         <ScrollView contentContainerStyle={styles.centerScroll}>
           <View style={styles.mascotWrapper}>
-            <MascotChar which="focus" size={130} expression="calm" />
+            <MascotChar which="focus" size={130} expression="calm" motion="focus" />
           </View>
           <Text style={styles.title}>Círculo de Enfoque</Text>
           <Text style={styles.subtitle}>
