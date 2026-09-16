@@ -210,7 +210,7 @@ export default function DeckReview() {
             style={styles.victoryGradient}
           >
             <View style={styles.mascotWrapper}>
-              <MascotChar which="memo" size={140} expression="happy" />
+              <MascotChar which="memo" size={140} expression="happy" motion="celebrate" />
             </View>
 
             <Text style={styles.victoryTitle}>¡Mazo Completado!</Text>

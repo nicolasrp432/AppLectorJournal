@@ -1003,7 +1003,7 @@ function ExerciseResult({ exercise, result, newAchievements, livesNote, calibrat
       <ScrollView contentContainerStyle={resultStyles.scroll} showsVerticalScrollIndicator={false}>
         <Animated.View style={[resultStyles.hero, heroStyle]}>
           <View style={[resultStyles.heroCircle, { backgroundColor: result.passed ? c : '#9CA3AF' }, heroShadow(result.passed ? c : '#9CA3AF')]}>
-            <MascotChar which={result.passed ? 'joy' : 'focus'} expression={result.passed ? 'happy' : 'wow'} size={90} breathing={false} blinking={false} />
+            <MascotChar which={result.passed ? 'joy' : 'focus'} expression={result.passed ? 'happy' : 'wow'} motion={result.passed ? 'celebrate' : 'coach'} size={90} breathing={false} blinking={false} />
           </View>
           <Text style={[resultStyles.heroLabel, { color: c }]}>
             {result.passed ? '¡Completado!' : 'Sigue intentando'}

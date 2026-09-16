@@ -606,7 +606,7 @@ export default function ReaderScreen() {
       return (
         <SafeAreaView style={styles.safe}>
           <View style={styles.quizLoadingBox}>
-            <MascotChar which="swift" expression="happy" size={110} />
+            <MascotChar which="swift" expression="happy" motion="focus" size={110} />
             <ActivityIndicator color={ACCENT} size="large" style={{ marginTop: 24 }} />
             <Text style={styles.quizLoadingText}>Procesando lectura con IA...</Text>
             <Text style={styles.quizLoadingSub}>Diseñando preguntas personalizadas para evaluar tu comprensión lectora.</Text>
@@ -681,7 +681,7 @@ export default function ReaderScreen() {
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.doneScroll} showsVerticalScrollIndicator={false}>
         <View style={styles.doneMascot}>
-          <MascotChar which="joy" expression="happy" size={110} />
+          <MascotChar which="joy" expression="happy" motion="celebrate" size={110} />
         </View>
 
         <Text style={[styles.doneLabel, { color: ACCENT }]}>¡Sesión completada!</Text>

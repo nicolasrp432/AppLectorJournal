@@ -4,24 +4,26 @@
  * Architecture (100% Safe, Cross-Platform & Type-Safe):
  *  - Body & Volume: High-fidelity SVG render with <RadialGradient> volume and Specular Glass Highlight.
  *  - Face: Layered hardware-accelerated Animated.View elements with smooth spring-physics transitions.
- *  - Interactivity: Elastic squash, stretch & jump animation on touch.
- *  - Loops: Continuous subtle breathing and organic random double-blinking.
+ *  - Motion: Independent breathing, floating, semantic squash and organic blinking.
+ *  - Accessibility: Every ambient loop respects the reduced-motion preference.
  */
-import React, { useEffect } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import React, { useEffect, useId } from 'react';
+import { StyleSheet, View } from 'react-native';
 import Svg, {
-  Path, Ellipse, Defs, RadialGradient, Stop
+  Path, Ellipse, Circle, Defs, RadialGradient, LinearGradient, Stop
 } from 'react-native-svg';
 import Animated, {
   useSharedValue, useAnimatedStyle,
-  withRepeat, withSequence, withTiming, withSpring
+  withDelay, withRepeat, withSequence, withTiming, withSpring
 } from 'react-native-reanimated';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Shape = 'tallPill' | 'bean' | 'round' | 'spark' | 'cloud' | 'droplet' | 'hex' | 'arch';
 
 export type MascotKey = 'focus' | 'calm' | 'joy' | 'swift' | 'memo' | 'loci' | 'boss';
 export type Expression = 'calm' | 'happy' | 'wow' | 'sleepy' | 'wink' | 'fast' | 'serious' | 'angry' | 'defeated';
+export type MotionIntent = 'idle' | 'coach' | 'focus' | 'celebrate' | 'defeat';
 
 // ─── Body paths (viewBox 0 0 100 120) ────────────────────────────────────────
 const BODY_PATHS: Record<Shape, string> = {
@@ -45,6 +47,16 @@ const MASCOTS: Record<MascotKey, { shape: Shape; defaultExp: Expression }> = {
   boss:  { shape: 'hex',      defaultExp: 'serious' },
 };
 
+const PERSONALITY: Record<MascotKey, { light: string; main: string; dark: string; accent: string }> = {
+  focus: { light: '#BBF7D0', main: '#22C55E', dark: '#15803D', accent: '#14532D' },
+  calm:  { light: '#BFDBFE', main: '#3B82F6', dark: '#1D4ED8', accent: '#DBEAFE' },
+  joy:   { light: '#FEF08A', main: '#FACC15', dark: '#CA8A04', accent: '#FB7185' },
+  swift: { light: '#FED7AA', main: '#F97316', dark: '#C2410C', accent: '#0F172A' },
+  memo:  { light: '#FBCFE8', main: '#EC4899', dark: '#9D174D', accent: '#FDF2F8' },
+  loci:  { light: '#DDD6FE', main: '#8B5CF6', dark: '#5B21B6', accent: '#FDE68A' },
+  boss:  { light: '#FECACA', main: '#DC2626', dark: '#991B1B', accent: '#FDE047' },
+};
+
 // spring stiffness and damping parameters
 const SPRING_CONFIG = { damping: 13, stiffness: 110 };
 
@@ -54,6 +66,7 @@ interface CharShapeProps {
   size: number;
   breathing: boolean;
   blinking: boolean;
+  motion: MotionIntent;
 }
 
 export function CharShape({
@@ -62,10 +75,17 @@ export function CharShape({
   size,
   breathing,
   blinking,
+  motion,
 }: CharShapeProps) {
+  const reduceMotion = useReducedMotion();
+  const uniqueId = useId().replace(/:/g, '');
+  const gradientId = `mascot_${which}_${uniqueId}`;
+  const shineId = `shine_${which}_${uniqueId}`;
+  const palette = PERSONALITY[which];
   const d = BODY_PATHS[MASCOTS[which]?.shape] ?? BODY_PATHS.round;
   const w = size;
   const h = size * 1.2;
+  const showFineDetail = size >= 52;
 
   // ─── Face Container absolute metrics ───
   const faceW = w * 0.54;
@@ -104,10 +124,17 @@ export function CharShape({
   const bodyScaleY = useSharedValue(1.0);
   const bodyTranslateY = useSharedValue(0);
   const shadowScaleX = useSharedValue(1.0);
+  const idleY = useSharedValue(0);
+  const idleRotate = useSharedValue(0);
+  const semanticY = useSharedValue(0);
+  const semanticScale = useSharedValue(1);
+  const semanticRotate = useSharedValue(0);
+  const auraScale = useSharedValue(0.82);
+  const auraOpacity = useSharedValue(0);
 
   // ─── Continuous Breathing Loop ───
   useEffect(() => {
-    if (!breathing) {
+    if (!breathing || reduceMotion) {
       bodyScaleY.value = 1.0;
       bodyScaleX.value = 1.0;
       shadowScaleX.value = 1.0;
@@ -140,11 +167,89 @@ export function CharShape({
       -1,
       false,
     );
-  }, [breathing]);
+  }, [bodyScaleX, bodyScaleY, breathing, reduceMotion, shadowScaleX]);
+
+  // Each character has a slightly different silhouette rhythm. The offset is
+  // deterministic, so groups feel choreographed instead of mechanically synced.
+  useEffect(() => {
+    if (!breathing || reduceMotion) {
+      idleY.value = 0;
+      idleRotate.value = 0;
+      return;
+    }
+    const pace = 2100 + Object.keys(MASCOTS).indexOf(which) * 130;
+    idleY.value = withRepeat(
+      withSequence(withTiming(-3, { duration: pace }), withTiming(0, { duration: pace })),
+      -1,
+      true,
+    );
+    idleRotate.value = withRepeat(
+      withSequence(withTiming(-1.4, { duration: pace }), withTiming(1.4, { duration: pace })),
+      -1,
+      true,
+    );
+  }, [breathing, idleRotate, idleY, reduceMotion, which]);
+
+  // Semantic motion communicates state instead of adding perpetual decoration.
+  // It is layered over the quiet idle motion and never changes layout dimensions.
+  useEffect(() => {
+    semanticY.value = 0;
+    semanticScale.value = 1;
+    semanticRotate.value = 0;
+    auraScale.value = 0.82;
+    auraOpacity.value = 0;
+    if (reduceMotion) return;
+
+    if (motion === 'celebrate') {
+      semanticY.value = withSequence(
+        withTiming(3, { duration: 90 }),
+        withSpring(-15, { damping: 7, stiffness: 150 }),
+        withSpring(0, { damping: 9, stiffness: 120 }),
+      );
+      semanticScale.value = withSequence(
+        withTiming(0.92, { duration: 90 }),
+        withSpring(1.1, { damping: 7, stiffness: 160 }),
+        withSpring(1, { damping: 10, stiffness: 120 }),
+      );
+      semanticRotate.value = withSequence(
+        withTiming(-6, { duration: 120 }),
+        withTiming(6, { duration: 120 }),
+        withSpring(0),
+      );
+      auraOpacity.value = withSequence(withTiming(0.75, { duration: 140 }), withDelay(420, withTiming(0, { duration: 360 })));
+      auraScale.value = withSequence(withTiming(0.8, { duration: 1 }), withTiming(1.35, { duration: 760 }));
+    } else if (motion === 'coach') {
+      semanticRotate.value = withRepeat(
+        withSequence(withTiming(-2.2, { duration: 850 }), withTiming(2.2, { duration: 850 })),
+        -1,
+        true,
+      );
+      auraOpacity.value = withRepeat(
+        withSequence(withTiming(0.28, { duration: 1100 }), withTiming(0.08, { duration: 1100 })),
+        -1,
+        true,
+      );
+    } else if (motion === 'focus') {
+      semanticScale.value = withRepeat(
+        withSequence(withTiming(1.025, { duration: 1600 }), withTiming(0.985, { duration: 1600 })),
+        -1,
+        true,
+      );
+      auraOpacity.value = withRepeat(
+        withSequence(withTiming(0.32, { duration: 1600 }), withTiming(0.06, { duration: 1600 })),
+        -1,
+        true,
+      );
+    } else if (motion === 'defeat') {
+      semanticY.value = withSpring(5, { damping: 14, stiffness: 90 });
+      semanticScale.value = withSpring(0.94, { damping: 14, stiffness: 90 });
+      semanticRotate.value = withSpring(-3, { damping: 14, stiffness: 90 });
+    }
+  }, [auraOpacity, auraScale, motion, reduceMotion, semanticRotate, semanticScale, semanticY]);
 
   // ─── Random Natural Blinking ───
   useEffect(() => {
-    if (!blinking) {
+    if (!blinking || reduceMotion) {
       blinkScaleY.value = 1.0;
       return;
     }
@@ -166,7 +271,7 @@ export function CharShape({
 
     const timerRef = { current: runBlink() };
     return () => clearTimeout(timerRef.current);
-  }, [blinking]);
+  }, [blinkScaleY, blinking, reduceMotion]);
 
   // ─── Reactive Expression Smooth Transitions ───
   useEffect(() => {
@@ -320,36 +425,28 @@ export function CharShape({
     mouthBigSmileOpacity.value = withSpring(targetBigSmileOp, SPRING_CONFIG);
     mouthOpenOpacity.value = withSpring(targetOpenOp, SPRING_CONFIG);
     mouthFlatOpacity.value = withSpring(targetFlatOp, SPRING_CONFIG);
-  }, [expression]);
-
-  // ─── Touch Jump Animation ───
-  const handlePress = () => {
-    bodyScaleX.value = withSequence(
-      withTiming(1.15, { duration: 90 }),
-      withSpring(1.0, { damping: 9, stiffness: 120 }),
-    );
-    bodyScaleY.value = withSequence(
-      withTiming(0.81, { duration: 90 }),
-      withSpring(1.0, { damping: 9, stiffness: 120 }),
-    );
-    shadowScaleX.value = withSequence(
-      withTiming(1.22, { duration: 90 }),
-      withSpring(1.0, { damping: 10 }),
-    );
-    bodyTranslateY.value = withSequence(
-      withTiming(5, { duration: 90 }),
-      withSpring(-22, { damping: 7, stiffness: 80 }),
-      withSpring(0, { damping: 11, stiffness: 110 }),
-    );
-  };
+  }, [
+    blushOpacity, expression, eyeScaleX, eyeScaleY, leftBrowRotate, leftBrowY,
+    leftEyeClosedOpacity, leftEyeOpenOpacity, mouthBigSmileOpacity,
+    mouthFlatOpacity, mouthOpenOpacity, mouthScaleX, mouthScaleY,
+    mouthSmileOpacity, mouthY, rightBrowRotate, rightBrowY,
+    rightEyeClosedOpacity, rightEyeOpenOpacity,
+  ]);
 
   // ─── Animated Styles ────────────────────────────────────────────────────────
   const bodyAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: bodyTranslateY.value },
+      { translateY: bodyTranslateY.value + idleY.value + semanticY.value },
+      { rotate: `${idleRotate.value + semanticRotate.value}deg` },
+      { scale: semanticScale.value },
       { scaleX: bodyScaleX.value },
       { scaleY: bodyScaleY.value },
     ],
+  }));
+
+  const auraAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: auraOpacity.value,
+    transform: [{ scale: auraScale.value }],
   }));
 
   const shadowAnimatedStyle = useAnimatedStyle(() => ({
@@ -428,6 +525,13 @@ export function CharShape({
     // llegara al Pressable padre (p.ej. el nodo del mapa no abría).
     <View style={{ width: w, height: h }} pointerEvents="none">
       <View style={{ width: w, height: h, position: 'relative' }}>
+        <Animated.View
+          style={[
+            styles.motionAura,
+            auraAnimatedStyle,
+            { width: w * 0.9, height: w * 0.9, left: w * 0.05, top: h * 0.16, borderColor: palette.light },
+          ]}
+        />
         
         {/* Shadow absolute (at bottom of character) */}
         <Animated.View style={[styles.shadowContainer, shadowAnimatedStyle, { width: w }]}>
@@ -440,48 +544,33 @@ export function CharShape({
         <Animated.View style={[{ width: w, height: h }, bodyAnimatedStyle]}>
           <Svg width="100%" height="100%" viewBox="0 0 100 120">
             <Defs>
-              <RadialGradient id="grad_focus" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#86EFAC" />
-                <Stop offset="55%" stopColor="#22C55E" />
-                <Stop offset="100%" stopColor="#15803D" />
+              <RadialGradient id={gradientId} cx="32%" cy="24%" r="76%" fx="30%" fy="22%">
+                <Stop offset="0%" stopColor={palette.light} />
+                <Stop offset="58%" stopColor={palette.main} />
+                <Stop offset="100%" stopColor={palette.dark} />
               </RadialGradient>
-              <RadialGradient id="grad_calm" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#93C5FD" />
-                <Stop offset="55%" stopColor="#3B82F6" />
-                <Stop offset="100%" stopColor="#1D4ED8" />
-              </RadialGradient>
-              <RadialGradient id="grad_joy" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#FEF08A" />
-                <Stop offset="55%" stopColor="#FACC15" />
-                <Stop offset="100%" stopColor="#CA8A04" />
-              </RadialGradient>
-              <RadialGradient id="grad_swift" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#FED7AA" />
-                <Stop offset="55%" stopColor="#F97316" />
-                <Stop offset="100%" stopColor="#C2410C" />
-              </RadialGradient>
-              <RadialGradient id="grad_memo" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#FBCFE8" />
-                <Stop offset="55%" stopColor="#EC4899" />
-                <Stop offset="100%" stopColor="#9D174D" />
-              </RadialGradient>
-              <RadialGradient id="grad_loci" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#C084FC" />
-                <Stop offset="55%" stopColor="#8B5CF6" />
-                <Stop offset="100%" stopColor="#5B21B6" />
-              </RadialGradient>
-              <RadialGradient id="grad_boss" cx="35%" cy="30%" r="70%" fx="35%" fy="30%">
-                <Stop offset="0%" stopColor="#FECACA" />
-                <Stop offset="55%" stopColor="#DC2626" />
-                <Stop offset="100%" stopColor="#991B1B" />
-              </RadialGradient>
+              <LinearGradient id={shineId} x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.68" />
+                <Stop offset="100%" stopColor="#FFFFFF" stopOpacity="0" />
+              </LinearGradient>
             </Defs>
             {/* Underlay shadow */}
             <Path d={d} fill="#000" opacity="0.12" y="2.5" />
             {/* Primary body */}
-            <Path d={d} fill={`url(#grad_${which})`} />
-            {/* Glass highlight */}
-            <Ellipse cx="35" cy="27" rx="14" ry="7.5" fill="#fff" opacity="0.22" />
+            <Path d={d} fill={`url(#${gradientId})`} />
+            <Path d={d} fill="none" stroke={palette.light} strokeWidth="1.35" opacity="0.7" />
+            {/* Layered highlights give the clay body a sculpted volume. */}
+            <Ellipse cx="34" cy="27" rx="15" ry="8" fill={`url(#${shineId})`} />
+            <Ellipse cx="72" cy="80" rx="7" ry="14" fill={palette.dark} opacity="0.12" />
+
+            {/* Abstract visual signatures preserve the non-human figure language. */}
+            {showFineDetail && which === 'focus' && <><Circle cx="50" cy="22" r="11" fill="none" stroke={palette.accent} strokeWidth="2.8" opacity="0.8" /><Circle cx="50" cy="22" r="3" fill={palette.accent} /></>}
+            {showFineDetail && which === 'calm' && <Path d="M24 27 Q37 20 50 27 T76 27" fill="none" stroke={palette.accent} strokeWidth="3.5" strokeLinecap="round" opacity="0.9" />}
+            {showFineDetail && which === 'joy' && <Path d="M50 8 V17 M29 15 L36 22 M71 15 L64 22" fill="none" stroke={palette.accent} strokeWidth="3.2" strokeLinecap="round" />}
+            {showFineDetail && which === 'swift' && <Path d="M15 35 H34 M10 43 H29 M17 51 H37" fill="none" stroke={palette.accent} strokeWidth="3" strokeLinecap="round" opacity="0.8" />}
+            {showFineDetail && which === 'memo' && <><Circle cx="39" cy="20" r="3.5" fill={palette.accent} /><Circle cx="61" cy="20" r="3.5" fill={palette.accent} /><Path d="M39 20 L50 12 L61 20" fill="none" stroke={palette.accent} strokeWidth="2.4" /></>}
+            {showFineDetail && which === 'loci' && <><Circle cx="50" cy="18" r="9" fill="none" stroke={palette.accent} strokeWidth="2.8" /><Circle cx="50" cy="18" r="2.8" fill={palette.accent} /></>}
+            {showFineDetail && which === 'boss' && <Path d="M28 24 L38 13 L50 22 L62 13 L72 24" fill="none" stroke={palette.accent} strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />}
           </Svg>
 
           {/* ─── absolute face overlay ─── */}
@@ -560,6 +649,8 @@ interface MascotCharProps {
   size?: number;
   breathing?: boolean;
   blinking?: boolean;
+  /** Semantic animation. Prefer event meaning over decorative perpetual motion. */
+  motion?: MotionIntent;
 }
 
 export function MascotChar({
@@ -568,9 +659,12 @@ export function MascotChar({
   size = 80,
   breathing = true,
   blinking = true,
+  motion,
 }: MascotCharProps) {
   const preset = MASCOTS[which] ?? MASCOTS.focus;
   const exp    = expression ?? preset.defaultExp;
+  const resolvedMotion: MotionIntent = motion
+    ?? (exp === 'defeated' ? 'defeat' : exp === 'happy' ? 'celebrate' : 'idle');
 
   return (
     <CharShape
@@ -579,6 +673,7 @@ export function MascotChar({
       size={size}
       breathing={breathing}
       blinking={blinking}
+      motion={resolvedMotion}
     />
   );
 }
@@ -586,7 +681,10 @@ export function MascotChar({
 /** Five mascots side-by-side for the welcome screen hero */
 export function CharGroup({ size = 70 }: { size?: number }) {
   return (
-    <Animated.View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+    <Animated.View style={[styles.groupStage, { minHeight: size * 1.55 }]}>
+      <View style={[styles.groupAura, { width: size * 4.2, height: size * 1.18 }]} />
+      <View style={[styles.sparkle, { left: size * 0.15, top: size * 0.18 }]} />
+      <View style={[styles.sparkle, styles.sparkleSmall, { right: size * 0.25, top: 0 }]} />
       <Animated.View style={{ transform: [{ translateX: 14 }, { translateY: 8 }] }}>
         <MascotChar which="memo" size={size * 0.85} />
       </Animated.View>
@@ -606,12 +704,47 @@ export function CharGroup({ size = 70 }: { size?: number }) {
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
+  groupStage: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    position: 'relative',
+    paddingTop: 12,
+  },
+  groupAura: {
+    position: 'absolute',
+    bottom: 2,
+    borderRadius: 999,
+    backgroundColor: '#EEF2FF',
+    borderWidth: 1,
+    borderColor: '#E0E7FF',
+    transform: [{ rotate: '-3deg' }],
+  },
+  sparkle: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 3,
+    backgroundColor: '#FACC15',
+    transform: [{ rotate: '45deg' }],
+  },
+  sparkleSmall: {
+    width: 7,
+    height: 7,
+    backgroundColor: '#8B5CF6',
+  },
   shadowContainer: {
     position: 'absolute',
     bottom: 0,
     height: 12,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  motionAura: {
+    position: 'absolute',
+    borderRadius: 99,
+    borderWidth: 3,
+    backgroundColor: 'rgba(255,255,255,0.4)',
   },
   faceContainer: {
     position: 'absolute',

@@ -138,7 +138,7 @@ export function ReadingSpeedTest({ accent = '#F97316', onFinish, onQuit }: Props
         <View style={styles.contentWrap}>
           <ScrollView contentContainerStyle={styles.centerScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.mascotWrapper}>
-              <MascotChar which="swift" size={130} expression="wow" />
+              <MascotChar which="swift" size={130} expression="wow" motion="coach" />
             </View>
             <Text style={styles.title}>Diagnóstico Inicial</Text>
             <Text style={styles.subtitle}>
